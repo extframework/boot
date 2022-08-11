@@ -1,20 +1,20 @@
 package net.yakclient.boot.dependency
 
 import net.yakclient.archives.ArchiveHandle
-import net.yakclient.archives.ResolvedArchive
+import net.yakclient.archives.ArchiveReference
 
 
 public abstract class DependencyResolutionFallBack(
-    private val fallback: ArchiveResolver,
-) : ArchiveResolver {
-    override fun invoke(ref: ArchiveHandle, dependants: Set<ResolvedArchive>): ResolvedArchive =
+    private val fallback: ArchiveHandleMaker,
+) : ArchiveHandleMaker {
+    override fun invoke(ref: ArchiveReference, dependants: Set<ArchiveHandle>): ArchiveHandle =
         resolve(ref, dependants) ?: fallback(ref, dependants)
 
-    public abstract fun resolve(ref: ArchiveHandle, dependants: Set<ResolvedArchive>): ResolvedArchive?
+    public abstract fun resolve(ref: ArchiveReference, dependants: Set<ArchiveHandle>): ArchiveHandle?
 }
 
-public fun interface DependencyResolutionBid : (ArchiveHandle, Set<ResolvedArchive>) -> ResolvedArchive?
+public fun interface DependencyResolutionBid : (ArchiveReference, Set<ArchiveHandle>) -> ArchiveHandle?
 
-public fun DependencyResolutionBid.orFallBackOn(fallback: ArchiveResolver) : ArchiveResolver = object: DependencyResolutionFallBack(fallback) {
-    override fun resolve(ref: ArchiveHandle, dependants: Set<ResolvedArchive>): ResolvedArchive? = this@orFallBackOn(ref, dependants)
+public fun DependencyResolutionBid.orFallBackOn(fallback: ArchiveHandleMaker) : ArchiveHandleMaker = object: DependencyResolutionFallBack(fallback) {
+    override fun resolve(ref: ArchiveReference, dependants: Set<ArchiveHandle>): ArchiveHandle? = this@orFallBackOn(ref, dependants)
 }

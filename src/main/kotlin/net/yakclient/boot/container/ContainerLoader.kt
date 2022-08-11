@@ -1,6 +1,5 @@
 package net.yakclient.boot.container
 
-import net.yakclient.archives.Archives
 import net.yakclient.boot.container.volume.ContainerVolume
 import net.yakclient.boot.security.PrivilegeManager
 
@@ -13,13 +12,10 @@ public object ContainerLoader {
         loader: ProcessLoader<T, P>,
         volume: ContainerVolume,
         privilegeManager: PrivilegeManager,
-        parent: ClassLoader,
     ): Container<P> {
-//        val cl = ContainerClassLoader(ArchiveSourceProvider(info.reference), privilegeManager, ContainerSource(handle), info.dependencies.map(::ArchiveClassProvider), parent)
+        val process = loader.load(info)
 
-        Archives.resolve(info.reference, Archives.Resolvers.JPM_RESOLVER, )
-
-        val container = Container(loader.load(info), volume, privilegeManager)
+        val container = Container(loader.load(info), process.archive, volume, privilegeManager)
         handle.handle = container
 
         return container

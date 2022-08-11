@@ -1,14 +1,13 @@
 package net.yakclient.boot.archive
 
-public abstract class ArchiveGraph<T: ArchiveNode>(
-    public val store: ArchiveStore
-) {
-    public abstract val graph: Map<ArchiveDescriptor, T>
+import net.yakclient.boot.store.DataStore
 
-    public abstract class GraphPopulator(
-//        public val loader: ArchiveLoader<I>,
-//        public val postLoader: ArchivePostLoader<I, T>,
-    ) {
-        public abstract fun load(name: String) : T?
+public abstract class ArchiveGraph<N: ArchiveNode, K: ArchiveKey, V: ArchiveData>(
+    public val store: DataStore<K, V>
+) {
+    public abstract val graph: Map<K, N>
+
+    public abstract inner class GraphPopulator {
+        public abstract fun load(name: String) : N?
     }
 }

@@ -1,13 +1,13 @@
 package net.yakclient.boot.extension
 
 import com.durganmcbroom.artifact.resolver.*
+import net.yakclient.boot.ArtifactArchiveKey
 import net.yakclient.boot.RepositoryArchiveGraph
-import net.yakclient.boot.archive.ArchiveDescriptor
-import net.yakclient.boot.archive.ArchiveStore
+import net.yakclient.boot.dependency.DependencyStore
 
-public abstract class ExtensionGraph(store: ArchiveStore) : RepositoryArchiveGraph<ExtensionNode>(store) {
-    private val _graph: MutableMap<ArchiveDescriptor, ExtensionNode> = HashMap()
-    override val graph: Map<ArchiveDescriptor, ExtensionNode>
+public abstract class ExtensionGraph(store: ExtensionStore) : RepositoryArchiveGraph<ExtensionNode, ExtensionData>(store) {
+    private val _graph: MutableMap<ArtifactArchiveKey, ExtensionNode> = HashMap()
+    override val graph: Map<ArtifactArchiveKey, ExtensionNode>
         get() = _graph.toMap()
 
 //    public fun <S : RepositorySettings, O : ArtifactResolutionOptions, D : ArtifactMetadata.Descriptor, C : ArtifactGraphConfig<D, O>> createLoader(

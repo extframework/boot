@@ -1,36 +1,14 @@
 package net.yakclient.boot
 
-import com.durganmcbroom.artifact.resolver.ArtifactGraphProvider
-import com.durganmcbroom.artifact.resolver.ArtifactResolutionOptions
-import com.durganmcbroom.artifact.resolver.RepositorySettings
-import com.durganmcbroom.artifact.resolver.group.ResolutionGroupConfig
-import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMaven
-import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenArtifactResolutionOptions
-import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenRepositorySettings
 import kotlinx.cli.ArgParser
 import kotlinx.cli.ArgType
 import kotlinx.cli.required
 import net.yakclient.archives.ArchiveReference
 import net.yakclient.archives.Archives
-import net.yakclient.boot.container.ContainerHandle
-import net.yakclient.boot.security.PrivilegeAccess
-import net.yakclient.boot.security.PrivilegeManager
-import net.yakclient.boot.container.volume.RootVolume
-import net.yakclient.boot.dependency.JpmArchiveResolver
-import net.yakclient.boot.archive.ArchiveStore
-import net.yakclient.boot.dependency.ArchiveGraph1
-import net.yakclient.boot.extension.DefaultExtensionManager
-import net.yakclient.boot.extension.ExtensionProcess
-import net.yakclient.boot.extension.yak.YakErmDependency
-import net.yakclient.boot.extension.yak.YakExtManifestDependencyManager
-import net.yakclient.boot.extension.yak.YakErmRepository
-import net.yakclient.boot.extension.yak.YakExtensionLoader
-import net.yakclient.boot.mixin.MixinRegistry
-import net.yakclient.common.util.equalsAny
 import java.nio.file.Files
 import java.nio.file.Path
 import java.security.Policy
-import java.util.Properties
+import java.util.*
 
 public fun main(args: Array<String>) {
     Policy.setPolicy(BasicPolicy())
@@ -45,93 +23,93 @@ public fun main(args: Array<String>) {
 
     val instance = setupApp(appPath).createInstance()
 
-    val dependencyGraph = ArchiveGraph1(ArchiveStore(Path.of(dependencyCache)), JpmArchiveResolver())
-
-    val basicDependencyManager = object : YakExtManifestDependencyManager {
-        override fun getProvider(repo: YakErmRepository): ArtifactGraphProvider<*, *> {
-            check(
-                repo.type.equalsAny(
-                    "maven",
-                    "maven-central",
-                    "maven-local"
-                )
-            ) { "Only maven repositories are supported" }
-
-            return SimpleMaven
-        }
-
-        override fun registerWith(config: ResolutionGroupConfig, repo: YakErmRepository) {
-            check(
-                repo.type.equalsAny(
-                    "maven",
-                    "maven-central",
-                    "maven-local"
-                )
-            ) { "Only maven repositories are supported" }
-
-            config.graphOf(SimpleMaven).register()
-        }
-
-        override fun getRepositorySettings(repo: YakErmRepository): RepositorySettings {
-            check(
-                repo.type.equalsAny(
-                    "maven",
-                    "maven-central",
-                    "maven-local"
-                )
-            ) { "Only maven repositories are supported" }
-
-            return SimpleMavenRepositorySettings().apply {
-                when (repo.type) {
-                    "maven-central" -> useMavenCentral()
-                    "maven-local" -> useMavenLocal()
-                    "maven" -> {
-                        when (repo.configuration["layout"] ?: "default") {
-                            "default" -> useDefaultLayout(
-                                repo.configuration["url"]
-                                    ?: throw IllegalStateException("No url specified for maven repository")
-                            )
-                            else -> throw IllegalStateException("Unknown layout: ${repo.configuration["layout"] ?: "default"}")
-                        }
-                    }
-                }
-                useBasicRepoReferencer()
-            }
-        }
-
-        override fun getArtifactResolutionOptions(repo: YakErmRepository, dependency: YakErmDependency): ArtifactResolutionOptions {
-            check(
-                repo.type.equalsAny(
-                    "maven",
-                    "maven-central",
-                    "maven-local"
-                )
-            ) { "Only maven repositories are supported" }
-
-            val isTransitive: Boolean = dependency.options["transitive"] != "false"
-            val exclude: List<String> = dependency.options["exclude"] as? List<String> ?: listOf()
-            val includeScopes: List<String> = dependency.options["include-scopes"] as? List<String> ?: listOf()
-
-            return SimpleMavenArtifactResolutionOptions(
-                isTransitive = isTransitive,
-                _excludes = exclude.toMutableSet(),
-                _includeScopes = includeScopes.toMutableSet()
-            )
-        }
-
-    }
-
-    val manager = DefaultExtensionManager(YakExtensionLoader(basicDependencyManager,dependencyGraph ), MixinRegistry(mapOf()), instance)
-
-
-    val rootPrivilegeManager = PrivilegeManager(
-        null,
-        PrivilegeAccess.allPrivileges(),
-        ContainerHandle<ExtensionProcess>()
-    ) { false }
-
-
-    val container = manager.load(Path.of(""), rootPrivilegeManager, RootVolume, PrivilegeAccess.createPrivileges(), { true }, ClassLoader.getSystemClassLoader())
+//    val dependencyGraph = DependencyGraph(DependencyStore(Path.of(dependencyCache), ), JpmArchiveResolver())
+//
+//    val basicDependencyManager = object : YakExtManifestDependencyManager {
+//        override fun getProvider(repo: YakErmRepository): ArtifactGraphProvider<*, *> {
+//            check(
+//                repo.type.equalsAny(
+//                    "maven",
+//                    "maven-central",
+//                    "maven-local"
+//                )
+//            ) { "Only maven repositories are supported" }
+//
+//            return SimpleMaven
+//        }
+//
+//        override fun registerWith(config: ResolutionGroupConfig, repo: YakErmRepository) {
+//            check(
+//                repo.type.equalsAny(
+//                    "maven",
+//                    "maven-central",
+//                    "maven-local"
+//                )
+//            ) { "Only maven repositories are supported" }
+//
+//            config.graphOf(SimpleMaven).register()
+//        }
+//
+//        override fun getRepositorySettings(repo: YakErmRepository): RepositorySettings {
+//            check(
+//                repo.type.equalsAny(
+//                    "maven",
+//                    "maven-central",
+//                    "maven-local"
+//                )
+//            ) { "Only maven repositories are supported" }
+//
+//            return SimpleMavenRepositorySettings().apply {
+//                when (repo.type) {
+//                    "maven-central" -> useMavenCentral()
+//                    "maven-local" -> useMavenLocal()
+//                    "maven" -> {
+//                        when (repo.configuration["layout"] ?: "default") {
+//                            "default" -> useDefaultLayout(
+//                                repo.configuration["url"]
+//                                    ?: throw IllegalStateException("No url specified for maven repository")
+//                            )
+//                            else -> throw IllegalStateException("Unknown layout: ${repo.configuration["layout"] ?: "default"}")
+//                        }
+//                    }
+//                }
+//                useBasicRepoReferencer()
+//            }
+//        }
+//
+//        override fun getArtifactResolutionOptions(repo: YakErmRepository, dependency: YakErmDependency): ArtifactResolutionOptions {
+//            check(
+//                repo.type.equalsAny(
+//                    "maven",
+//                    "maven-central",
+//                    "maven-local"
+//                )
+//            ) { "Only maven repositories are supported" }
+//
+//            val isTransitive: Boolean = dependency.options["transitive"] != "false"
+//            val exclude: List<String> = dependency.options["exclude"] as? List<String> ?: listOf()
+//            val includeScopes: List<String> = dependency.options["include-scopes"] as? List<String> ?: listOf()
+//
+//            return SimpleMavenArtifactResolutionOptions(
+//                isTransitive = isTransitive,
+//                _excludes = exclude.toMutableSet(),
+//                _includeScopes = includeScopes.toMutableSet()
+//            )
+//        }
+//
+//    }
+//
+//    val manager = DefaultExtensionManager(YakExtensionLoader(basicDependencyManager,dependencyGraph ), MixinRegistry(mapOf()), instance)
+//
+//
+//    val rootPrivilegeManager = PrivilegeManager(
+//        null,
+//        PrivilegeAccess.allPrivileges(),
+//        ContainerHandle<ExtensionProcess>()
+//    ) { false }
+//
+//
+//    val container = manager.load(Path.of(""), rootPrivilegeManager, RootVolume, PrivilegeAccess.createPrivileges(), { true }, ClassLoader.getSystemClassLoader())
 
 }
 

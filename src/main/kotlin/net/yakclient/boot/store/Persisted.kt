@@ -1,4 +1,5 @@
 package net.yakclient.boot.store
 
-interface Persisted {
+public interface Persisted {
+    public val key: PersistenceKey
 }
