@@ -13,10 +13,10 @@ import com.fasterxml.jackson.module.kotlin.KotlinModule
 import com.fasterxml.jackson.module.kotlin.addDeserializer
 import com.fasterxml.jackson.module.kotlin.addSerializer
 import com.fasterxml.jackson.module.kotlin.readValue
-import net.yakclient.boot.ArtifactArchiveKey
-import net.yakclient.boot.store.CachingDataStore
+import net.yakclient.boot.DescriptorKey
 import net.yakclient.boot.store.DataAccess
 import net.yakclient.boot.store.DataStore
+import net.yakclient.boot.store.DelegatingDataStore
 import net.yakclient.common.util.make
 import net.yakclient.common.util.resolve
 import net.yakclient.common.util.resource.LocalResource
@@ -31,12 +31,12 @@ import java.util.logging.Level
 import java.util.logging.Logger
 import kotlin.reflect.KFunction1
 
-public typealias DependencyStore = DataStore<ArtifactArchiveKey, DependencyData>
+public typealias DependencyStore = DataStore<DescriptorKey, DependencyData>
 
 public fun DependencyStore(
     path: Path,
     providers: List<DependencyMetadataProvider<*>>,
-    func: KFunction1<DataAccess<ArtifactArchiveKey, DependencyData>, DependencyStore> = ::CachingDataStore
+    func: KFunction1<DataAccess<DescriptorKey, DependencyData>, DependencyStore> = ::DelegatingDataStore
 ): DependencyStore {
     return func.invoke(DependencyDataAccess(path, providers))
 }
@@ -51,11 +51,12 @@ private const val RESOURCE_URI_FIELD = "uri"
 private class DependencyDataAccess(
     val path: Path,
     private val providers: List<DependencyMetadataProvider<*>>,
-) : DataAccess<ArtifactArchiveKey, DependencyData> {
+) : DataAccess<DescriptorKey, DependencyData> {
     private val metaPath = path resolve "dependencies.json"
 
-    private val cachedDependencies: MutableMap<String, DependencyData>
+    private val cachedDependencies: MutableMap<DescriptorKey, DependencyData>
     private val mapper: ObjectMapper
+
     private val logger: Logger = Logger.getLogger(this::class.simpleName)
 
     init {
@@ -127,10 +128,10 @@ private class DependencyDataAccess(
                 ArtifactMetadata.Descriptor::class,
                 DescriptionDeserializer()
             ).addSerializer(
-                SafeResource::class.java,
+                SafeResource::class,
                 SafeResourceSerializer()
             ).addDeserializer(
-                SafeResource::class.java,
+                SafeResource::class,
                 SafeResourceDeserializer()
             )
         )
@@ -139,7 +140,7 @@ private class DependencyDataAccess(
 
         if (metaPath.make()) src.writeText(mapper.writeValueAsString(HashMap<String, DependencyData>()))
 
-        val inMeta = mapper.readValue<Map<String, DependencyData>>(src)
+        val inMeta = mapper.readValue<Map<String, DependencyData>>(src).mapKeys { (_, v) -> v.key }
 
         cachedDependencies = inMeta.toMutableMap()
     }
@@ -148,21 +149,17 @@ private class DependencyDataAccess(
         (providers.find { it.descriptorType.isInstance(d) } as? DependencyMetadataProvider<ArtifactMetadata.Descriptor>)
             ?: throw java.lang.IllegalArgumentException("Unknown descriptor type: '${d::class.simpleName}', no valid metadata provider found.")
 
-    override fun read(key: ArtifactArchiveKey): DependencyData? {
-        val skey = getProvider(key.desc).descToString(key.desc)
-
-        return cachedDependencies[skey]
+    override fun read(key: DescriptorKey): DependencyData? {
+        return cachedDependencies[key]
     }
 
-    override fun write(key: ArtifactArchiveKey, value: DependencyData) {
+    override fun write(key: DescriptorKey, value: DependencyData) {
         val desc = key.desc
         val provider = getProvider(desc)
 
         // Check if we need to cache the archive
         val cacheJar = value.archive != null
 
-        // Create a cached descriptor
-        val skey = (provider.descToString(desc))
         // Check the in-memory cache to see if it has already been loaded, if it has then return it
         // Create a path to where the artifact should be cached, if no version is present then making sure no extra '-' is included
         val jarPath = path resolve provider.relativePath(desc) resolve provider.jarName(desc)
@@ -189,7 +186,7 @@ private class DependencyDataAccess(
         }
 
         // Updating the in-memory cache
-        cachedDependencies[skey] = data
+        cachedDependencies[key] = data
 
         // Updating the out-of-memory cache
         metaPath.toFile().writeText(mapper.writeValueAsString(cachedDependencies))

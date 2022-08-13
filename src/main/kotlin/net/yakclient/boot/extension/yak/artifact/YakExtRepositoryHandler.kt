@@ -19,13 +19,12 @@ public class YakExtRepositoryHandler(
     private val layout = DefaultSimpleMavenLayout(settings.url, HashType.SHA1)
     private val mapper = ObjectMapper().registerModule(KotlinModule())
 
-    override fun descriptorOf(name: String): YakExtDescriptor? = SimpleMavenDescriptor.parseDescription(name)
-
+    override fun descriptorOf(name: String): YakExtDescriptor? = YakExtDescriptor.parseDescriptor(name)
 
     override fun metaOf(descriptor: YakExtDescriptor): YakExtArtifactMetadata? {
-        val (group, artifact, version, classifier) = descriptor
+        val (group, artifact, version) = descriptor
 
-        val ermResource = layout.artifactOf(group, artifact, version, classifier, ERM_ENDING) ?: return null
+        val ermResource = layout.artifactOf(group, artifact, version, null, ERM_ENDING) ?: return null
         val erm = mapper.readValue<YakErm>(ermResource.open())
 
         val deps = erm.dependencies.map { d ->
@@ -53,7 +52,7 @@ public class YakExtRepositoryHandler(
             )
         }
 
-        val ext = layout.artifactOf(group, artifact, version, classifier, erm.packagingType)
+        val ext = layout.artifactOf(group, artifact, version, null, erm.packagingType)
 
         return YakExtArtifactMetadata(
             descriptor,

@@ -1,13 +1,15 @@
 package net.yakclient.boot.extension
 
 import com.durganmcbroom.artifact.resolver.*
-import net.yakclient.boot.ArtifactArchiveKey
+import net.yakclient.boot.DescriptorKey
 import net.yakclient.boot.RepositoryArchiveGraph
-import net.yakclient.boot.dependency.DependencyStore
+import net.yakclient.boot.archive.ArchiveKey
 
-public abstract class ExtensionGraph(store: ExtensionStore) : RepositoryArchiveGraph<ExtensionNode, ExtensionData>(store) {
-    private val _graph: MutableMap<ArtifactArchiveKey, ExtensionNode> = HashMap()
-    override val graph: Map<ArtifactArchiveKey, ExtensionNode>
+public abstract class ExtensionGraph<N : ExtensionNode, K: ArchiveKey, D : ExtensionData>(
+    store: ExtensionStore<K, D>
+) : RepositoryArchiveGraph<N, K, D>(store) {
+    private val _graph: MutableMap<K, N> = HashMap()
+    override val graph: Map<K, N>
         get() = _graph.toMap()
 
 //    public fun <S : RepositorySettings, O : ArtifactResolutionOptions, D : ArtifactMetadata.Descriptor, C : ArtifactGraphConfig<D, O>> createLoader(
@@ -40,12 +42,7 @@ public abstract class ExtensionGraph(store: ExtensionStore) : RepositoryArchiveG
 //    }
 
 
-    public abstract inner class ExtensionGraphPopulator<O: ArtifactResolutionOptions, T: ExtensionInfo>(
-        resolver: ArtifactGraph.ArtifactResolver<*, *, *, O>,
-        protected val loader: ExtensionLoader<T>
-    ) : RepositoryGraphPopulator<O>(
-        resolver
-    ) {
-
-    }
+    public abstract inner class ExtensionGraphPopulator<O : ArtifactResolutionOptions, T : ExtensionInfo>(
+        resolver: ArtifactGraph.ArtifactResolver<*, *, *, O>, protected val loader: ExtensionLoader<T>
+    ) : RepositoryGraphPopulator<O>(resolver)
 }

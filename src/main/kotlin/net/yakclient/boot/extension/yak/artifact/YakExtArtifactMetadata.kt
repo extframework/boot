@@ -17,7 +17,18 @@ public class YakExtArtifactMetadata(
     desc, resource, transitives
 )
 
-public typealias YakExtDescriptor = SimpleMavenDescriptor
+public data class YakExtDescriptor(
+    val groupId: String,
+    val artifactId: String,
+    val version: String
+) : ArtifactMetadata.Descriptor {
+    override val name: String = "$groupId:$artifactId:$version"
+
+    public companion object {
+        public fun parseDescriptor(name: String) : YakExtDescriptor? =
+            name.split(":").takeIf { it.size == 3 }?.let { YakExtDescriptor(it[0], it[2], it[3]) }
+    }
+}
 
 public data class YakExtTransitiveInfo(
     override val desc: YakExtDescriptor,

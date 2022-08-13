@@ -4,9 +4,9 @@ import com.durganmcbroom.artifact.resolver.*
 import net.yakclient.boot.archive.*
 import net.yakclient.boot.store.DataStore
 
-public abstract class RepositoryArchiveGraph<N : ArchiveNode, V : ArchiveData>(
-    store: DataStore<ArtifactArchiveKey, V>,
-) : ArchiveGraph<N, ArtifactArchiveKey, V>(store) {
+public abstract class RepositoryArchiveGraph<N : ArchiveNode, K: ArchiveKey, V : ArchiveData>(
+    store: DataStore<K, V>,
+) : ArchiveGraph<N, K, V>(store) {
 //    public fun <S : RepositorySettings, O : ArtifactResolutionOptions, D : ArtifactMetadata.Descriptor, C : ArtifactGraphConfig<D, O>> createLoader(
 //        provider: ArtifactGraphProvider<C, ArtifactGraph<*, S, ArtifactGraph.ArtifactResolver<D, *, S, O>>>,
 //    ): RepositoryConfigurer<S, O> = createLoader(
@@ -39,20 +39,8 @@ public abstract class RepositoryArchiveGraph<N : ArchiveNode, V : ArchiveData>(
         public fun emptyOptions() : O = resolver.emptyOptions()
 
         override fun load(name: String): N? = load(name, resolver.emptyOptions())
+        public abstract fun load(name: String, options: O): N?
 
-        public open fun load(name: String, options: O): N? {
-            val key = ArtifactArchiveKey(resolver.descriptorOf(name) ?: return null)
-
-            return graph[key] ?: load(
-                store[key]
-                    ?: resolver.artifactOf(name, options)?.let(::cache)?.let { store[key] }
-                    ?: return null
-            )
-        }
-
-        public abstract fun cache(artifact: Artifact)
-
-        public abstract fun load(data: V): N
 //        public open fun load(name: String, artifactResolutionOptions: O): N? {
 //            val desc: ArtifactMetadata.Descriptor = resolver.descriptorOf(name) ?: return null
 //            return graph[ArtifactArchiveDescriptor(desc)] ?: store.get(desc) ?: run {

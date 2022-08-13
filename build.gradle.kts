@@ -8,15 +8,14 @@ version = "1.0-SNAPSHOT"
 
 repositories {
     mavenCentral()
-    mavenLocal()
-//    maven {
-//        name = "Durgan McBroom GitHub Packages"
-//        url = uri("https://maven.pkg.github.com/durganmcbroom/artifact-resolver")
-//        credentials {
-//            username = project.findProperty("gpr.user") as? String ?: throw IllegalArgumentException("Need a Github package registry username!")
-//            password = project.findProperty("gpr.key") as? String ?: throw IllegalArgumentException("Need a Github package registry key!")
-//        }
-//    }
+    maven {
+        name = "Durgan McBroom GitHub Packages"
+        url = uri("https://maven.pkg.github.com/durganmcbroom/artifact-resolver")
+        credentials {
+            username = project.findProperty("gpr.user") as? String ?: throw IllegalArgumentException("Need a Github package registry username!")
+            password = project.findProperty("gpr.key") as? String ?: throw IllegalArgumentException("Need a Github package registry key!")
+        }
+    }
     maven {
         isAllowInsecureProtocol = true
         url = uri("http://repo.yakclient.net/snapshots")
@@ -64,6 +63,11 @@ tasks.compileJava {
     sourceCompatibility = "17"
 }
 
+tasks.compileJava {
+    sourceCompatibility = "17"
+    targetCompatibility = "17"
+}
+
 tasks.compileKotlin {
     destinationDirectory.set(tasks.compileJava.get().destinationDirectory.asFile.get())
     kotlinOptions.jvmTarget = "17"
@@ -71,6 +75,12 @@ tasks.compileKotlin {
 
 tasks.compileTestKotlin {
     kotlinOptions.jvmTarget = "17"
+}
+
+java {
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(17))
+    }
 }
 
 kotlin {

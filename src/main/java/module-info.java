@@ -11,4 +11,5 @@ module yakclient.boot {
 
     opens net.yakclient.boot.dependency to com.fasterxml.jackson.databind;
     opens net.yakclient.boot to com.fasterxml.jackson.databind;
+    opens net.yakclient.boot.extension.yak to com.fasterxml.jackson.databind;
 }

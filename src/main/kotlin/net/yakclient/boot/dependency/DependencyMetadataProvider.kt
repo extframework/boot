@@ -7,6 +7,8 @@ import kotlin.reflect.KClass
 public interface DependencyMetadataProvider<D : ArtifactMetadata.Descriptor> {
     public val descriptorType: KClass<D>
 
+    public fun keyFor(desc: D) : VersionIndependentDependencyKey
+
     public fun descToString(d: D) : String
 
     public fun stringToDesc(d: String) : D?
