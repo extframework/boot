@@ -1,11 +1,10 @@
 package net.yakclient.boot.dependency
 
-import net.yakclient.boot.DescriptorKey
-import net.yakclient.boot.archive.ArchiveData
-import net.yakclient.common.util.resource.SafeResource
+import com.durganmcbroom.artifact.resolver.ArtifactRequest
+import java.nio.file.Path
 
-public data class DependencyData(
-    override val key: DescriptorKey,
-    override val archive: SafeResource?,
-    override val children: List<DescriptorKey>,
-) : ArchiveData
+public data class DependencyData<T: ArtifactRequest<*>>(
+    val key: T,
+    val archive: Path?,
+    val children: List<T>,
+)

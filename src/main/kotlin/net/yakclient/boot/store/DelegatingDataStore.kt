@@ -1,3 +1,3 @@
 package net.yakclient.boot.store
 
-public open class DelegatingDataStore<K: PersistenceKey, V: Persisted>(override val access: DataAccess<K, V>) : DataStore<K, V>
+public open class DelegatingDataStore<in K, V>(override val access: DataAccess<K, V>) : DataStore<K, V>

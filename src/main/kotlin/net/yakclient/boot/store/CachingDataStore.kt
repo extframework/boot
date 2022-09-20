@@ -1,6 +1,6 @@
 package net.yakclient.boot.store
 
-public class CachingDataStore<K : PersistenceKey, V : Persisted>(
+public class CachingDataStore<in K, V>(
     override val access: DataAccess<K, V>
 ) : DataStore<K, V> {
     private val cache : MutableMap<K, V> = HashMap()
@@ -9,7 +9,7 @@ public class CachingDataStore<K : PersistenceKey, V : Persisted>(
         cache[key] ?: access.read(key)?.also { cache[key] = it }
 
     override fun put(key: K, value: V) {
-        cache[key] = value
         access.write(key, value)
+        cache[key] = value
     }
 }

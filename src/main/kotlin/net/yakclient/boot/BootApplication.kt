@@ -1,5 +1,5 @@
 package net.yakclient.boot
 
 public interface BootApplication {
-    public fun createInstance() : AppInstance
+    public fun newInstance() : AppInstance
 }

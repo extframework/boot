@@ -1,15 +1,5 @@
 package net.yakclient.boot.dependency
 
-import com.durganmcbroom.artifact.resolver.Artifact
-import com.durganmcbroom.artifact.resolver.ArtifactGraph
-import com.durganmcbroom.artifact.resolver.ArtifactResolutionOptions
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.runBlocking
-import net.yakclient.archives.ArchiveFinder
-import net.yakclient.boot.archive.ArchiveNode
-import net.yakclient.common.util.mapNotBlocking
-import java.util.logging.Level
-import java.util.logging.Logger
 //
 //public class RepositoryArchiveLoader<O : ArtifactResolutionOptions>(
 //    private val artifactResolver: ArtifactGraph.ArtifactResolver<*, *, *, O>,

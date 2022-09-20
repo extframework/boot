@@ -1,7 +1,7 @@
 package net.yakclient.boot.loader
 
 public class DelegatingClassProvider(
-    private val delegates: List<ClassProvider>
+    delegates: List<ClassProvider>
 ) : ClassProvider {
     private fun <V, K> Iterable<V>.flatGroupBy(transformer: (V) -> Iterable<K>): Map<K, List<V>> =
         flatMap { v -> transformer(v).map { it to v } }.groupBy { it.first }

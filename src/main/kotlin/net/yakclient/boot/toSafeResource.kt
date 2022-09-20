@@ -8,9 +8,7 @@ import java.net.URI
 
 public fun CheckedResource.toSafeResource() : SafeResource = object : SafeResource {
     override val uri: URI
-        get() =
-            throw UnsupportedOperationException()
+        get() = URI.create(this@toSafeResource.location)
 
     override fun open(): InputStream = this@toSafeResource.open()
-
 }

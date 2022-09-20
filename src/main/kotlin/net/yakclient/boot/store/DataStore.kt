@@ -1,6 +1,6 @@
 package net.yakclient.boot.store
 
-public interface DataStore<K: PersistenceKey, V: Persisted> {
+public interface DataStore<in K, V> {
     public val access: DataAccess<K, V>
 
     public operator fun get(key: K) : V? = access.read(key)

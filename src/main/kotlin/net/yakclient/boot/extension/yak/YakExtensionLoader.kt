@@ -1,19 +1,5 @@
 package net.yakclient.boot.extension.yak
 
-import com.durganmcbroom.artifact.resolver.ArtifactGraph
-import com.durganmcbroom.artifact.resolver.ArtifactResolutionOptions
-import com.durganmcbroom.artifact.resolver.RepositorySettings
-import com.durganmcbroom.artifact.resolver.group.ResolutionGroup
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.module.kotlin.KotlinModule
-import com.fasterxml.jackson.module.kotlin.readValue
-import net.yakclient.archives.ArchiveHandle
-import net.yakclient.archives.ArchiveReference
-import net.yakclient.archives.Archives
-import net.yakclient.boot.extension.*
-import net.yakclient.boot.loader.IntegratedLoader
-import java.nio.file.Path
-
 private const val MANIFEST_LOCATION = "extension.json"
 //
 //internal class YakExtensionLoader(

@@ -1,17 +1,5 @@
 package net.yakclient.boot.extension.yak
 
-import com.durganmcbroom.artifact.resolver.Artifact
-import com.durganmcbroom.artifact.resolver.ArtifactGraph
-import net.yakclient.boot.DescriptorKey
-import net.yakclient.boot.dependency.DependencyGraph
-import net.yakclient.boot.extension.ExtensionGraph
-import net.yakclient.boot.extension.ExtensionLoader
-import net.yakclient.boot.extension.ExtensionNode
-import net.yakclient.boot.extension.ExtensionStore
-import net.yakclient.boot.extension.yak.artifact.YakExtArtifactMetadata
-import net.yakclient.boot.extension.yak.artifact.YakExtArtifactResolutionOptions
-import java.nio.file.Path
-
 //public class YakExtensionGraph(
 //    path: Path,
 //    private val dependencyGraph: DependencyGraph

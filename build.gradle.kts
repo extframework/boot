@@ -8,14 +8,15 @@ version = "1.0-SNAPSHOT"
 
 repositories {
     mavenCentral()
-    maven {
-        name = "Durgan McBroom GitHub Packages"
-        url = uri("https://maven.pkg.github.com/durganmcbroom/artifact-resolver")
-        credentials {
-            username = project.findProperty("gpr.user") as? String ?: throw IllegalArgumentException("Need a Github package registry username!")
-            password = project.findProperty("gpr.key") as? String ?: throw IllegalArgumentException("Need a Github package registry key!")
-        }
-    }
+    mavenLocal()
+//    maven {
+//        name = "Durgan McBroom GitHub Packages"
+//        url = uri("https://maven.pkg.github.com/durganmcbroom/artifact-resolver")
+//        credentials {
+//            username = project.findProperty("gpr.user") as? String ?: throw IllegalArgumentException("Need a Github package registry username!")
+//            password = project.findProperty("gpr.key") as? String ?: throw IllegalArgumentException("Need a Github package registry key!")
+//        }
+//    }
     maven {
         isAllowInsecureProtocol = true
         url = uri("http://repo.yakclient.net/snapshots")
@@ -28,9 +29,10 @@ configurations.all {
 
 dependencies {
     implementation(kotlin("stdlib"))
+    implementation("io.arrow-kt:arrow-core:1.1.2")
 
-    implementation("org.jetbrains.kotlinx:kotlinx-cli:0.3.4")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.2")
+    implementation("org.jetbrains.kotlinx:kotlinx-cli:0.3.5")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.4")
     api("net.yakclient:archives:1.0-SNAPSHOT") {
         isChanging = true
     }
@@ -40,8 +42,8 @@ dependencies {
     implementation("com.durganmcbroom:artifact-resolver-simple-maven:1.0-SNAPSHOT") {
         isChanging = true
     }
-    implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-xml:2.12.6")
-    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.12.6")
+    implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-xml:2.13.4")
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.13.4")
     implementation("net.yakclient:common-util:1.0-SNAPSHOT") {
         isChanging = true
     }

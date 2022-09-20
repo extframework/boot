@@ -1,126 +1,202 @@
 package net.yakclient.boot.dependency
 
+import arrow.core.Either
+import arrow.core.continuations.either
+import arrow.core.right
 import com.durganmcbroom.artifact.resolver.*
-import com.durganmcbroom.artifact.resolver.group.GroupedArtifactGraph
 import net.yakclient.archives.*
-import net.yakclient.boot.DescriptorKey
-import net.yakclient.boot.RepositoryArchiveGraph
+import net.yakclient.boot.archive.ArchiveGraph
+import net.yakclient.boot.archive.ArchiveKey
+import net.yakclient.boot.archive.ArchiveLoadException
+import net.yakclient.boot.archive.ArchiveResolutionProvider
 import net.yakclient.boot.security.PrivilegeAccess
 import net.yakclient.boot.security.PrivilegeManager
+import net.yakclient.boot.store.DataStore
 import net.yakclient.boot.toSafeResource
+import net.yakclient.common.util.resource.SafeResource
 import java.nio.file.Path
 
-public class DependencyGraph(
-    path: Path,
-    private val metadataProviders: List<DependencyMetadataProvider<*>>,
-    private val artifactGraph: GroupedArtifactGraph,
-    private val af: ArchiveFinder<*>,
-    private val ar: ArchiveResolver<ArchiveReference, out ResolutionResult>,
+public abstract class DependencyGraph<K : ArtifactRequest<*>, S : ArtifactStub<K, *>, in R : RepositorySettings>(
+    private val store: DataStore<K, DependencyData<K>>,
+    public override val repositoryFactory: RepositoryFactory<R, K, S, *, *>,
+    private val archiveResolver: ArchiveResolutionProvider<ResolutionResult>,
+    initialGraph: MutableMap<ArchiveKey<K>, DependencyNode> = HashMap(),
     private val privilegeManager: PrivilegeManager = PrivilegeManager(null, PrivilegeAccess.emptyPrivileges()) {},
-) : RepositoryArchiveGraph<DependencyNode, DescriptorKey, DependencyData>(
-    DependencyStore(
-        path, metadataProviders
-    )
+) : ArchiveGraph<K, DependencyNode, R>(
+    repositoryFactory
 ) {
-    private val _graph: MutableMap<DescriptorKey, DependencyNode> = HashMap()
-    override val graph: Map<DescriptorKey, DependencyNode>
-        get() = _graph.toMap()
+    private val mutableGraph: MutableMap<ArchiveKey<K>, DependencyNode> = initialGraph
+    override val graph: Map<ArchiveKey<K>, DependencyNode>
+        get() = mutableGraph.toMap()
 
-    @JvmOverloads
-    public fun <S : RepositorySettings, O : ArtifactResolutionOptions, D : ArtifactMetadata.Descriptor, C : ArtifactGraphConfig<D, O>> createLoader(
-        provider: ArtifactGraphProvider<C, ArtifactGraph<C, S, ArtifactGraph.ArtifactResolver<*, *, S, O>>>,
-        graph: ArtifactGraph<C, S, ArtifactGraph.ArtifactResolver<*, *, S, O>> = artifactGraph[provider]
-            ?: throw IllegalArgumentException("Unknown Graph provider: '${provider::class.simpleName}'."),
-        settings: S = graph.newRepoSettings(),
-        settingConfigurer: S.() -> Unit = {}
-    ): RepositoryGraphPopulator<O> = DependencyGraphPopulator(graph.resolverFor(settings.apply(settingConfigurer)))
+    abstract override fun loaderOf(settings: R): ArchiveLoader<*>
 
-    private fun <T : ArtifactMetadata.Descriptor> getProvider(desc: T): DependencyMetadataProvider<T> =
-        metadataProviders.find { it.descriptorType.isInstance(desc) } as? DependencyMetadataProvider<T>
-            ?: throw IllegalStateException("Descriptor: '${desc::class.qualifiedName}' has no registered metadata provider! You must provide one to use this type.")
+    override fun get(request: K): Either<ArchiveLoadException, DependencyNode> {
+        val key = ArchiveKey(request)
 
-    private inner class DependencyGraphPopulator<O : ArtifactResolutionOptions>(
-        resolver: ArtifactGraph.ArtifactResolver<*, *, *, O>,
-    ) : RepositoryGraphPopulator<O>(
-        resolver
-    ) {
-        override fun load(name: String, options: O): DependencyNode? {
-            val desc = resolver.descriptorOf(name) ?: return null
+        return graph[key]?.right() ?: either.eager {
+            val data = store[key.request] ?: shift(ArchiveLoadException.ArtifactNotCached)
 
-            val key = DescriptorKey(desc)
-            return graph[key] ?: run {
-                val local = LocalGraph()
+            val context = object : GraphContext<K> {
+                override fun get(key: ArchiveKey<K>): DependencyNode? = mutableGraph[key]
 
-                val data = store[key] ?: run {
-                    val artifact = resolver.artifactOf(name, options) ?: return null
-                    local.cache(artifact)
-                    store[key]
-                } ?: return null
-
-                local.load(data)
+                override fun put(key: ArchiveKey<K>, node: DependencyNode) {
+                    mutableGraph[key] = node
+                }
             }
-//            val key = desc.versionDependentKey()
+
+            load(context, data).bind()
+        }
+    }
+
+
+//    public fun interface DependencyPrePopulationProvider {
+//        public fun provideAll(): List<DependencyNode>
+//    }
+
+    //    protected abstract inner class DependencyPrePopulator(
+//    ) : ArchiveLoader<S>(
+//        ResolutionContext(
+//            object : ArtifactRepositoryContext<K, S, ArtifactReference<*, S>> {
+//                override val artifactRepository: Nothing
+//                    get() = throw IllegalStateException("This is an unusable context.")
+//            },
+//            object : StubResolverContext<S, ArtifactReference<*, S>> {
+//                override val stubResolver: Nothing
+//                    get() = throw IllegalStateException("This is an unusable context.")
+//            },
+//            object : ArtifactComposerContext {
+//                override val artifactComposer: Nothing
+//                    get() = throw IllegalStateException("This is an unusable context.")
+//            }
+//        )
+//    ) {
+//        override fun load(request: K): Either<ArchiveLoadException, DependencyNode> =
+//            ArchiveLoadException.NotSupported.left()
 //
-//            return graph[desc.versionIndependentKey()] ?: load(store[key] ?: resolver.artifactOf(name, options)
-//                ?.let(::cache)?.let { store[key] } ?: return null)
+//        public abstract fun prePopulate()
+//    }
+    public interface GraphContext<K : ArtifactRequest<*>> {
+        public operator fun get(key: ArchiveKey<K>): DependencyNode?
+
+        public fun put(key: ArchiveKey<K>, node: DependencyNode)
+    }
+
+    private fun load(
+        context: GraphContext<K>,
+        data: DependencyData<K>,
+    ): Either<ArchiveLoadException, DependencyNode> = either.eager {
+        fun DependencyNode.handleOrChildren(): Set<ArchiveHandle> = children.flatMapTo(HashSet()) { d ->
+            d.archive?.let(::setOf) ?: d.children.flatMapTo(HashSet()) { it.handleOrChildren() }
         }
 
-        private inner class LocalGraph {
+        context[ArchiveKey(data.key)] ?: either.eager eagerLoadFromData@{
+            val children = data.children
+                .map(store::get)
+                .map { it ?: shift(ArchiveLoadException.ArchiveGraphInvalidated) }
+                .map { load(context, it) }
+                .mapTo(HashSet()) { it.bind() }
+
+            val resource = data.archive ?: return@eagerLoadFromData DependencyNode(null, children)
+
+            val handles = children.flatMapTo(HashSet()) { it.handleOrChildren() }
+
+            val handle = archiveResolver.resolve(resource, {
+                DependencyClassLoader(it, handles, privilegeManager)
+            }, handles).bind().archive
+
+            DependencyNode(handle, children).also {
+                context.put(ArchiveKey(data.key), it)
+            }
+        }.bind()
+    }
+
+    public abstract inner class DependencyLoader(
+        resolver: ResolutionContext<K, S, ArtifactReference<*, S>>,
+    ) : ArchiveLoader<S>(
+        resolver
+    ) {
+        protected abstract fun newLocalGraph(): LocalGraph
+
+        override fun load(request: K): Either<ArchiveLoadException, DependencyNode> = either.eager {
+            val local = newLocalGraph()
+
+            fun loadUsingRepository(): Either<ArchiveLoadException, DependencyNode> = either.eager {
+                val data: DependencyData<K> = store[request] ?: cache(request).bind()
+
+                load(local.graphContext, data).bind()
+            }
+
+            val key = ArchiveKey(request)
+
+            graph[key] ?: loadUsingRepository().bind()
+        }
+
+        protected abstract fun writeResource(request: K, resource: SafeResource): Path
+
+        public fun cache(
+            request: K,
+        ): Either<ArchiveLoadException, DependencyData<K>> {
+            return store[request]?.right() ?: either.eager {
+                val unboundRef = resolver.repositoryContext.artifactRepository
+                    .get(request)
+
+                val ref = unboundRef
+                    .mapLeft(ArchiveLoadException::ArtifactLoadException)
+                    .bind()
+
+                cache(request, ref).bind()
+            }
+        }
+
+        private fun cache(
+            request: K,
+            ref: ArtifactReference<*, S>,
+        ): Either<ArchiveLoadException, DependencyData<K>> = either.eager {
+            ref.children.forEach { stub ->
+                val childRef = resolver.resolverContext.stubResolver
+                    .resolve(stub)
+                    .mapLeft(ArchiveLoadException::ArtifactLoadException)
+                    .bind()
+
+                cache(stub.request, childRef)
+            }
+
+            val data = DependencyData(
+                request,
+                ref.metadata.resource?.toSafeResource()?.let { writeResource(request, it) },
+                ref.children.map(ArtifactStub<K, *>::request)
+            )
+
+            if (!store.contains(request)) store.put(
+                request, data
+            )
+
+            data
+        }
+
+        protected abstract inner class LocalGraph {
             private val localGraph: MutableMap<VersionIndependentDependencyKey, DependencyNode> = HashMap()
+            public val graphContext: GraphContext<K> = object : GraphContext<K> {
+                override fun get(key: ArchiveKey<K>): DependencyNode? {
+                    val request by key::request
 
-            private fun getBy(desc: ArtifactMetadata.Descriptor): DependencyNode? {
-                val keyFor = getProvider(desc).keyFor(desc)
-                return localGraph[keyFor] ?: _graph[DescriptorKey(desc)]?.also {
-                    localGraph[keyFor] = it
+                    val keyFor = getKey(request)
+
+                    return localGraph[keyFor] ?: mutableGraph[ArchiveKey(request)]?.also {
+                        localGraph[keyFor] = it
+                    }
+                }
+
+                override fun put(key: ArchiveKey<K>, node: DependencyNode) {
+                    val request by key::request
+
+                    localGraph[getKey(request)] = node
+                    mutableGraph[ArchiveKey(request)] = node
                 }
             }
 
-            private fun putBy(desc: ArtifactMetadata.Descriptor, node: DependencyNode): DependencyNode {
-                localGraph[getProvider(desc).keyFor(desc)] = node
-                _graph[DescriptorKey(desc)] = node
-
-                return node
-            }
-
-            fun load(data: DependencyData): DependencyNode {
-                fun checkChild(data: DependencyData?): DependencyData {
-                    return data
-                        ?: throw IllegalStateException("Dependency cache invalidated! Please delete everything in directory: '${store.path()}'.")
-                }
-
-                fun DependencyNode.handleOrChildren(): Set<ArchiveHandle> = children.flatMapTo(HashSet()) { d ->
-                    d.archive?.let(::setOf) ?: d.children.flatMapTo(HashSet()) { it.handleOrChildren() }
-                }
-
-                return getBy(data.key.desc) ?: run {
-                    val children = data.children.map(store::get).map(::checkChild).mapTo(HashSet(), ::load)
-
-                    val ref: ArchiveReference =
-                        af.find(data.archive?.uri?.let(Path::of) ?: return DependencyNode(null, children))
-
-                    val handles = children.flatMapTo(HashSet()) { it.handleOrChildren() }
-                    val classloader = DependencyClassLoader(ref, handles, privilegeManager)
-
-                    val handle = Archives.resolve(ref, classloader, ar, handles).archive
-
-                    return putBy(data.key.desc, DependencyNode(handle, children))
-                }
-            }
-
-            fun cache(artifact: Artifact) {
-                val desc = artifact.metadata.desc
-                val key = DescriptorKey(desc)
-
-                if (!store.contains(key)) {
-                    store.put(
-                        key, DependencyData(key,
-                            artifact.metadata.resource?.toSafeResource(),
-                            artifact.children.map { DescriptorKey(it.metadata.desc) })
-                    )
-
-                    artifact.children.forEach(::cache)
-                }
-            }
+            protected abstract fun getKey(request: K): VersionIndependentDependencyKey
         }
     }
 }
