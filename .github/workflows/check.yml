@@ -16,4 +16,4 @@ jobs:
       - name: Grant permissions to Gradle
         run: chmod +x gradlew
       - name: Test
-        run: ./gradlew test --no-daemon -Pdm.grp.user=${{ secrets.DM_GPR_USER }} -Pdm.grp.key=${{ secrets.DM_GPR_KEY }}
+        run: ./gradlew test --no-daemon -Pdm.gpr.user=${{ secrets.DM_GPR_USER }} -Pdm.gpr.key=${{ secrets.DM_GPR_KEY }}
