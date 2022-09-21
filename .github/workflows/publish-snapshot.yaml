@@ -1,11 +1,13 @@
 name: publish-snapshot
 on:
-  workflow_run:
-    workflows:
-      - "check"
-    branches: [dev]
-    types:
-      - completed
+  push:
+    branches: [ dev ]
+#  workflow_run:
+#    workflows:
+#      - "check"
+#    branches: [dev]
+#    types:
+#      - completed
 jobs:
   publish-to-maven:
     runs-on: ubuntu-latest
