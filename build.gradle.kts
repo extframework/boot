@@ -17,8 +17,8 @@ repositories {
         name = "Durgan McBroom GitHub Packages"
         url = uri("https://maven.pkg.github.com/durganmcbroom/artifact-resolver")
         credentials {
-            username = project.findProperty("gpr.user") as? String ?: throw IllegalArgumentException("Need a Github package registry username!")
-            password = project.findProperty("gpr.key") as? String ?: throw IllegalArgumentException("Need a Github package registry key!")
+            username = project.findProperty("gpr.user") as? String ?: project.findProperty("DM_GPR_USER") as? String ?: throw IllegalArgumentException("Need a Github package registry username!")
+            password = project.findProperty("gpr.key") as? String ?: project.findProperty("DM_GPR_KEY") as? String  ?: throw IllegalArgumentException("Need a Github package registry key!")
         }
     }
     maven {
