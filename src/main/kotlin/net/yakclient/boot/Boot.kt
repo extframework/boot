@@ -91,7 +91,7 @@ public fun main(args: Array<String>) {
     }
 
     val app = setupApp(appPath)
-    val instance = app.newInstance()
+    val instance = app.newInstance(args)
 
     instance.start(args)
 }
