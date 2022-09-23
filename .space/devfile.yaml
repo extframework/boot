@@ -1,8 +1,8 @@
-schemaVersion: 2.2.0
-metadata:
-	name: "Boot dev config"
-attributes:
-	space:
-    	editor:
-        	instanceType: regular
-        	type: Idea
+attributes: 
+  space: 
+    editor: 
+      instanceType: regular
+      type: Idea
+metadata: 
+  name: "Boot dev config"
+schemaVersion: "2.2.0"
