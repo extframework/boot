@@ -24,4 +24,5 @@ module yakclient.boot {
     exports net.yakclient.boot.container;
     exports net.yakclient.boot.security;
     exports net.yakclient.boot.plugin;
+    exports net.yakclient.boot.archive;
 }
