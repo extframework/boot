@@ -2,6 +2,7 @@ package net.yakclient.boot.maven
 
 import com.durganmcbroom.artifact.resolver.ArtifactReference
 import com.durganmcbroom.artifact.resolver.ArtifactStubResolver
+import com.durganmcbroom.artifact.resolver.RepositoryFactory
 import com.durganmcbroom.artifact.resolver.ResolutionContext
 import com.durganmcbroom.artifact.resolver.simple.maven.*
 import net.yakclient.archives.ResolutionResult
@@ -31,8 +32,9 @@ public class MavenDependencyGraph(
     initialGraph: MutableMap<ArchiveKey<SimpleMavenArtifactRequest>, DependencyNode> = HashMap(),
     privilegeManager: PrivilegeManager = PrivilegeManager(null, PrivilegeAccess.emptyPrivileges()) {},
     private val stubResolutionProvider : (SimpleMavenArtifactRepository) -> ArtifactStubResolver<*, SimpleMavenArtifactStub, SimpleMavenArtifactReference> = SimpleMavenArtifactRepository::stubResolver,
+    factory: RepositoryFactory<SimpleMavenRepositorySettings, SimpleMavenArtifactRequest, SimpleMavenArtifactStub, SimpleMavenArtifactReference, SimpleMavenArtifactRepository> = SimpleMaven
 ) : DependencyGraph<SimpleMavenArtifactRequest, SimpleMavenArtifactStub, SimpleMavenRepositorySettings>(
-    store, SimpleMaven, archiveResolver, initialGraph, privilegeManager
+    store, factory, archiveResolver, initialGraph, privilegeManager
 ) {
     override fun loaderOf(settings: SimpleMavenRepositorySettings): ArchiveLoader<*> {
         val artifactRepository = SimpleMaven.createNew(settings)

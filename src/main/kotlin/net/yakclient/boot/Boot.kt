@@ -31,11 +31,16 @@ import net.yakclient.boot.plugin.PluginRuntimeModelRepository
 import net.yakclient.boot.plugin.artifact.PluginArtifactRequest
 import net.yakclient.boot.plugin.artifact.PluginRepositorySettings
 import net.yakclient.boot.store.CachingDataStore
+import net.yakclient.common.util.immutableLateInit
 import java.io.InputStream
 import java.nio.file.Files
 import java.nio.file.Path
 import java.security.Policy
 import java.util.*
+
+public object Boot {
+    public var maven: MavenDependencyGraph by immutableLateInit()
+}
 
 public fun main(args: Array<String>) {
     Policy.setPolicy(BasicPolicy())
@@ -50,7 +55,7 @@ public fun main(args: Array<String>) {
 
     parser.parse(args)
 
-    initMaven(mavenCache) { populateFrom ->
+    Boot.maven = createMaven(mavenCache) { populateFrom ->
         val mavenCentral = SimpleMaven.createContext(
             SimpleMavenRepositorySettings.mavenCentral(
                 preferredHash = HashType.SHA1
@@ -157,7 +162,10 @@ private fun initPluginSystem(pluginCache: String): PluginGraph {
     )
 }
 
-private fun initMaven(cacheLocation: String, initDependencies: (MavenContext.(String) -> Unit) -> Unit) {
+public fun createMaven(
+    cacheLocation: String,
+    initDependencies: (MavenContext.(String) -> Unit) -> Unit,
+): MavenDependencyGraph {
     val dependencyGraph = createMavenDependencyGraph(cacheLocation, initDependencies)
 
     DependencyProviders.add(object :
@@ -199,6 +207,8 @@ private fun initMaven(cacheLocation: String, initDependencies: (MavenContext.(St
             )
         }
     })
+
+    return dependencyGraph
 }
 
 private typealias MavenContext = ResolutionContext<SimpleMavenArtifactRequest, ArtifactStub<SimpleMavenArtifactRequest, SimpleMavenRepositoryStub>, ArtifactReference<SimpleMavenArtifactMetadata, ArtifactStub<SimpleMavenArtifactRequest, SimpleMavenRepositoryStub>>>
@@ -207,6 +217,27 @@ private fun createMavenDependencyGraph(
     cachePath: String,
     initDependencies: (MavenContext.(String) -> Unit) -> Unit,
 ): MavenDependencyGraph {
+    val moduleAwareGraph = populateDependenciesSafely(initDependencies)
+
+    val basePath = Path.of(cachePath)
+    val graph = MavenDependencyGraph(
+        basePath,
+        CachingDataStore(
+            MavenDataAccess(basePath)
+        ),
+        BasicArchiveResolutionProvider(
+            Archives.Finders.JPM_FINDER as ArchiveFinder<ArchiveReference>,
+            Archives.Resolvers.JPM_RESOLVER
+        ),
+        moduleAwareGraph
+    )
+
+    return graph
+}
+
+public fun populateDependenciesSafely(
+    initDependencies: (MavenContext.(String) -> Unit) -> Unit,
+): MutableMap<ArchiveKey<SimpleMavenArtifactRequest>, DependencyNode> {
     val initialGraph: MutableMap<ArchiveKey<SimpleMavenArtifactRequest>, DependencyNode> = HashMap()
 
     class UnVersionedArchiveKey(request: SimpleMavenArtifactRequest) :
@@ -235,7 +266,7 @@ private fun createMavenDependencyGraph(
     }
 
     val delegate = HashMap<ArchiveKey<SimpleMavenArtifactRequest>, DependencyNode>()
-    val moduleAwareGraph = object : MutableMap<ArchiveKey<SimpleMavenArtifactRequest>, DependencyNode> by delegate {
+    val moduleAwareGraph: MutableMap<ArchiveKey<SimpleMavenArtifactRequest>, DependencyNode> = object : MutableMap<ArchiveKey<SimpleMavenArtifactRequest>, DependencyNode> by delegate {
         override fun get(key: ArchiveKey<SimpleMavenArtifactRequest>): DependencyNode? {
             return initialGraph[UnVersionedArchiveKey(key.request)] ?: delegate[key]
         }
@@ -285,20 +316,7 @@ private fun createMavenDependencyGraph(
         )
     }
 
-    val basePath = Path.of(cachePath)
-    val graph = MavenDependencyGraph(
-        basePath,
-        CachingDataStore(
-            MavenDataAccess(basePath)
-        ),
-        BasicArchiveResolutionProvider(
-            Archives.Finders.JPM_FINDER as ArchiveFinder<ArchiveReference>,
-            Archives.Resolvers.JPM_RESOLVER
-        ),
-        moduleAwareGraph
-    )
-
-    return graph
+    return moduleAwareGraph
 }
 
 private const val APP_ENTRY_RESOURCE_LOCATION = "META-INF/app.json"
