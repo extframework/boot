@@ -86,10 +86,6 @@ public abstract class DependencyGraph<K : ArtifactRequest<*>, S : ArtifactStub<K
         context: GraphContext<K>,
         data: DependencyData<K>,
     ): Either<ArchiveLoadException, DependencyNode> = either.eager {
-        fun DependencyNode.handleOrChildren(): Set<ArchiveHandle> = children.flatMapTo(HashSet()) { d ->
-            d.archive?.let(::setOf) ?: d.children.flatMapTo(HashSet()) { it.handleOrChildren() }
-        }
-
         context[ArchiveKey(data.key)] ?: either.eager eagerLoadFromData@{
             val children = data.children
                 .map(store::get)
