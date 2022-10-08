@@ -47,9 +47,8 @@ application {
     )
 }
 
-tasks.run {
-   workingDir = project.parent!!.rootDir.toPath().resolve("minecraft").toFile()
-}
+tasks.run.get().workingDir = project.parent!!.rootDir.toPath().resolve("minecraft").toFile()
+
 
 configurations.all {
     resolutionStrategy.cacheChangingModulesFor(0, "seconds")
