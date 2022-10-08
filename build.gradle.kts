@@ -5,14 +5,19 @@ plugins {
     id("signing")
     id("maven-publish")
     id("org.jetbrains.dokka") version "1.6.0"
+    application
+    java
 }
 
 group = "net.yakclient"
 version = "1.0-SNAPSHOT"
 
+java {
+    modularity.inferModulePath.set(true)
+}
+
 repositories {
     mavenCentral()
-//    mavenLocal()
     maven {
         name = "Durgan McBroom GitHub Packages"
         url = uri("https://maven.pkg.github.com/durganmcbroom/artifact-resolver")
@@ -25,6 +30,25 @@ repositories {
         isAllowInsecureProtocol = true
         url = uri("http://repo.yakclient.net/snapshots")
     }
+}
+
+application {
+    mainClass.set("net.yakclient.boot.BootKt")
+    mainModule.set("yakclient.boot")
+
+
+    applicationDefaultJvmArgs = listOf(
+        "-Xms512m",
+        "-Xmx4G",
+        "-XstartOnFirstThread",
+        "-Djava.security.manager=allow",
+        "--add-exports",
+        "kotlin.reflect/kotlin.reflect.jvm.internal=com.fasterxml.jackson.kotlin",
+    )
+}
+
+tasks.run {
+   workingDir = project.parent!!.rootDir.toPath().resolve("minecraft").toFile()
 }
 
 configurations.all {
@@ -52,6 +76,8 @@ dependencies {
         isChanging = true
     }
     testImplementation(kotlin("test"))
+
+//    components { withModule<ModularKotlinRule>(kotlin("")) }
 }
 
 task<Jar>("sourcesJar") {
@@ -179,27 +205,3 @@ allprojects {
         }
     }
 }
-//
-//
-//tasks.test {
-//    useJUnitPlatform()
-//}
-//
-//tasks.compileJava {
-//    targetCompatibility = "17"
-//    sourceCompatibility = "17"
-//}
-//
-//tasks.compileJava {
-//    sourceCompatibility = "17"
-//    targetCompatibility = "17"
-//}
-//
-//tasks.compileKotlin {
-//    destinationDirectory.set(tasks.compileJava.get().destinationDirectory.asFile.get())
-//    kotlinOptions.jvmTarget = "17"
-//}
-//
-//tasks.compileTestKotlin {
-//    kotlinOptions.jvmTarget = "17"
-//}

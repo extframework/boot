@@ -82,6 +82,7 @@ public abstract class DependencyGraph<K : ArtifactRequest<*>, S : ArtifactStub<K
         public fun put(key: ArchiveKey<K>, node: DependencyNode)
     }
 
+
     private fun load(
         context: GraphContext<K>,
         data: DependencyData<K>,
@@ -107,10 +108,12 @@ public abstract class DependencyGraph<K : ArtifactRequest<*>, S : ArtifactStub<K
         }.bind()
     }
 
+    protected abstract fun writeResource(request: K, resource: SafeResource): Path
+
     public abstract inner class DependencyLoader(
         resolver: ResolutionContext<K, S, ArtifactReference<*, S>>,
     ) : ArchiveLoader<S>(
-        resolver
+        resolver,
     ) {
         protected abstract fun newLocalGraph(): LocalGraph
 
@@ -128,7 +131,6 @@ public abstract class DependencyGraph<K : ArtifactRequest<*>, S : ArtifactStub<K
             graph[key] ?: loadUsingRepository().bind()
         }
 
-        protected abstract fun writeResource(request: K, resource: SafeResource): Path
 
         public fun cache(
             request: K,
@@ -150,12 +152,14 @@ public abstract class DependencyGraph<K : ArtifactRequest<*>, S : ArtifactStub<K
             ref: ArtifactReference<*, S>,
         ): Either<ArchiveLoadException, DependencyData<K>> = either.eager {
             ref.children.forEach { stub ->
-                val childRef = resolver.resolverContext.stubResolver
+                val resolve = resolver.resolverContext.stubResolver
                     .resolve(stub)
+
+                val childRef = resolve
                     .mapLeft(ArchiveLoadException::ArtifactLoadException)
                     .bind()
 
-                cache(stub.request, childRef)
+                cache(stub.request, childRef).bind()
             }
 
             val data = DependencyData(

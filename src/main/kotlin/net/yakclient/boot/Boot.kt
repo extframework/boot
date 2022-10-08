@@ -10,10 +10,7 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.KotlinModule
 import com.fasterxml.jackson.module.kotlin.readValue
-import kotlinx.cli.ArgParser
-import kotlinx.cli.ArgType
-import kotlinx.cli.required
-import kotlinx.cli.vararg
+import kotlinx.cli.*
 import net.yakclient.archives.*
 import net.yakclient.boot.archive.ArchiveKey
 import net.yakclient.boot.archive.BasicArchiveResolutionProvider
@@ -46,12 +43,12 @@ public fun main(args: Array<String>) {
     Policy.setPolicy(BasicPolicy())
     System.setSecurityManager(SecurityManager())
 
-    val parser = ArgParser("boot")
+    val parser = ArgParser("boot", skipExtraArguments = true)
 
     val appPath by parser.option(ArgType.String, "app").required()
     val mavenCache by parser.option(ArgType.String, "maven-cache-location").required()
     val pluginCache by parser.option(ArgType.String, "plugin-cache-location").required()
-    val plugins by parser.argument(ArgType.String, "plugins").vararg()
+    val plugins = listOf<String>()// by parser.argument(ArgType.String, "plugins").vararg().optional()
 
     parser.parse(args)
 
@@ -87,7 +84,7 @@ public fun main(args: Array<String>) {
         yakCentral.populateFrom("net.yakclient:archives:1.0-SNAPSHOT")
     }
 
-    val pluginRequests = parsePluginRequests(plugins)
+    val pluginRequests = parsePluginRequests(if (plugins.isNotEmpty()) plugins.subList(1, plugins.size) else plugins)
 
     val pluginGraph = initPluginSystem(pluginCache)
 
@@ -98,7 +95,7 @@ public fun main(args: Array<String>) {
     val app = setupApp(appPath)
     val instance = app.newInstance(args)
 
-    instance.start(args)
+    instance.start(arrayOf("--accessToken", "", "--version", "1.18.2"))
 }
 
 private fun parsePluginRequests(
@@ -344,7 +341,7 @@ private fun readApp(app: String): ArchiveReference {
 
     check(Files.exists(path)) { "Given argument 'app-entry' (value: '$app') cannot be found in the file system!" }
 
-    return Archives.find(path, Archives.Finders.ZIP_FINDER)
+    return Archives.find(path, Archives.Finders.JPM_FINDER)
 }
 
 private fun setupApp(app: String): BootApplication {
@@ -355,7 +352,7 @@ private fun setupApp(app: String): BootApplication {
         ?: throw IllegalStateException("Application Entry Point: '$app' should have a property file named: $'$APP_ENTRY_RESOURCE_LOCATION'")
 
     val dependencies = properties.dependencies.map {
-        val provider = DependencyProviders.getByType(it.type)
+        val provider: DependencyGraphProvider<*, *>? = DependencyProviders.getByType(it.type)
 
         provider?.getArtifact(it.request, it.repository)?.orNull()
             ?: throw IllegalArgumentException("Failed to load artifact '${it.request}' of type '${it.type}' from repository '${it.repository}'")
@@ -365,7 +362,7 @@ private fun setupApp(app: String): BootApplication {
         return node.archive?.let(::listOf) ?: node.children.flatMap(::handleOrChildren)
     }
 
-    val children = dependencies.flatMapTo(HashSet(), ::handleOrChildren)
+    val children = dependencies.flatMapTo(HashSet(), ::handleOrChildren) + ModuleLayer.boot().modules().map(JpmArchives::moduleToArchive)
 
     val handle = Archives.resolve(
         ref,

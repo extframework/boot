@@ -2,6 +2,7 @@ package net.yakclient.boot.archive
 
 import arrow.core.Either
 import com.durganmcbroom.artifact.resolver.*
+import net.yakclient.archives.ResolutionResult
 import net.yakclient.boot.dependency.ArchiveStubResolver
 import net.yakclient.boot.store.DataStore
 import java.util.logging.Logger

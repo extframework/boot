@@ -4,7 +4,7 @@ import java.net.URL
 import java.nio.ByteBuffer
 
 public class DelegatingSourceProvider(
-    delegates: List<SourceProvider>,
+    private val delegates: List<SourceProvider>,
 ) : SourceProvider {
     private fun <V, K> Iterable<V>.flatGroupBy(transformer: (V) -> Iterable<K>): Map<K, List<V>> =
         flatMap { v -> transformer(v).map { it to v } }.groupBy { it.first }
@@ -17,8 +17,8 @@ public class DelegatingSourceProvider(
         packageMap[name.packageFormat]?.firstNotNullOfOrNull { it.getSource(name) }
 
     override fun getResource(name: String): URL? =
-        packageMap[name.packageFormat]?.firstNotNullOfOrNull { it.getResource(name) }
+       delegates.firstNotNullOfOrNull { it.getResource(name) }
 
     override fun getResource(name: String, module: String): URL? =
-        packageMap[name.packageFormat]?.firstNotNullOfOrNull { it.getResource(name, module) }
+        delegates.firstNotNullOfOrNull { it.getResource(name, module) }
 }

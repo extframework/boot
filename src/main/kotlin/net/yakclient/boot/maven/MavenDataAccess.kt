@@ -2,17 +2,13 @@ package net.yakclient.boot.maven
 
 import com.durganmcbroom.artifact.resolver.ArtifactMetadata
 import com.durganmcbroom.artifact.resolver.ArtifactRequest
-import com.durganmcbroom.artifact.resolver.simple.maven.*
-import com.fasterxml.jackson.annotation.JsonAutoDetect
-import com.fasterxml.jackson.annotation.JsonCreator
+import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenArtifactRequest
+import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenDescriptor
 import com.fasterxml.jackson.annotation.JsonIgnore
-import com.fasterxml.jackson.annotation.JsonProperty
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.module.kotlin.KotlinFeature
 import com.fasterxml.jackson.module.kotlin.KotlinModule
 import com.fasterxml.jackson.module.kotlin.readValue
 import net.yakclient.boot.dependency.DependencyData
-import net.yakclient.boot.plugin.artifact.PluginArtifactRequest
 import net.yakclient.boot.store.DataAccess
 import net.yakclient.common.util.make
 import net.yakclient.common.util.resolve
@@ -23,19 +19,19 @@ import kotlin.io.path.writeBytes
 
 private const val VERSIONED_METADATA_NAME = "artifact-metadata.json"
 
-private const val SCOPE_CONTROL_TYPE_FIELD_NAME = "scope-control-type"
-private const val SCOPE_INCLUSION_TYPE_NAME = "scope_inclusion"
-private const val SCOPE_EXCLUSION_TYPE_NAME = "scope_exclusion"
-private const val SCOPE_ARRAY_NAME = "scopes"
-
-private const val ARTIFACT_CONTROL_TYPE_FIELD_NAME = "scope-control-type"
-private const val ARTIFACT_INCLUSION_TYPE_NAME = "scope_inclusion"
-private const val ARTIFACT_EXCLUSION_TYPE_NAME = "scope_exclusion"
-private const val ARTIFACT_ARRAY_NAME = "scopes"
+//private const val SCOPE_CONTROL_TYPE_FIELD_NAME = "scope-control-type"
+//private const val SCOPE_INCLUSION_TYPE_NAME = "scope_inclusion"
+//private const val SCOPE_EXCLUSION_TYPE_NAME = "scope_exclusion"
+//private const val SCOPE_ARRAY_NAME = "scopes"
+//
+//private const val ARTIFACT_CONTROL_TYPE_FIELD_NAME = "scope-control-type"
+//private const val ARTIFACT_INCLUSION_TYPE_NAME = "scope_inclusion"
+//private const val ARTIFACT_EXCLUSION_TYPE_NAME = "scope_exclusion"
+//private const val ARTIFACT_ARRAY_NAME = "scopes"
 
 public open class MavenDataAccess(
     private val path: Path,
-) : DataAccess<PluginArtifactRequest, DependencyData<PluginArtifactRequest>> {
+) : DataAccess<SimpleMavenArtifactRequest, DependencyData<SimpleMavenArtifactRequest>> {
     private val mapper: ObjectMapper by lazy(::initMapper)
 
 //    private abstract class ArtifactRequestJacksonMixin @JsonCreator constructor(
@@ -158,7 +154,7 @@ public open class MavenDataAccess(
         metadataPath.writeBytes(value)
     }
 
-    override fun read(key: PluginArtifactRequest): DependencyData<SimpleMavenArtifactRequest>? {
+    override fun read(key: SimpleMavenArtifactRequest): DependencyData<SimpleMavenArtifactRequest>? {
         val desc by key::descriptor
 
         val artifactPath =
@@ -170,8 +166,8 @@ public open class MavenDataAccess(
     }
 
     override fun write(
-        key: PluginArtifactRequest,
-        value: DependencyData<PluginArtifactRequest>,
+        key: SimpleMavenArtifactRequest,
+        value: DependencyData<SimpleMavenArtifactRequest>,
     ) {
         val desc by key::descriptor
 

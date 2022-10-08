@@ -32,12 +32,13 @@ public class MavenDependencyGraph(
     initialGraph: MutableMap<ArchiveKey<SimpleMavenArtifactRequest>, DependencyNode> = HashMap(),
     privilegeManager: PrivilegeManager = PrivilegeManager(null, PrivilegeAccess.emptyPrivileges()) {},
     private val stubResolutionProvider : (SimpleMavenArtifactRepository) -> ArtifactStubResolver<*, SimpleMavenArtifactStub, SimpleMavenArtifactReference> = SimpleMavenArtifactRepository::stubResolver,
-    factory: RepositoryFactory<SimpleMavenRepositorySettings, SimpleMavenArtifactRequest, SimpleMavenArtifactStub, SimpleMavenArtifactReference, SimpleMavenArtifactRepository> = SimpleMaven
+    private val factory: RepositoryFactory<SimpleMavenRepositorySettings, SimpleMavenArtifactRequest, SimpleMavenArtifactStub, SimpleMavenArtifactReference, SimpleMavenArtifactRepository> = SimpleMaven
 ) : DependencyGraph<SimpleMavenArtifactRequest, SimpleMavenArtifactStub, SimpleMavenRepositorySettings>(
     store, factory, archiveResolver, initialGraph, privilegeManager
 ) {
     override fun loaderOf(settings: SimpleMavenRepositorySettings): ArchiveLoader<*> {
-        val artifactRepository = SimpleMaven.createNew(settings)
+        val artifactRepository = factory.createNew(settings)
+
         return MavenDependencyLoader(
             ResolutionContext(
                 artifactRepository,
@@ -47,33 +48,35 @@ public class MavenDependencyGraph(
         )
     }
 
+    override fun writeResource(request: SimpleMavenArtifactRequest, resource: SafeResource): Path {
+        val descriptor by request::descriptor
+
+        val jarName = "${descriptor.artifact}-${descriptor.version}.jar"
+        val jarPath = path resolve descriptor.group.replace(
+            '.',
+            File.separatorChar
+        ) resolve descriptor.artifact resolve descriptor.version resolve jarName
+
+        if (!Files.exists(jarPath)) {
+            logger.log(Level.INFO, "Downloading dependency: '$descriptor'")
+
+            Channels.newChannel(resource.open()).use { cin ->
+                jarPath.make()
+                FileOutputStream(jarPath.toFile()).use { fout ->
+                    fout.channel.transferFrom(cin, 0, Long.MAX_VALUE)
+                }
+            }
+        }
+
+        return jarPath
+    }
+
     private inner class MavenDependencyLoader(
         resolver: ResolutionContext<SimpleMavenArtifactRequest, SimpleMavenArtifactStub, ArtifactReference<*, SimpleMavenArtifactStub>>,
     ) : DependencyLoader(resolver) {
         override fun newLocalGraph(): LocalGraph = MavenLocalGraph()
 
-        override fun writeResource(request: SimpleMavenArtifactRequest, resource: SafeResource): Path {
-            val descriptor by request::descriptor
 
-            val jarName = "${descriptor.artifact}-${descriptor.version}.jar"
-            val jarPath = path resolve descriptor.group.replace(
-                '.',
-                File.separatorChar
-            ) resolve descriptor.artifact resolve descriptor.version resolve jarName
-
-            if (!Files.exists(jarPath)) {
-                logger.log(Level.INFO, "Downloading dependency: '$descriptor'")
-
-                Channels.newChannel(resource.open()).use { cin ->
-                    jarPath.make()
-                    FileOutputStream(jarPath.toFile()).use { fout ->
-                        fout.channel.transferFrom(cin, 0, Long.MAX_VALUE)
-                    }
-                }
-            }
-
-            return jarPath
-        }
 
         private inner class MavenLocalGraph : LocalGraph() {
             override fun getKey(request: SimpleMavenArtifactRequest): VersionIndependentDependencyKey {

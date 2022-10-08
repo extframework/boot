@@ -10,5 +10,5 @@ internal class BasicPolicy : Policy() {
         permissions.add(AllPermission())
     }
 
-    override fun getPermissions(codesource: CodeSource): PermissionCollection? = if (codesource !is ContainerSource) permissions else null
+    override fun getPermissions(codesource: CodeSource?): PermissionCollection? = if (codesource !is ContainerSource) permissions else null
 }
