@@ -26,7 +26,7 @@ public class PluginMetadataHandler(
         val (group, artifact, version, _) = desc
 
         // plugin runtime model
-        val prmResource = layout.resourceOf(group, artifact, version, null, "prm.json").bind()
+        val prmResource = layout.resourceOf(group, artifact, version, "prm", "json").bind()
         val jarResource = layout.resourceOf(group, artifact, version, null, "jar").orNull()
 
         val prm = mapper.readValue<PluginRuntimeModel>(prmResource.open())

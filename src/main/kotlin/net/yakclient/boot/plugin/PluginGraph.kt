@@ -3,6 +3,7 @@ package net.yakclient.boot.plugin
 import arrow.core.Either
 import arrow.core.continuations.either
 import arrow.core.continuations.ensureNotNull
+import arrow.core.identity
 import arrow.core.left
 import arrow.core.right
 import com.durganmcbroom.artifact.resolver.*
@@ -27,7 +28,9 @@ public class PluginGraph(
     private val store: DataStore<PluginDescriptor, PluginData>,
     private val resolutionProvider: ArchiveResolutionProvider<*>,
 ) : ArchiveGraph<PluginArtifactRequest, PluginNode, PluginRepositorySettings>(BootPlugins) {
-    override val graph: Map<PluginDescriptor, PluginNode> = mapOf()
+    private val mutableGraph: MutableMap<PluginDescriptor, PluginNode> = HashMap()
+    override val graph: Map<PluginDescriptor, PluginNode>
+        get() = mutableGraph.toMap()
 
     override fun get(request: PluginArtifactRequest): Either<ArchiveLoadException, PluginNode> {
         return graph[request.descriptor]?.right() ?: either.eager {
@@ -67,7 +70,7 @@ public class PluginGraph(
                 )
             }
 
-            val archive = data.archive?.let {
+            val result = data.archive?.let {
                 val parents = children.mapNotNullTo(HashSet(), PluginNode::archive) + dependencies.mapNotNullTo(
                     HashSet(),
                     DependencyNode::archive
@@ -77,7 +80,9 @@ public class PluginGraph(
                     { a -> PluginClassLoader(a, parents) },
                     parents
                 )
-            }?.bind()?.archive
+            }?.bind()
+
+            val archive = result?.archive
 
             PluginNode(
                 archive,
@@ -85,7 +90,7 @@ public class PluginGraph(
                 dependencies.toSet(),
                 data.runtimeModel,
                 archive?.let { loadPlugin(it, data.runtimeModel) }
-            )
+            ).also { mutableGraph[data.key] = it }
         }
     }
 
@@ -166,13 +171,13 @@ public class PluginGraph(
                 .map { it.orNull() ?: throw IllegalStateException("Found a artifact stub: '${(it as Either.Left).value}' when trying to cache plugins.") }
                 .forEach(::cache)
 
-            metadata.dependencies.forEach {
-                val provider = DependencyProviders.getByType(it.type)
-                    ?: throw IllegalArgumentException("Invalid repository: '${it.type}'. Failed to find provider for this type.")
+            metadata.dependencies.forEach { i ->
+                val provider = DependencyProviders.getByType(i.type)
+                    ?: throw IllegalArgumentException("Invalid repository: '${i.type}'. Failed to find provider for this type.")
                 provider.cacheArtifact(
-                    it.repositorySettings,
-                    it.request
-                )
+                    i.repositorySettings,
+                    i.request
+                ).fold({throw it}, ::identity)
             }
 
             val data = PluginData(

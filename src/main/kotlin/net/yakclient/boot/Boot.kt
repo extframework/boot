@@ -1,12 +1,10 @@
 package net.yakclient.boot
 
-import com.durganmcbroom.artifact.resolver.ArtifactReference
-import com.durganmcbroom.artifact.resolver.ArtifactStub
-import com.durganmcbroom.artifact.resolver.ResolutionContext
-import com.durganmcbroom.artifact.resolver.createContext
+import arrow.core.identity
+import com.durganmcbroom.artifact.resolver.*
 import com.durganmcbroom.artifact.resolver.simple.maven.*
 import com.durganmcbroom.artifact.resolver.simple.maven.layout.SimpleMavenDefaultLayout
-import com.fasterxml.jackson.databind.JsonNode
+import com.fasterxml.jackson.core.JsonParser
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.KotlinModule
 import com.fasterxml.jackson.module.kotlin.readValue
@@ -16,15 +14,17 @@ import net.yakclient.boot.archive.ArchiveKey
 import net.yakclient.boot.archive.BasicArchiveResolutionProvider
 import net.yakclient.boot.archive.moduleNameFor
 import net.yakclient.boot.dependency.*
+import net.yakclient.boot.event.ApplicationLaunchEvent
+import net.yakclient.boot.event.ApplicationLoadEvent
+import net.yakclient.boot.event.EventPipelineManager
+import net.yakclient.boot.event.PluginLoadEvent
 import net.yakclient.boot.loader.ArchiveClassProvider
 import net.yakclient.boot.loader.ArchiveSourceProvider
 import net.yakclient.boot.loader.DelegatingClassProvider
 import net.yakclient.boot.loader.IntegratedLoader
 import net.yakclient.boot.maven.MavenDataAccess
 import net.yakclient.boot.maven.MavenDependencyGraph
-import net.yakclient.boot.plugin.PluginDataAccess
-import net.yakclient.boot.plugin.PluginGraph
-import net.yakclient.boot.plugin.PluginRuntimeModelRepository
+import net.yakclient.boot.plugin.*
 import net.yakclient.boot.plugin.artifact.PluginArtifactRequest
 import net.yakclient.boot.plugin.artifact.PluginRepositorySettings
 import net.yakclient.boot.store.CachingDataStore
@@ -37,6 +37,7 @@ import java.util.*
 
 public object Boot {
     public var maven: MavenDependencyGraph by immutableLateInit()
+    public val eventManager: EventPipelineManager = EventPipelineManager()
 }
 
 public fun main(args: Array<String>) {
@@ -48,9 +49,14 @@ public fun main(args: Array<String>) {
     val appPath by parser.option(ArgType.String, "app").required()
     val mavenCache by parser.option(ArgType.String, "maven-cache-location").required()
     val pluginCache by parser.option(ArgType.String, "plugin-cache-location").required()
-    val plugins = listOf<String>()// by parser.argument(ArgType.String, "plugins").vararg().optional()
+    val pluginArguments by parser.option(ArgType.String, "plugins").required()
 
     parser.parse(args)
+
+    println(appPath)
+    println(mavenCache)
+    println(pluginCache)
+    println(pluginArguments)
 
     Boot.maven = createMaven(mavenCache) { populateFrom ->
         val mavenCentral = SimpleMaven.createContext(
@@ -84,65 +90,86 @@ public fun main(args: Array<String>) {
         yakCentral.populateFrom("net.yakclient:archives:1.0-SNAPSHOT")
     }
 
-    val pluginRequests = parsePluginRequests(if (plugins.isNotEmpty()) plugins.subList(1, plugins.size) else plugins)
+    val pluginRequests = parsePluginRequests(pluginArguments)
 
     val pluginGraph = initPluginSystem(pluginCache)
 
     pluginRequests.forEach { (req, settings) ->
-        pluginGraph.loaderOf(settings).load(req)
+        pluginGraph.loaderOf(settings).load(req).fold({ throw it }, ::identity)
     }
 
-    val app = setupApp(appPath)
+    pluginGraph.graph.values
+        .onEach { it.plugin?.onLoad() }
+        .onEach {
+            if (it.plugin != null) Boot.eventManager.accept(PluginLoadEvent(it, it.plugin))
+        }
+
+    val appRef = readApp(appPath)
+
+    Boot.eventManager.accept(ApplicationLoadEvent(appRef))
+
+    val (app, handle) = setupApp(appRef)
     val instance = app.newInstance(args)
 
-    instance.start(arrayOf("--accessToken", "", "--version", "1.18.2"))
+    Boot.eventManager.accept(ApplicationLaunchEvent(handle, app))
+
+    instance.start(args)
 }
 
 private fun parsePluginRequests(
-    plugins: List<String>,
-) = plugins.map { s ->
-    val mapper = ObjectMapper()
+    plugins: String,
+): List<Pair<PluginArtifactRequest, PluginRepositorySettings>> {
+    val mapper = ObjectMapper().registerModule(KotlinModule.Builder().build())
+    mapper.configure(JsonParser.Feature.ALLOW_SINGLE_QUOTES, true)
 
-    val tree = mapper.readTree(s.byteInputStream())
+    data class CLIRepositorySettings(
+        val type: String,
+        val url: String,
+        val hashType: HashType = HashType.SHA1,
+        val releases: Boolean = true,
+        val snapshots: Boolean = true,
+    )
 
-    fun JsonNode.textify(): String? {
-        return asText().takeIf { it.isNotEmpty() }
-    }
+    data class CLIArtifactRequest(
+        val descriptor: String,
+        val isTransitive: Boolean = true,
+        val includeScopes: Set<String> = setOf(),
+        val excludeArtifacts: Set<String> = setOf(),
+        val repository: CLIRepositorySettings,
+    )
 
-    PluginArtifactRequest(
-        tree["desc"]?.textify() ?: throw IllegalArgumentException("Invalid descriptor for plugin request: $s."),
-        tree["isTransitive"]?.textify()?.toBoolean() ?: true,
-        tree["includeScopes"]?.textify()?.split(',')?.toSet() ?: setOf(),
-        tree["excludeArtifacts"]?.textify()?.split(',')?.toSet() ?: setOf()
-    ) to run {
-        val repository =
-            tree["repository"] ?: throw IllegalArgumentException("Repository not defined in plugin request: '$s'")
+    val requests = mapper.readValue<List<CLIArtifactRequest>>(plugins)
 
+    return requests.map { req ->
+        val repository by req::repository
 
-        val type = repository["type"]?.textify()
-            ?: throw IllegalArgumentException("Type declaration of field 'type' not defined in repository: '$repository'")
-
-        val url = (repository["url"]?.textify()
-            ?: throw IllegalArgumentException("Type declaration of field 'url' not defined in repository: '$repository'"))
-        val preferredHash = HashType.valueOf(repository["hashType"]?.textify() ?: "SHA1")
+        val request = PluginArtifactRequest(
+            req.descriptor,
+            req.isTransitive,
+            req.includeScopes,
+            req.excludeArtifacts
+        )
 
         val layout =
-            if (type == PluginRuntimeModelRepository.PLUGIN_REPO_TYPE) {
+            if (repository.type == PluginRuntimeModelRepository.PLUGIN_REPO_TYPE) {
                 SimpleMavenDefaultLayout(
-                    url,
-                    preferredHash,
-                    repository["releases"]?.textify()?.toBoolean() ?: true,
-                    repository["snapshots"]?.textify()?.toBoolean() ?: true
+                    repository.url,
+                    repository.hashType,
+                    repository.releases,
+                    repository.snapshots
                 )
-            } else if (type == PluginRuntimeModelRepository.LOCAL_PLUGIN_REPO_TYPE) SimpleMavenRepositorySettings.local(
-                url,
-                preferredHash
-            ).layout else throw java.lang.IllegalArgumentException("Unknown plugin repository type: '$type'")
+            } else if (repository.type == PluginRuntimeModelRepository.LOCAL_PLUGIN_REPO_TYPE) SimpleMavenRepositorySettings.local(
+                repository.url,
+                repository.hashType
+            ).layout else throw java.lang.IllegalArgumentException("Unknown plugin repository type: '${repository.type}'")
 
-        PluginRepositorySettings(
+
+        val settings = PluginRepositorySettings(
             layout,
-            preferredHash
+            repository.hashType,
         )
+
+        request to settings
     }
 }
 
@@ -263,11 +290,12 @@ public fun populateDependenciesSafely(
     }
 
     val delegate = HashMap<ArchiveKey<SimpleMavenArtifactRequest>, DependencyNode>()
-    val moduleAwareGraph: MutableMap<ArchiveKey<SimpleMavenArtifactRequest>, DependencyNode> = object : MutableMap<ArchiveKey<SimpleMavenArtifactRequest>, DependencyNode> by delegate {
-        override fun get(key: ArchiveKey<SimpleMavenArtifactRequest>): DependencyNode? {
-            return initialGraph[UnVersionedArchiveKey(key.request)] ?: delegate[key]
+    val moduleAwareGraph: MutableMap<ArchiveKey<SimpleMavenArtifactRequest>, DependencyNode> =
+        object : MutableMap<ArchiveKey<SimpleMavenArtifactRequest>, DependencyNode> by delegate {
+            override fun get(key: ArchiveKey<SimpleMavenArtifactRequest>): DependencyNode? {
+                return initialGraph[UnVersionedArchiveKey(key.request)] ?: delegate[key]
+            }
         }
-    }
 
     fun MavenContext.populate(
         ref: SimpleMavenArtifactReference,
@@ -344,12 +372,12 @@ private fun readApp(app: String): ArchiveReference {
     return Archives.find(path, Archives.Finders.JPM_FINDER)
 }
 
-private fun setupApp(app: String): BootApplication {
-    val ref = readApp(app)
+private fun setupApp(ref: ArchiveReference): Pair<BootApplication, ArchiveHandle> {
+    val appPath = ref.location.path
 
     val properties = ref.reader[APP_ENTRY_RESOURCE_LOCATION]
         ?.let { parseAppProperties(it.resource.open()) }
-        ?: throw IllegalStateException("Application Entry Point: '$app' should have a property file named: $'$APP_ENTRY_RESOURCE_LOCATION'")
+        ?: throw IllegalStateException("Application Entry Point: '$appPath' should have a property file named: $'$APP_ENTRY_RESOURCE_LOCATION'")
 
     val dependencies = properties.dependencies.map {
         val provider: DependencyGraphProvider<*, *>? = DependencyProviders.getByType(it.type)
@@ -362,7 +390,8 @@ private fun setupApp(app: String): BootApplication {
         return node.archive?.let(::listOf) ?: node.children.flatMap(::handleOrChildren)
     }
 
-    val children = dependencies.flatMapTo(HashSet(), ::handleOrChildren) + ModuleLayer.boot().modules().map(JpmArchives::moduleToArchive)
+    val children = dependencies.flatMapTo(HashSet(), ::handleOrChildren) + ModuleLayer.boot().modules()
+        .map(JpmArchives::moduleToArchive)
 
     val handle = Archives.resolve(
         ref,
@@ -381,13 +410,13 @@ private fun setupApp(app: String): BootApplication {
     val tryLoadClass = runCatching { handle.classloader.loadClass(properties.appClassName) }
 
     val entrypointClass = tryLoadClass.getOrNull()
-        ?: throw IllegalStateException("Failed to load class '${properties.appClassName}' from Entrypoint jar: '$app'")
+        ?: throw IllegalStateException("Failed to load class '${properties.appClassName}' from Entrypoint jar: '$appPath'")
     val entrypointConstructor = runCatching { entrypointClass.getConstructor() }.getOrNull()
         ?: throw IllegalStateException("ApplicationEntrypoint class: '${properties.appClassName}' must have a no-arg constructor!")
     val entrypoint = runCatching { entrypointConstructor.newInstance() }.getOrNull()
         ?: throw IllegalStateException("Failed to instantiate type: '${properties.appClassName}' during entrypoint construction.")
 
-    return entrypoint as? BootApplication
-        ?: throw IllegalStateException("Type given as application entrypoint is not a child of '${BootApplication::class.java.name}'.")
+    return (entrypoint as? BootApplication
+        ?: throw IllegalStateException("Type given as application entrypoint is not a child of '${BootApplication::class.java.name}'.")) to handle
 }
 

@@ -12,10 +12,6 @@ plugins {
 group = "net.yakclient"
 version = "1.0-SNAPSHOT"
 
-java {
-    modularity.inferModulePath.set(true)
-}
-
 repositories {
     mavenCentral()
     maven {
@@ -51,13 +47,14 @@ application {
 
 
 configurations.all {
-    resolutionStrategy.cacheChangingModulesFor(0, "seconds")
+    resolutionStrategy.cacheChangingModulesFor(24, "hours")
 }
 
 dependencies {
     implementation(kotlin("stdlib"))
     implementation("io.arrow-kt:arrow-core:1.1.2")
 
+    implementation("com.durganmcbroom:event-api:1.0-SNAPSHOT")
     implementation("org.jetbrains.kotlinx:kotlinx-cli:0.3.5")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.4")
     api("net.yakclient:archives:1.0-SNAPSHOT") {
