@@ -14,10 +14,7 @@ import net.yakclient.boot.archive.ArchiveKey
 import net.yakclient.boot.archive.BasicArchiveResolutionProvider
 import net.yakclient.boot.archive.moduleNameFor
 import net.yakclient.boot.dependency.*
-import net.yakclient.boot.event.ApplicationLaunchEvent
-import net.yakclient.boot.event.ApplicationLoadEvent
-import net.yakclient.boot.event.EventPipelineManager
-import net.yakclient.boot.event.PluginLoadEvent
+import net.yakclient.boot.event.*
 import net.yakclient.boot.loader.ArchiveClassProvider
 import net.yakclient.boot.loader.ArchiveSourceProvider
 import net.yakclient.boot.loader.DelegatingClassProvider
@@ -52,11 +49,6 @@ public fun main(args: Array<String>) {
     val pluginArguments by parser.option(ArgType.String, "plugins").required()
 
     parser.parse(args)
-
-    println(appPath)
-    println(mavenCache)
-    println(pluginCache)
-    println(pluginArguments)
 
     Boot.maven = createMaven(mavenCache) { populateFrom ->
         val mavenCentral = SimpleMaven.createContext(

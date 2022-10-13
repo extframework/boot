@@ -5,7 +5,6 @@ import net.yakclient.archives.ArchiveReference
 import net.yakclient.boot.BootApplication
 import net.yakclient.boot.plugin.BootPlugin
 import net.yakclient.boot.plugin.PluginNode
-import net.yakclient.boot.plugin.artifact.PluginArtifactRequest
 
 public data class ApplicationLoadEvent(
     val reference: ArchiveReference

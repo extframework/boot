@@ -28,6 +28,8 @@ public class EventPipelineManager internal constructor() {
         pipeline.accept(event)
     }
 
+    public fun <T: BootEvent> subscribe(type: Class<T>, callback: BootEventHandler<T>): Unit = subscribe(type.kotlin, callback)
+
     public fun <T: BootEvent> subscribe(type: KClass<T>, callback: BootEventHandler<T>) {
         stage.callbacks.add(type to callback)
     }
