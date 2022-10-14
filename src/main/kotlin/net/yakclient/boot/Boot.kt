@@ -97,10 +97,10 @@ public fun main(args: Array<String>) {
         }
 
     val appRef = readApp(appPath)
+    val (app, handle) = setupApp(appRef)
 
     Boot.eventManager.accept(ApplicationLoadEvent(appRef))
 
-    val (app, handle) = setupApp(appRef)
     val instance = app.newInstance(args)
 
     Boot.eventManager.accept(ApplicationLaunchEvent(handle, app))
