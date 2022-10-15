@@ -18,8 +18,10 @@ repositories {
         name = "Durgan McBroom GitHub Packages"
         url = uri("https://maven.pkg.github.com/durganmcbroom/artifact-resolver")
         credentials {
-            username = project.findProperty("dm.gpr.user") as? String ?: throw IllegalArgumentException("Need a Github package registry username!")
-            password = project.findProperty("dm.gpr.key") as? String ?: throw IllegalArgumentException("Need a Github package registry key!")
+            username = project.findProperty("dm.gpr.user") as? String
+                ?: throw IllegalArgumentException("Need a Github package registry username!")
+            password = project.findProperty("dm.gpr.key") as? String
+                ?: throw IllegalArgumentException("Need a Github package registry key!")
         }
     }
     maven {
@@ -42,9 +44,6 @@ application {
         "kotlin.reflect/kotlin.reflect.jvm.internal=com.fasterxml.jackson.kotlin",
     )
 }
-
-//tasks.run.get()?.workingDir = project.parent!!.rootDir.toPath().resolve("minecraft").toFile()
-
 
 configurations.all {
     resolutionStrategy.cacheChangingModulesFor(24, "hours")
@@ -71,10 +70,6 @@ dependencies {
     implementation("net.yakclient:common-util:1.0-SNAPSHOT") {
         isChanging = true
     }
-    testImplementation(kotlin("test"))
-
-
-//    components { withModule<ModularKotlinRule>(kotlin("")) }
 }
 
 task<Jar>("sourcesJar") {
@@ -144,9 +139,8 @@ allprojects {
 
     publishing {
         repositories {
-            if (!project.hasProperty("maven-user") || !project.hasProperty("maven-pass")) return@repositories
-
-            maven {
+            if (project.hasProperty("maven-user") && project.hasProperty("maven-pass")) maven {
+                logger.quiet("Maven user and password found.")
                 val repo = if (project.findProperty("isSnapshot") == "true") "snapshots" else "releases"
 
                 isAllowInsecureProtocol = true
@@ -160,7 +154,7 @@ allprojects {
                 authentication {
                     create<BasicAuthentication>("basic")
                 }
-            }
+            } else logger.quiet("Maven user and password not found.")
         }
     }
 
