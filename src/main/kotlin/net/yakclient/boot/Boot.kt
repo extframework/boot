@@ -12,6 +12,7 @@ import kotlinx.cli.*
 import net.yakclient.archives.*
 import net.yakclient.boot.archive.ArchiveKey
 import net.yakclient.boot.archive.BasicArchiveResolutionProvider
+import net.yakclient.boot.archive.handleOrChildren
 import net.yakclient.boot.archive.moduleNameFor
 import net.yakclient.boot.dependency.*
 import net.yakclient.boot.event.*
@@ -378,9 +379,7 @@ private fun setupApp(ref: ArchiveReference): Pair<BootApplication, ArchiveHandle
             ?: throw IllegalArgumentException("Failed to load artifact '${it.request}' of type '${it.type}' from repository '${it.repository}'")
     }
 
-    fun handleOrChildren(node: DependencyNode): List<ArchiveHandle> {
-        return node.archive?.let(::listOf) ?: node.children.flatMap(::handleOrChildren)
-    }
+    fun handleOrChildren(node: DependencyNode): Set<ArchiveHandle> = node.handleOrChildren()
 
     val children = dependencies.flatMapTo(HashSet(), ::handleOrChildren) + ModuleLayer.boot().modules()
         .map(JpmArchives::moduleToArchive)

@@ -29,4 +29,5 @@ module yakclient.boot {
     exports net.yakclient.boot.plugin;
     exports net.yakclient.boot.archive;
     exports net.yakclient.boot.event;
+    exports net.yakclient.boot.container.volume;
 }

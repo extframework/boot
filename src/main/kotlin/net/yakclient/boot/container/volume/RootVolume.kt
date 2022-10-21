@@ -4,7 +4,7 @@ import java.nio.file.FileSystem
 import java.nio.file.FileSystems
 import java.nio.file.Path
 
-internal object RootVolume : ContainerVolume {
+public object RootVolume : ContainerVolume {
     override val name: String = "root"
     override val relativeRoot: Path = Path.of("/")
     override val parent: ContainerVolume? = null
