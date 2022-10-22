@@ -1,3 +1,5 @@
+import org.jetbrains.kotlin.ir.backend.js.compile
+
 plugins {
     kotlin("jvm") version "1.7.10"
     id("org.javamodularity.moduleplugin") version "1.8.12"

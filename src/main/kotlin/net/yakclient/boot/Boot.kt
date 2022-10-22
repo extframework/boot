@@ -255,7 +255,7 @@ private fun createMavenDependencyGraph(
 public fun populateDependenciesSafely(
     initDependencies: (MavenContext.(String) -> Unit) -> Unit,
 ): MutableMap<ArchiveKey<SimpleMavenArtifactRequest>, DependencyNode> {
-    val initialGraph: MutableMap<ArchiveKey<SimpleMavenArtifactRequest>, DependencyNode> = HashMap()
+//    val initialGraph: MutableMap<ArchiveKey<SimpleMavenArtifactRequest>, DependencyNode> = HashMap()
 
     class UnVersionedArchiveKey(request: SimpleMavenArtifactRequest) :
         ArchiveKey<SimpleMavenArtifactRequest>(request) {
@@ -286,7 +286,7 @@ public fun populateDependenciesSafely(
     val moduleAwareGraph: MutableMap<ArchiveKey<SimpleMavenArtifactRequest>, DependencyNode> =
         object : MutableMap<ArchiveKey<SimpleMavenArtifactRequest>, DependencyNode> by delegate {
             override fun get(key: ArchiveKey<SimpleMavenArtifactRequest>): DependencyNode? {
-                return initialGraph[UnVersionedArchiveKey(key.request)] ?: delegate[key]
+                return delegate[key]
             }
         }
 
@@ -310,7 +310,7 @@ public fun populateDependenciesSafely(
             children
         )
 
-        initialGraph[UnVersionedArchiveKey(request)] = node
+        delegate[UnVersionedArchiveKey(request)] = node
 
         return node
     }
