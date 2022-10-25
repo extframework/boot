@@ -13,7 +13,7 @@ import net.yakclient.boot.security.SecureSourceDefiner
 public fun DependencyClassLoader(ref: ArchiveReference, children: Set<ArchiveHandle>, parent: PrivilegeManager): ClassLoader = IntegratedLoader(
     cp = DelegatingClassProvider(children.map(::ArchiveClassProvider)),
     sp = ArchiveSourceProvider(ref),
-    sd = SecureSourceDefiner(PrivilegeManager(parent, PrivilegeAccess.emptyPrivileges()) {
+    sd = SecureSourceDefiner(PrivilegeManager(parent, parent.privileges) {
         it.requester.parent?.request(it.privilege)
     }),
     parent = ClassLoader.getSystemClassLoader()

@@ -100,7 +100,7 @@ public fun main(args: Array<String>) {
     val appRef = readApp(appPath)
     val (app, handle) = setupApp(appRef)
 
-    Boot.eventManager.accept(ApplicationLoadEvent(appRef))
+    Boot.eventManager.accept(ApplicationLoadEvent(appRef, handle))
 
     val instance = app.newInstance(args)
 
@@ -286,7 +286,7 @@ public fun populateDependenciesSafely(
     val moduleAwareGraph: MutableMap<ArchiveKey<SimpleMavenArtifactRequest>, DependencyNode> =
         object : MutableMap<ArchiveKey<SimpleMavenArtifactRequest>, DependencyNode> by delegate {
             override fun get(key: ArchiveKey<SimpleMavenArtifactRequest>): DependencyNode? {
-                return delegate[key]
+                return delegate[UnVersionedArchiveKey(key.request)]
             }
         }
 
@@ -375,7 +375,7 @@ private fun setupApp(ref: ArchiveReference): Pair<BootApplication, ArchiveHandle
     val dependencies = properties.dependencies.map {
         val provider: DependencyGraphProvider<*, *>? = DependencyProviders.getByType(it.type)
 
-        provider?.getArtifact(it.request, it.repository)?.orNull()
+        provider?.getArtifact(it.repository, it.request)?.orNull()
             ?: throw IllegalArgumentException("Failed to load artifact '${it.request}' of type '${it.type}' from repository '${it.repository}'")
     }
 
@@ -404,8 +404,8 @@ private fun setupApp(ref: ArchiveReference): Pair<BootApplication, ArchiveHandle
         ?: throw IllegalStateException("Failed to load class '${properties.appClassName}' from Entrypoint jar: '$appPath'")
     val entrypointConstructor = runCatching { entrypointClass.getConstructor() }.getOrNull()
         ?: throw IllegalStateException("ApplicationEntrypoint class: '${properties.appClassName}' must have a no-arg constructor!")
-    val entrypoint = runCatching { entrypointConstructor.newInstance() }.getOrNull()
-        ?: throw IllegalStateException("Failed to instantiate type: '${properties.appClassName}' during entrypoint construction.")
+    val entrypoint = runCatching { entrypointConstructor.newInstance() }.let {
+       it.getOrNull() ?: throw IllegalStateException("Failed to instantiate type: '${properties.appClassName}' during entrypoint construction. Error was: '${it.exceptionOrNull()?.message}'") }
 
     return (entrypoint as? BootApplication
         ?: throw IllegalStateException("Type given as application entrypoint is not a child of '${BootApplication::class.java.name}'.")) to handle

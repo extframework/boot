@@ -43,4 +43,4 @@ public fun Privilege.toPermission(): Permission =
     if (this is PermissionPrivilege) permission else JavaPermissionWrapper(this)
 
 public fun toPermissionCollection(list: Privileges): PermissionCollection =
-    Permissions().apply { list.forEach { it.toPermission() } }
+    Permissions().apply { list.forEach { add( it.toPermission()) } }

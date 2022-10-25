@@ -25,7 +25,7 @@ public open class IntegratedLoader(
         d(n, b, ProtectionDomain(null, null, cl, null))
     },
 
-    parent: ClassLoader
+    parent: ClassLoader,
 ) : ClassLoader(parent) {
     override fun findClass(name: String): Class<*>? = findClass(null, name)
 
@@ -37,10 +37,11 @@ public open class IntegratedLoader(
     override fun findResource(mn: String?, name: String): URL? =
         if (mn == null) sp.getResource(name) else sp.getResource(name, mn)
 
-    override fun loadClass(name: String, resolve: Boolean): Class<*> = findLoadedClass(name)
-        ?: tryDefine(name, resolve)
-        ?: super.loadClass(name, resolve)
-        ?: throw ClassNotFoundException(name)
+    override fun loadClass(name: String, resolve: Boolean): Class<*> =
+        findLoadedClass(name)
+            ?: tryDefine(name, resolve)
+            ?: super.loadClass(name, resolve)
+            ?: throw ClassNotFoundException(name)
 
     private fun tryDefine(name: String, resolve: Boolean): Class<*>? = sp.getSource(name)?.let {
         sd.define(

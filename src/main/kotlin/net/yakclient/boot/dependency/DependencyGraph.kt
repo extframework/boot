@@ -17,12 +17,11 @@ public abstract class DependencyGraph<K : ArtifactRequest<*>, S : ArtifactStub<K
     private val store: DataStore<K, DependencyData<K>>,
     public override val repositoryFactory: RepositoryFactory<R, K, S, *, *>,
     private val archiveResolver: ArchiveResolutionProvider<ResolutionResult>,
-    initialGraph: MutableMap<ArchiveKey<K>, DependencyNode> = HashMap(),
+    private val mutableGraph: MutableMap<ArchiveKey<K>, DependencyNode> = HashMap(),
     private val privilegeManager: PrivilegeManager = PrivilegeManager(null, PrivilegeAccess.emptyPrivileges()) {},
 ) : ArchiveGraph<K, DependencyNode, R>(
     repositoryFactory
 ) {
-    private val mutableGraph: MutableMap<ArchiveKey<K>, DependencyNode> = initialGraph
     override val graph: Map<ArchiveKey<K>, DependencyNode>
         get() = mutableGraph.toMap()
 
@@ -31,7 +30,7 @@ public abstract class DependencyGraph<K : ArtifactRequest<*>, S : ArtifactStub<K
     override fun get(request: K): Either<ArchiveLoadException, DependencyNode> {
         val key = ArchiveKey(request)
 
-        return graph[key]?.right() ?: either.eager {
+        return mutableGraph[key]?.right() ?: either.eager {
             val data = store[key.request] ?: shift(ArchiveLoadException.ArtifactNotCached)
 
             val context = object : GraphContext<K> {
@@ -125,7 +124,7 @@ public abstract class DependencyGraph<K : ArtifactRequest<*>, S : ArtifactStub<K
 
             val key = ArchiveKey(request)
 
-            graph[key] ?: loadUsingRepository().bind()
+            mutableGraph[key] ?: loadUsingRepository().bind()
         }
 
 
