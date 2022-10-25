@@ -77,8 +77,6 @@ public class MavenDependencyGraph(
     ) : DependencyLoader(resolver) {
         override fun newLocalGraph(): LocalGraph = MavenLocalGraph()
 
-
-
         private inner class MavenLocalGraph : LocalGraph() {
             override fun getKey(request: SimpleMavenArtifactRequest): VersionIndependentDependencyKey {
                 class VersionIndependentMavenKey : VersionIndependentDependencyKey {

@@ -24,7 +24,6 @@ public open class IntegratedLoader(
     private val sd: SourceDefiner = SourceDefiner { n, b, cl, d ->
         d(n, b, ProtectionDomain(null, null, cl, null))
     },
-
     parent: ClassLoader,
 ) : ClassLoader(parent) {
     override fun findClass(name: String): Class<*>? = findClass(null, name)
