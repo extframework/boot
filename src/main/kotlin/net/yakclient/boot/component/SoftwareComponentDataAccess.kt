@@ -1,11 +1,11 @@
-package net.yakclient.boot.plugin
+package net.yakclient.boot.component
 
 import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenDescriptor
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.KotlinModule
 import com.fasterxml.jackson.module.kotlin.readValue
-import net.yakclient.boot.plugin.artifact.PluginDescriptor
+import net.yakclient.boot.component.artifact.SoftwareComponentDescriptor
 import net.yakclient.boot.store.DataAccess
 import net.yakclient.boot.store.addDeserializer
 import net.yakclient.boot.store.addSerializer
@@ -16,16 +16,16 @@ import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.writeBytes
 
-private const val METADATA_FILE_NAME = "plugin-metadata.json"
+private const val METADATA_FILE_NAME = "component.json"
 
 private const val GROUP_FIELD_NAME = "group"
 private const val ARTIFACT_FIELD_NAME = "artifact"
 private const val VERSION_FIELD_NAME = "version"
 private const val CLASSIFIER_FIELD_NAME = "classifier"
 
-public class PluginDataAccess(
+public class SoftwareComponentDataAccess(
     private val path: Path,
-) : DataAccess<PluginDescriptor, PluginData> {
+) : DataAccess<SoftwareComponentDescriptor, SoftwareComponentData> {
     private val mapper : ObjectMapper
 
     init {
@@ -56,7 +56,7 @@ public class PluginDataAccess(
         this.mapper = mapper
     }
 
-    override fun read(key: PluginDescriptor): PluginData? {
+    override fun read(key: SoftwareComponentDescriptor): SoftwareComponentData? {
 
         val versionedPath = path resolve
                 key.group.replace('.', File.separatorChar) resolve
@@ -67,10 +67,10 @@ public class PluginDataAccess(
 
         if (!Files.exists(metadataPath)) return null
 
-        return mapper.readValue<PluginData>(metadataPath.toFile())
+        return mapper.readValue<SoftwareComponentData>(metadataPath.toFile())
     }
 
-    override fun write(key: PluginDescriptor, value: PluginData) {
+    override fun write(key: SoftwareComponentDescriptor, value: SoftwareComponentData) {
         val versionedPath = path resolve
                 key.group.replace('.', File.separatorChar) resolve
                 key.artifact resolve

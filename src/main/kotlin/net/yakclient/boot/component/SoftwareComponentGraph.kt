@@ -1,9 +1,8 @@
-package net.yakclient.boot.plugin
+package net.yakclient.boot.component
 
 import arrow.core.Either
 import arrow.core.continuations.either
 import arrow.core.continuations.ensureNotNull
-import arrow.core.identity
 import arrow.core.left
 import arrow.core.right
 import com.durganmcbroom.artifact.resolver.*
@@ -12,7 +11,7 @@ import net.yakclient.boot.archive.ArchiveGraph
 import net.yakclient.boot.archive.ArchiveLoadException
 import net.yakclient.boot.archive.ArchiveResolutionProvider
 import net.yakclient.boot.dependency.*
-import net.yakclient.boot.plugin.artifact.*
+import net.yakclient.boot.component.artifact.*
 import net.yakclient.boot.store.DataStore
 import net.yakclient.common.util.make
 import net.yakclient.common.util.resolve
@@ -23,16 +22,18 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.util.logging.Level
 
-public class PluginGraph(
+
+// TODO Check for cyclic plugins
+public class SoftwareComponentGraph(
     private val path: Path,
-    private val store: DataStore<PluginDescriptor, PluginData>,
+    private val store: DataStore<SoftwareComponentDescriptor, SoftwareComponentData>,
     private val resolutionProvider: ArchiveResolutionProvider<*>,
-) : ArchiveGraph<PluginArtifactRequest, PluginNode, PluginRepositorySettings>(BootPlugins) {
-    private val mutableGraph: MutableMap<PluginDescriptor, PluginNode> = HashMap()
-    override val graph: Map<PluginDescriptor, PluginNode>
+) : ArchiveGraph<SoftwareComponentArtifactRequest, SoftwareComponentNode, SoftwareComponentRepositorySettings>(SoftwareComponentRepositoryFactory) {
+    private val mutableGraph: MutableMap<SoftwareComponentDescriptor, SoftwareComponentNode> = HashMap()
+    override val graph: Map<SoftwareComponentDescriptor, SoftwareComponentNode>
         get() = mutableGraph.toMap()
 
-    override fun get(request: PluginArtifactRequest): Either<ArchiveLoadException, PluginNode> {
+    override fun get(request: SoftwareComponentArtifactRequest): Either<ArchiveLoadException, SoftwareComponentNode> {
         return graph[request.descriptor]?.right() ?: either.eager {
             val data = ensureNotNull(store[request.descriptor]) { ArchiveLoadException.ArtifactNotCached }
 
@@ -40,8 +41,8 @@ public class PluginGraph(
         }
     }
 
-    override fun loaderOf(settings: PluginRepositorySettings): ArchiveLoader<*> = PluginLoader(
-        BootPlugins.createContext(settings)
+    override fun cacherOf(settings: SoftwareComponentRepositorySettings): SoftwareComponentCacher = SoftwareComponentCacher(
+        SoftwareComponentRepositoryFactory.createContext(settings)
     )
 
     private fun <S : RepositorySettings, R : ArtifactRequest<*>> DependencyGraphProvider<R, S>.getArtifact(
@@ -53,7 +54,7 @@ public class PluginGraph(
     }
 
 
-    private fun load(data: PluginData): Either<ArchiveLoadException, PluginNode> {
+    private fun load(data: SoftwareComponentData): Either<ArchiveLoadException, SoftwareComponentNode> {
         return graph[data.key]?.right() ?: either.eager {
             val children = data.children.asSequence()
                 .map(store::get)
@@ -71,43 +72,45 @@ public class PluginGraph(
             }
 
             val result = data.archive?.let {
-                val parents = children.mapNotNullTo(HashSet(), PluginNode::archive) + dependencies.mapNotNullTo(
+                val parents = children.mapNotNullTo(HashSet(), SoftwareComponentNode::archive) + dependencies.mapNotNullTo(
                     HashSet(),
                     DependencyNode::archive
                 )
                 resolutionProvider.resolve(
                     it,
-                    { a -> PluginClassLoader(a, parents) },
+                    { a -> SofwareComponentClassLoader(a, parents) },
                     parents
                 )
             }?.bind()
 
             val archive = result?.archive
 
-            PluginNode(
+            SoftwareComponentNode(
+                data.key,
                 archive,
                 children.toSet(),
                 dependencies.toSet(),
                 data.runtimeModel,
-                archive?.let { loadPlugin(it, data.runtimeModel) }
+                archive?.let { loadPlugin(it, data.runtimeModel) },
+                data.configuration
             ).also { mutableGraph[data.key] = it }
         }
     }
 
-    private fun loadPlugin(archive: ArchiveHandle, runtimeModel: PluginRuntimeModel): BootPlugin =
-        archive.classloader.loadClass(runtimeModel.entrypoint).getConstructor().newInstance() as BootPlugin
+    private fun loadPlugin(archive: ArchiveHandle, runtimeModel: SoftwareComponentModel): SoftwareComponent =
+        archive.classloader.loadClass(runtimeModel.entrypoint).getConstructor().newInstance() as SoftwareComponent
 
-    private inner class PluginLoader(
-        override val resolver: ResolutionContext<PluginArtifactRequest, PluginArtifactStub, ArtifactReference<*, PluginArtifactStub>>,
-    ) : ArchiveLoader<PluginArtifactStub>(
+    public inner class SoftwareComponentCacher(
+        override val resolver: ResolutionContext<SoftwareComponentArtifactRequest, SoftwareComponentArtifactStub, ArtifactReference<*, SoftwareComponentArtifactStub>>,
+    ) : ArchiveCacher<SoftwareComponentArtifactStub>(
         resolver
     ) {
-        override fun load(
-            request: PluginArtifactRequest,
-        ): Either<ArchiveLoadException, PluginNode> = either.eager {
+        override fun cache(
+            request: SoftwareComponentArtifactRequest,
+        ): Either<ArchiveLoadException, Unit> = either.eager {
             val desc by request::descriptor
 
-            graph[desc] ?: either.eager {
+            if (!graph.contains(desc))  {
                 val data = store[desc] ?: either.eager {
                     val artifact = resolver.getAndResolve(request)
                         .mapLeft(ArchiveLoadException::ArtifactLoadException)
@@ -119,19 +122,33 @@ public class PluginGraph(
                 }.bind()
 
                 load(data).bind()
-            }.bind()
+            }
+        }
+
+        public fun cacheConfiguration(
+            descriptor: SoftwareComponentDescriptor,
+            config: Map<String, String>
+        ) : Boolean {
+            val data = store[descriptor] ?: return false
+            val newData = data.copy(
+                configuration = config
+            )
+
+            store.put(descriptor, newData)
+
+            return true
         }
 
 
         private fun <S : RepositorySettings, R : ArtifactRequest<*>> DependencyGraphProvider<R, S>.cacheArtifact(
             pSettings: Map<String, String>,
             pRequest: Map<String, String>,
-        ): Either<ArchiveLoadException, DependencyData<R>> = either.eager {
+        ): Either<ArchiveLoadException, Unit> = either.eager {
             val settings = parseSettings(pSettings) ?: shift(ArchiveLoadException.DependencyInfoParseFailed)
 
             val request = parseRequest(pRequest) ?: shift(ArchiveLoadException.DependencyInfoParseFailed)
 
-            val loader = graph.loaderOf(settings) as? DependencyGraph.DependencyLoader
+            val loader = graph.cacherOf(settings) as? DependencyGraph.DependencyCacher
                 ?: shift(ArchiveLoadException.IllegalState("Dependency graph loader is not a DependencyLoader."))
 
             loader.cache(request).bind()
@@ -140,7 +157,7 @@ public class PluginGraph(
 
         private fun cache(artifact: Artifact) {
             val metadata = artifact.metadata
-            check(metadata is PluginArtifactMetadata) { "Invalid artifact metadata! Must be plugin artifact metadata." }
+            check(metadata is SoftwareComponentArtifactMetadata) { "Invalid artifact metadata! Must be plugin artifact metadata." }
 
             if (store.contains(metadata.descriptor)) return
 
@@ -177,19 +194,20 @@ public class PluginGraph(
                 provider.cacheArtifact(
                     i.repositorySettings,
                     i.request
-                ).fold({throw it}, ::identity)
+                ).tapLeft { throw it }
             }
 
-            val data = PluginData(
+            val data = SoftwareComponentData(
                 metadata.descriptor,
                 jarPath,
                 metadata.children
-                    .map(PluginChildInfo::descriptor),
+                    .map(SoftwareComponentChildInfo::descriptor),
                 metadata.dependencies.map {
 
-                    PluginDependencyData(it.type, it.request)
+                    SoftwareComponentDependencyData(it.type, it.request)
                 },
-                metadata.runtimeModel
+                metadata.runtimeModel,
+                HashMap()
             )
 
             artifact.children

@@ -27,13 +27,13 @@ class TestDependencyGraph {
     fun `Test maven basic dependency loading`() {
         val graph = createMavenDependencyGraph()
 
-        val loader = graph.loaderOf(
+        val loader = graph.cacherOf(
             SimpleMavenRepositorySettings.mavenCentral(
                 preferredHash = HashType.MD5
             )
         )
 
-        val node = loader.load(
+        val node = loader.cache(
             SimpleMavenArtifactRequest(
                 "org.springframework:spring-core:5.3.22",
                includeScopes = setOf("compile", "runtime", "import")

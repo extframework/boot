@@ -1,27 +1,5 @@
 package net.yakclient.boot.test.plugin
 
-import com.durganmcbroom.artifact.resolver.simple.maven.HashType
-import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenArtifactRequest
-import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenDescriptor
-import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenRepositorySettings
-import com.durganmcbroom.artifact.resolver.simple.maven.layout.MAVEN_CENTRAL_REPO
-import com.durganmcbroom.artifact.resolver.simple.maven.layout.SimpleMavenDefaultLayout
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.module.kotlin.KotlinModule
-import net.yakclient.boot.archive.JpmResolutionProvider
-import net.yakclient.boot.dependency.DependencyGraph
-import net.yakclient.boot.dependency.DependencyGraphProvider
-import net.yakclient.boot.dependency.DependencyProviders
-import net.yakclient.boot.plugin.*
-import net.yakclient.boot.plugin.artifact.PluginArtifactRequest
-import net.yakclient.boot.plugin.artifact.PluginRepositorySettings
-import net.yakclient.boot.store.CachingDataStore
-import net.yakclient.boot.test.dependency.TestDependencyGraph.Companion.createMavenDependencyGraph
-import net.yakclient.common.util.resolve
-import java.nio.file.Path
-import kotlin.io.path.writeBytes
-import kotlin.test.Test
-
 class PluginGraphTests {
 //    @Test
 //    fun `Test local plugin loading`() {

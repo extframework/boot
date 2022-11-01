@@ -37,10 +37,10 @@ public class MavenDependencyGraph(
 ) : DependencyGraph<SimpleMavenArtifactRequest, SimpleMavenArtifactStub, SimpleMavenRepositorySettings>(
     store, factory, archiveResolver, initialGraph, privilegeManager
 ) {
-    override fun loaderOf(settings: SimpleMavenRepositorySettings): ArchiveLoader<*> {
+    override fun cacherOf(settings: SimpleMavenRepositorySettings): ArchiveCacher<*> {
         val artifactRepository = factory.createNew(settings)
 
-        return MavenDependencyLoader(
+        return MavenDependencyCacher(
             ResolutionContext(
                 artifactRepository,
                 stubResolutionProvider(artifactRepository),
@@ -72,9 +72,9 @@ public class MavenDependencyGraph(
         return jarPath
     }
 
-    private inner class MavenDependencyLoader(
+    private inner class MavenDependencyCacher(
         resolver: ResolutionContext<SimpleMavenArtifactRequest, SimpleMavenArtifactStub, ArtifactReference<*, SimpleMavenArtifactStub>>,
-    ) : DependencyLoader(resolver) {
+    ) : DependencyCacher(resolver) {
         override fun newLocalGraph(): LocalGraph = MavenLocalGraph()
 
         private inner class MavenLocalGraph : LocalGraph() {

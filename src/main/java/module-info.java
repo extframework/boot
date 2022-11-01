@@ -15,9 +15,8 @@ module yakclient.boot {
 
     opens net.yakclient.boot.dependency to com.fasterxml.jackson.databind, kotlin.reflect;
     opens net.yakclient.boot to com.fasterxml.jackson.databind, kotlin.reflect;
-    opens net.yakclient.boot.extension.yak to com.fasterxml.jackson.databind;
     opens net.yakclient.boot.maven to com.fasterxml.jackson.databind, kotlin.reflect;
-    opens net.yakclient.boot.plugin to com.fasterxml.jackson.databind, kotlin.reflect;
+    opens net.yakclient.boot.component to com.fasterxml.jackson.databind, kotlin.reflect;
 
     exports net.yakclient.boot.store;
     exports net.yakclient.boot;
@@ -26,7 +25,7 @@ module yakclient.boot {
     exports net.yakclient.boot.dependency;
     exports net.yakclient.boot.container;
     exports net.yakclient.boot.security;
-    exports net.yakclient.boot.plugin;
+    exports net.yakclient.boot.component;
     exports net.yakclient.boot.archive;
     exports net.yakclient.boot.event;
     exports net.yakclient.boot.container.volume;

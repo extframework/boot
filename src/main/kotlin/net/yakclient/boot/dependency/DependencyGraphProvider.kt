@@ -18,12 +18,12 @@ public interface DependencyGraphProvider<R: ArtifactRequest<*>, S: RepositorySet
 public fun <S : RepositorySettings, R : ArtifactRequest<*>> DependencyGraphProvider<R, S>.getArtifact(
     pSettings: Map<String, String>,
     pRequest: Map<String, String>,
-): Either<ArchiveLoadException, DependencyNode> = either.eager {
+): Either<ArchiveLoadException, Unit> = either.eager {
     val settings = parseSettings(pSettings) ?: shift(ArchiveLoadException.DependencyInfoParseFailed)
 
     val request = parseRequest(pRequest) ?: shift(ArchiveLoadException.DependencyInfoParseFailed)
 
-    val loader = graph.loaderOf(settings)
+    val loader = graph.cacherOf(settings)
 
-    loader.load(request).bind()
+    loader.cache(request).bind()
 }

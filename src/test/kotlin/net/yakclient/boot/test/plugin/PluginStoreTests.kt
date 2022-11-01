@@ -1,10 +1,10 @@
 package net.yakclient.boot.test.plugin
 
-import net.yakclient.boot.plugin.PluginData
-import net.yakclient.boot.plugin.PluginDataAccess
-import net.yakclient.boot.plugin.PluginDependencyData
-import net.yakclient.boot.plugin.PluginRuntimeModel
-import net.yakclient.boot.plugin.artifact.PluginDescriptor
+import net.yakclient.boot.component.SoftwareComponentData
+import net.yakclient.boot.component.SoftwareComponentDataAccess
+import net.yakclient.boot.component.SoftwareComponentDependencyData
+import net.yakclient.boot.component.SoftwareComponentModel
+import net.yakclient.boot.component.artifact.SoftwareComponentDescriptor
 import net.yakclient.common.util.resolve
 import java.nio.file.Path
 import kotlin.test.Test
@@ -14,17 +14,17 @@ class PluginStoreTests {
     fun `Test plugin data access write`() {
         val basePath = Path.of(System.getProperty("user.dir")) resolve "cache/plugin"
 
-        val access = PluginDataAccess(basePath)
+        val access = SoftwareComponentDataAccess(basePath)
 
-        val desc = PluginDescriptor("org.example", "example", "1.0-EXAMPLE", null)
+        val desc = SoftwareComponentDescriptor("org.example", "example", "1.0-EXAMPLE", null)
         access.write(
             desc,
-            PluginData(
+            SoftwareComponentData(
                 desc,
                 null,
                 listOf(desc, desc),
                 listOf(
-                    PluginDependencyData(
+                    SoftwareComponentDependencyData(
                         "maven",
                         mapOf(
                             "group" to "net.questcraft",
@@ -33,7 +33,7 @@ class PluginStoreTests {
                         ),
                     )
                 ),
-                PluginRuntimeModel(
+                SoftwareComponentModel(
                     "Plugin!",
                     "A jar",
                     null,
@@ -48,9 +48,9 @@ class PluginStoreTests {
     fun `Test plugin data access read`() {
         val basePath = Path.of(System.getProperty("user.dir")) resolve "cache/plugin"
 
-        val access = PluginDataAccess(basePath)
+        val access = SoftwareComponentDataAccess(basePath)
 
-        val desc = PluginDescriptor("org.example", "example", "1.0-EXAMPLE", null)
+        val desc = SoftwareComponentDescriptor("org.example", "example", "1.0-EXAMPLE", null)
 
         println(access.read(desc))
     }

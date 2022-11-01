@@ -25,7 +25,7 @@ public abstract class DependencyGraph<K : ArtifactRequest<*>, S : ArtifactStub<K
     override val graph: Map<ArchiveKey<K>, DependencyNode>
         get() = mutableGraph.toMap()
 
-    abstract override fun loaderOf(settings: R): ArchiveLoader<*>
+    abstract override fun cacherOf(settings: R): ArchiveCacher<*>
 
     override fun get(request: K): Either<ArchiveLoadException, DependencyNode> {
         val key = ArchiveKey(request)
@@ -106,32 +106,17 @@ public abstract class DependencyGraph<K : ArtifactRequest<*>, S : ArtifactStub<K
 
     protected abstract fun writeResource(request: K, resource: SafeResource): Path
 
-    public abstract inner class DependencyLoader(
+    public abstract inner class DependencyCacher(
         resolver: ResolutionContext<K, S, ArtifactReference<*, S>>,
-    ) : ArchiveLoader<S>(
+    ) : ArchiveCacher<S>(
         resolver,
     ) {
         protected abstract fun newLocalGraph(): LocalGraph
 
-        override fun load(request: K): Either<ArchiveLoadException, DependencyNode> = either.eager {
-            val local = newLocalGraph()
-
-            fun loadUsingRepository(): Either<ArchiveLoadException, DependencyNode> = either.eager {
-                val data: DependencyData<K> = store[request] ?: cache(request).bind()
-
-                load(local.graphContext, data).bind()
-            }
-
+        override fun cache(request: K): Either<ArchiveLoadException, Unit> = either.eager {
             val key = ArchiveKey(request)
 
-            mutableGraph[key] ?: loadUsingRepository().bind()
-        }
-
-
-        public fun cache(
-            request: K,
-        ): Either<ArchiveLoadException, DependencyData<K>> {
-            return store[request]?.right() ?: either.eager {
+            if (!mutableGraph.contains(key) && !store.contains(request)) {
                 val unboundRef = resolver.repositoryContext.artifactRepository
                     .get(request)
 
@@ -142,6 +127,22 @@ public abstract class DependencyGraph<K : ArtifactRequest<*>, S : ArtifactStub<K
                 cache(request, ref).bind()
             }
         }
+
+
+//        private fun cache(
+//            request: K,
+//        ): Either<ArchiveLoadException, Unit> {
+//            return store[request]?.right() ?: either.eager {
+//                val unboundRef = resolver.repositoryContext.artifactRepository
+//                    .get(request)
+//
+//                val ref = unboundRef
+//                    .mapLeft(ArchiveLoadException::ArtifactLoadException)
+//                    .bind()
+//
+//                cache(request, ref).bind()
+//            }
+//        }
 
         private fun cache(
             request: K,

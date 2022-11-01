@@ -1,4 +1,4 @@
-package net.yakclient.boot.plugin
+package net.yakclient.boot.component
 
 import net.yakclient.archives.ArchiveHandle
 import net.yakclient.archives.ArchiveReference
@@ -7,7 +7,7 @@ import net.yakclient.boot.loader.ArchiveSourceProvider
 import net.yakclient.boot.loader.DelegatingClassProvider
 import net.yakclient.boot.loader.IntegratedLoader
 
-public fun PluginClassLoader(archive: ArchiveReference, children: Set<ArchiveHandle>): ClassLoader = IntegratedLoader(
+public fun SofwareComponentClassLoader(archive: ArchiveReference, children: Set<ArchiveHandle>): ClassLoader = IntegratedLoader(
     DelegatingClassProvider(children.map(::ArchiveClassProvider)),
     ArchiveSourceProvider(archive),
     parent = ClassLoader.getPlatformClassLoader()
