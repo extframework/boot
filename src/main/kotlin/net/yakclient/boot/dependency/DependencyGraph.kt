@@ -9,7 +9,7 @@ import net.yakclient.boot.archive.*
 import net.yakclient.boot.security.PrivilegeAccess
 import net.yakclient.boot.security.PrivilegeManager
 import net.yakclient.boot.store.DataStore
-import net.yakclient.boot.toSafeResource
+import net.yakclient.boot.util.toSafeResource
 import net.yakclient.common.util.resource.SafeResource
 import java.nio.file.Path
 

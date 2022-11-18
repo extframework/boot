@@ -7,8 +7,8 @@ import com.fasterxml.jackson.module.kotlin.KotlinModule
 import com.fasterxml.jackson.module.kotlin.readValue
 import net.yakclient.boot.component.artifact.SoftwareComponentDescriptor
 import net.yakclient.boot.store.DataAccess
-import net.yakclient.boot.store.addDeserializer
-import net.yakclient.boot.store.addSerializer
+import net.yakclient.boot.util.addDeserializer
+import net.yakclient.boot.util.addSerializer
 import net.yakclient.common.util.make
 import net.yakclient.common.util.resolve
 import java.io.File

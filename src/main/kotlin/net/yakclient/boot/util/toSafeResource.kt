@@ -1,4 +1,4 @@
-package net.yakclient.boot
+package net.yakclient.boot.util
 
 import com.durganmcbroom.artifact.resolver.CheckedResource
 import com.durganmcbroom.artifact.resolver.open

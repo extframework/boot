@@ -4,7 +4,7 @@ import net.yakclient.boot.container.ContainerSource
 import java.security.*
 
 
-internal class BasicPolicy : Policy() {
+internal class ContainerPolicy : Policy() {
     private val permissions: PermissionCollection = Permissions()
     init {
         permissions.add(AllPermission())

@@ -1,7 +1,7 @@
 package net.yakclient.boot.component
 
 public interface SoftwareComponent {
-    public fun onEnable(context: ComponentLoadContext)
+    public fun onEnable(context: ComponentContext)
 
-    public fun onDisable(context: ComponentUnloadContext)
+    public fun onDisable()
 }

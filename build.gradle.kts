@@ -1,4 +1,5 @@
-import org.jetbrains.kotlin.ir.backend.js.compile
+import com.github.jengelman.gradle.plugins.shadow.tasks.ConfigureShadowRelocation
+import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 
 plugins {
     kotlin("jvm") version "1.7.10"
@@ -9,6 +10,8 @@ plugins {
     id("org.jetbrains.dokka") version "1.6.0"
     application
     java
+
+    id("com.github.johnrengelman.shadow") version "7.1.2"
 }
 
 group = "net.yakclient"
@@ -55,10 +58,9 @@ dependencies {
     implementation(kotlin("stdlib"))
     implementation("io.arrow-kt:arrow-core:1.1.2")
 
-    implementation("com.durganmcbroom:event-api:1.0-SNAPSHOT")
     implementation("org.jetbrains.kotlinx:kotlinx-cli:0.3.5")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.4")
-    api("net.yakclient:archives:1.0-SNAPSHOT") {
+    implementation("net.yakclient:archives:1.0-SNAPSHOT") {
         isChanging = true
     }
     implementation("com.durganmcbroom:artifact-resolver:1.0-SNAPSHOT") {
@@ -73,6 +75,21 @@ dependencies {
         isChanging = true
     }
 }
+
+//val shadowJar by tasks
+//
+//val relocateShadowJar by tasks.registering(ConfigureShadowRelocation::class) {
+//    target = shadowJar as ShadowJar
+//    prefix = "net/yakclient/boot/internal/dependencies" // Default value is "shadow"
+//}
+//
+//shadowJar.dependsOn(relocateShadowJar)
+
+//tasks.withType<ShadowJar> {
+//   dependencies {
+//       include(dependency("org.jetbrains.kotlinx:kotlinx-cli:0.3.5"))
+//   }
+//}
 
 task<Jar>("sourcesJar") {
     archiveClassifier.set("sources")

@@ -10,6 +10,7 @@ import net.yakclient.archives.ArchiveHandle
 import net.yakclient.boot.archive.ArchiveGraph
 import net.yakclient.boot.archive.ArchiveLoadException
 import net.yakclient.boot.archive.ArchiveResolutionProvider
+import net.yakclient.boot.util.bindMap
 import net.yakclient.boot.dependency.*
 import net.yakclient.boot.component.artifact.*
 import net.yakclient.boot.store.DataStore
@@ -24,10 +25,11 @@ import java.util.logging.Level
 
 
 // TODO Check for cyclic plugins
-public class SoftwareComponentGraph(
+public class SoftwareComponentGraph internal constructor(
     private val path: Path,
     private val store: DataStore<SoftwareComponentDescriptor, SoftwareComponentData>,
     private val resolutionProvider: ArchiveResolutionProvider<*>,
+    private val dependencyProviders: DependencyProviders
 ) : ArchiveGraph<SoftwareComponentArtifactRequest, SoftwareComponentNode, SoftwareComponentRepositorySettings>(SoftwareComponentRepositoryFactory) {
     private val mutableGraph: MutableMap<SoftwareComponentDescriptor, SoftwareComponentNode> = HashMap()
     override val graph: Map<SoftwareComponentDescriptor, SoftwareComponentNode>
@@ -48,25 +50,39 @@ public class SoftwareComponentGraph(
     private fun <S : RepositorySettings, R : ArtifactRequest<*>> DependencyGraphProvider<R, S>.getArtifact(
         pRequest: Map<String, String>,
     ): Either<ArchiveLoadException, DependencyNode> = either.eager {
-        val request = parseRequest(pRequest) ?: shift(ArchiveLoadException.DependencyInfoParseFailed)
+        val request = parseRequest(pRequest) ?: shift(ArchiveLoadException.DependencyInfoParseFailed("Failed to parse artifact request: '$pRequest'"))
 
         graph.get(request).bind()
+    }
+
+    public fun cacheConfiguration(
+        descriptor: SoftwareComponentDescriptor,
+        config: Map<String, String>
+    ) : Boolean {
+        val data = store[descriptor] ?: return false
+        val newData = data.copy(
+            configuration = config
+        )
+
+        store.put(descriptor, newData)
+
+        return true
     }
 
 
     private fun load(data: SoftwareComponentData): Either<ArchiveLoadException, SoftwareComponentNode> {
         return graph[data.key]?.right() ?: either.eager {
-            val children = data.children.asSequence()
+            val children = data.children
                 .map(store::get)
                 .map { it?.right() ?: ArchiveLoadException.ArtifactNotCached.left() }
                 .map { it.map(::load) }
                 .map {
-                    it.orNull()?.orNull()
+                    it.orNull()
                         ?: throw IllegalStateException("Some children of plugin: '${data.key}' could not be found in the cache. This means your plugin cache has been invalidated and you should delete the directory.")
-                }
+                }.bindMap().bind()
 
             val dependencies = data.dependencies.map {
-                DependencyProviders.getByType(it.type)?.getArtifact(it.request)?.bind() ?: shift(
+                dependencyProviders.getByType(it.type)?.getArtifact(it.request)?.bind() ?: shift(
                     ArchiveLoadException.DependencyTypeNotFound(it.type)
                 )
             }
@@ -125,28 +141,13 @@ public class SoftwareComponentGraph(
             }
         }
 
-        public fun cacheConfiguration(
-            descriptor: SoftwareComponentDescriptor,
-            config: Map<String, String>
-        ) : Boolean {
-            val data = store[descriptor] ?: return false
-            val newData = data.copy(
-                configuration = config
-            )
-
-            store.put(descriptor, newData)
-
-            return true
-        }
-
-
         private fun <S : RepositorySettings, R : ArtifactRequest<*>> DependencyGraphProvider<R, S>.cacheArtifact(
             pSettings: Map<String, String>,
             pRequest: Map<String, String>,
         ): Either<ArchiveLoadException, Unit> = either.eager {
-            val settings = parseSettings(pSettings) ?: shift(ArchiveLoadException.DependencyInfoParseFailed)
+            val settings = parseSettings(pSettings) ?: shift(ArchiveLoadException.DependencyInfoParseFailed("Failed to parse artifact repository settings: '$pSettings'"))
 
-            val request = parseRequest(pRequest) ?: shift(ArchiveLoadException.DependencyInfoParseFailed)
+            val request = parseRequest(pRequest) ?: shift(ArchiveLoadException.DependencyInfoParseFailed("Failed to parse artifact request: '$pRequest'"))
 
             val loader = graph.cacherOf(settings) as? DependencyGraph.DependencyCacher
                 ?: shift(ArchiveLoadException.IllegalState("Dependency graph loader is not a DependencyLoader."))
@@ -189,7 +190,7 @@ public class SoftwareComponentGraph(
                 .forEach(::cache)
 
             metadata.dependencies.forEach { i ->
-                val provider = DependencyProviders.getByType(i.type)
+                val provider = dependencyProviders.getByType(i.type)
                     ?: throw IllegalArgumentException("Invalid repository: '${i.type}'. Failed to find provider for this type.")
                 provider.cacheArtifact(
                     i.repositorySettings,

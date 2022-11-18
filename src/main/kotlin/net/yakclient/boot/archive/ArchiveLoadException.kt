@@ -3,11 +3,17 @@ package net.yakclient.boot.archive
 import com.durganmcbroom.artifact.resolver.ArtifactException
 
 public sealed class ArchiveLoadException : Exception() {
-    public data class ArtifactLoadException(val exception: ArtifactException) : ArchiveLoadException()
+    public data class ArtifactLoadException(val exception: ArtifactException) : ArchiveLoadException() {
+        override fun toString(): String {
+            return exception.message
+        }
+    }
 
     public data class ArchiveLoadFailed(val reason: String) : ArchiveLoadException()
 
-    public object DependencyInfoParseFailed : ArchiveLoadException()
+    public class DependencyInfoParseFailed(override val message: String) : ArchiveLoadException() {
+        override fun toString(): String = message
+    }
 
     public data class DependencyTypeNotFound(val type: String) : ArchiveLoadException()
 

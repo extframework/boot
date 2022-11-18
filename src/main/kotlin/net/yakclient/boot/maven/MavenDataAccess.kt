@@ -19,35 +19,10 @@ import kotlin.io.path.writeBytes
 
 private const val VERSIONED_METADATA_NAME = "artifact-metadata.json"
 
-//private const val SCOPE_CONTROL_TYPE_FIELD_NAME = "scope-control-type"
-//private const val SCOPE_INCLUSION_TYPE_NAME = "scope_inclusion"
-//private const val SCOPE_EXCLUSION_TYPE_NAME = "scope_exclusion"
-//private const val SCOPE_ARRAY_NAME = "scopes"
-//
-//private const val ARTIFACT_CONTROL_TYPE_FIELD_NAME = "scope-control-type"
-//private const val ARTIFACT_INCLUSION_TYPE_NAME = "scope_inclusion"
-//private const val ARTIFACT_EXCLUSION_TYPE_NAME = "scope_exclusion"
-//private const val ARTIFACT_ARRAY_NAME = "scopes"
-
 public open class MavenDataAccess(
     private val path: Path,
 ) : DataAccess<SimpleMavenArtifactRequest, DependencyData<SimpleMavenArtifactRequest>> {
     private val mapper: ObjectMapper by lazy(::initMapper)
-
-//    private abstract class ArtifactRequestJacksonMixin @JsonCreator constructor(
-//        @JsonProperty
-//        val descriptor: SimpleMavenDescriptor,
-//        @JsonProperty
-//        val isTransitive: Boolean = true,
-//        @JsonProperty
-//        val includeScopes: Set<String> = setOf(),
-//        @JsonProperty
-//        val excludeArtifacts: Set<String> = setOf(),
-//    )
-
-//    private data class SerializableMavenDescriptor(
-//
-//    ) : ArtifactMetadata.Descriptor
 
     private data class SerializableMavenDescriptor(
         val group: String,
@@ -74,7 +49,6 @@ public open class MavenDataAccess(
 
         return mapper.registerModule(kotlinModule)
     }
-
 
     private fun readMetadataFile(versionedPath: Path): Map<SimpleMavenArtifactRequest, DependencyData<SimpleMavenArtifactRequest>> {
         val metadataPath = versionedPath resolve VERSIONED_METADATA_NAME

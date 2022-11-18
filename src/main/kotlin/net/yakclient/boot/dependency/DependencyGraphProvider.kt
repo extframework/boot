@@ -19,9 +19,9 @@ public fun <S : RepositorySettings, R : ArtifactRequest<*>> DependencyGraphProvi
     pSettings: Map<String, String>,
     pRequest: Map<String, String>,
 ): Either<ArchiveLoadException, Unit> = either.eager {
-    val settings = parseSettings(pSettings) ?: shift(ArchiveLoadException.DependencyInfoParseFailed)
+    val settings = parseSettings(pSettings) ?: shift(ArchiveLoadException.DependencyInfoParseFailed("Failed to parse artifact repository settings: '$pSettings'"))
 
-    val request = parseRequest(pRequest) ?: shift(ArchiveLoadException.DependencyInfoParseFailed)
+    val request = parseRequest(pRequest) ?: shift(ArchiveLoadException.DependencyInfoParseFailed("Failed to parse artifact request: '$pRequest'"))
 
     val loader = graph.cacherOf(settings)
 

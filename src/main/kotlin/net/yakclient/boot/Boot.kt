@@ -1,64 +1,66 @@
 package net.yakclient.boot
 
+import arrow.core.Either
 import com.durganmcbroom.artifact.resolver.*
 import com.durganmcbroom.artifact.resolver.simple.maven.*
-import com.durganmcbroom.artifact.resolver.simple.maven.layout.SimpleMavenDefaultLayout
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.module.kotlin.KotlinModule
-import com.fasterxml.jackson.module.kotlin.readValue
 import kotlinx.cli.*
 import net.yakclient.archives.*
 import net.yakclient.boot.archive.ArchiveKey
 import net.yakclient.boot.archive.BasicArchiveResolutionProvider
 import net.yakclient.boot.archive.moduleNameFor
-import net.yakclient.boot.dependency.*
-import net.yakclient.boot.maven.MavenDataAccess
-import net.yakclient.boot.maven.MavenDependencyGraph
 import net.yakclient.boot.component.*
 import net.yakclient.boot.component.SoftwareComponentModelRepository.Companion.DEFAULT
 import net.yakclient.boot.component.SoftwareComponentModelRepository.Companion.LOCAL
 import net.yakclient.boot.component.artifact.SoftwareComponentArtifactRequest
 import net.yakclient.boot.component.artifact.SoftwareComponentDescriptor
 import net.yakclient.boot.component.artifact.SoftwareComponentRepositorySettings
+import net.yakclient.boot.dependency.*
+import net.yakclient.boot.maven.MavenDataAccess
+import net.yakclient.boot.maven.MavenDependencyGraph
 import net.yakclient.boot.store.CachingDataStore
+import net.yakclient.boot.util.toSafeResource
 import java.io.File
-import java.io.InputStream
-import java.nio.file.Files
 import java.nio.file.Path
 import java.security.Policy
 import java.util.*
 import java.util.logging.Level
 import java.util.logging.Logger
 
-//public object Boot {
-//    public var maven: MavenDependencyGraph by immutableLateInit()
-//    public val eventManager: EventPipelineManager = EventPipelineManager()
-//}
-//
-//public data class PluginArgument(
-//    public val request: PluginArtifactRequest,
-//    public val repository: PluginRepositorySettings,
-//    public val configuration: Map<String, String>,
-//)
-
 @ExperimentalCli
 public fun main(args: Array<String>) {
-    Policy.setPolicy(BasicPolicy())
+    // Setup security policies
+    Policy.setPolicy(ContainerPolicy())
     System.setSecurityManager(SecurityManager())
 
+    // Setup logger
     val logger = Logger.getLogger("boot")
 
-    val parser = ArgParser("boot", skipExtraArguments = true)
+    // Setup argument parser
+    val parser = ArgParser("boot")
 
+    // Get working dir
     val workingDir = System.getProperty("user.dir")
 
+    // Parse args
     val mavenCache by parser.option(ArgType.String, "maven-cache-location")
         .default("$workingDir${File.separator}cache${File.separator}maven")
     val softwareComponentCache by parser.option(ArgType.String, "software-component-cache-location")
         .default("$workingDir${File.separator}cache${File.separator}software-component")
 
-    fun Subcommand.echo(value: String) = logger.log(Level.INFO, value)
+    // Create Boot context for later use
+    val bootContext = BootContext()
 
+    // Convenience methods
+    fun initMaven(init: (MavenContext.(String) -> Boolean) -> Unit) = bootContext.dependencyProviders.add(
+        createMavenProvider(mavenCache, init)
+    )
+
+    fun echo(value: String) = logger.log(Level.INFO, value)
+
+    echo("Setting up Software Component Graph.")
+    val softwareComponentGraph = initSoftwareComponentGraph(softwareComponentCache, bootContext.dependencyProviders)
+
+    // Start of cli commands
     class CacheComponent : Subcommand(
         "cacheComponent",
         "Installs a single software component into the cache for later use."
@@ -69,31 +71,40 @@ public fun main(args: Array<String>) {
         val configuration by option(
             ArgType.String,
             "configuration",
-            description = "Configures the given component. Should be in a map format where the separator is a ',' and key value pairs are assigned with '='. Example 'one=1,two=2,three=3'"
+            "Configures the given component. Should be in a map format where the separator is a ',' and key value pairs are assigned with '='. Example 'one=1,two=2,three=3'"
         ).default("")
 
         override fun execute() {
-            echo("Setting up Software Component Graph.")
-            val graph = initSoftwareComponentGraph(softwareComponentCache)
-
             echo("Setting up maven")
-            initMaven(mavenCache, withBootDependencies { })
+            initMaven(withBootDependencies())
 
-            echo("Creating a cacher")
-            val cacher = graph.cacherOf(
-                if (type == DEFAULT) SoftwareComponentRepositorySettings.default(location)
-                else if (type == LOCAL) SoftwareComponentRepositorySettings.local(location)
-                else throw IllegalArgumentException("Unknown Software Component repository type: '$type'. Only known types are '$DEFAULT' (for remote repositories) and '$LOCAL' (for local repositories)"),
+            val settings = when (type) {
+                DEFAULT -> SoftwareComponentRepositorySettings.default(
+                    location,
+                    preferredHash = HashType.SHA1
+                )
+                LOCAL -> SoftwareComponentRepositorySettings.local(
+                    location,
+                    preferredHash = HashType.SHA1
+                )
+                else -> throw IllegalArgumentException("Unknown Software Component repository type: '$type'. Only known types are '$DEFAULT' (for remote repositories) and '$LOCAL' (for local repositories)")
+            }
+
+            echo("Creating a software component cacher")
+            val cacher = softwareComponentGraph.cacherOf(
+                settings,
             )
 
             val request = SoftwareComponentArtifactRequest(
-                descriptor
+                descriptor,
             )
 
             echo("Caching")
             val cacheAttempt = cacher.cache(
                 request
             )
+
+            echo("Successfully cached the component: '$descriptor'!")
 
             if (cacheAttempt.isLeft()) {
                 echo("Failed to cache component: '$descriptor'. Throwing exception.")
@@ -111,7 +122,7 @@ public fun main(args: Array<String>) {
                         split[0] to split.getOrElse(1) { "" }
                     }
 
-                cacher.cacheConfiguration(
+                softwareComponentGraph.cacheConfiguration(
                     request.descriptor,
                     parsedConfig
                 )
@@ -119,119 +130,107 @@ public fun main(args: Array<String>) {
         }
     }
 
-    class LoadComponents : Subcommand(
-        "loadComponents",
-        "Loads any given number of components from the cache into the current runtime"
+    class StartComponents : Subcommand(
+        "start",
+        "Starts any given number of components from the cache into the current runtime"
     ) {
         val components by argument(ArgType.String).vararg()
 
         override fun execute() {
-            echo("Setting up Software Component Graph.")
-            val graph = initSoftwareComponentGraph(softwareComponentCache)
-
             echo("Setting up maven")
-            initMaven(mavenCache, withBootDependencies { })
+            initMaven(withBootDependencies())
 
             echo("Starting to load components '${components.joinToString()}'")
 
-            components.map {
+            val nodes: List<SoftwareComponentNode> = components.map {
                 SoftwareComponentArtifactRequest(it)
-            }.forEach { req ->
+            }.map { req ->
                 echo("Loading component: '$req'")
 
-                val get = graph.get(req)
+                val get = softwareComponentGraph.get(req)
 
-                if (get.isRight()) echo("Successfully loaded '$req' and all of its children.")
-                else {
+                if (get is Either.Right) {
+                    echo("Successfully loaded '$req' and all of its children.")
+                    get.value
+                } else {
                     echo("Failed to load '$req'. This is a fatal exception.")
-                    get.tapLeft { throw it }
+                    throw (get as Either.Left).value
                 }
+            }
+
+            val enabled = HashSet<SoftwareComponentDescriptor>()
+
+            nodes.forEach {
+                enabled.addAll(enableAllComponents(it, enabled, bootContext).map(SoftwareComponentNode::descriptor))
             }
         }
     }
 
-    parser.subcommands(CacheComponent(), LoadComponents())
+    class Configure : Subcommand(
+        "configure",
+        "(Re)Configures a component"
+    ) {
+        val descriptor by option(
+            ArgType.String,
+            "descriptor",
+            description = "The descriptor of the component to configure"
+        ).required()
+        val configuration by option(ArgType.String, "configuration").required()
+
+        override fun execute() {
+            echo("This isn't implemented yet.")
+
+            echo("Setting up maven")
+            initMaven {}
+
+            val config = if (configuration.isNotBlank())
+                configuration
+                    .split(",")
+                    .associate {
+                        val split = it.split("=")
+
+                        split[0] to split.getOrElse(1) { "" }
+                    } else mapOf()
+
+            echo("Caching")
+            softwareComponentGraph.cacheConfiguration(
+                SimpleMavenDescriptor.parseDescription(descriptor)
+                    ?: throw IllegalArgumentException("Failed to parse descriptor: '$descriptor'"),
+                config
+            )
+
+            echo("Successfully cached configuration for component '$descriptor'")
+        }
+    }
+
+    parser.subcommands(CacheComponent(), StartComponents(), Configure())
 
     parser.parse(args)
 }
-//
-// TODO Create into api
-//public fun main(args: Array<String>) {
-//    Policy.setPolicy(BasicPolicy())
-//    System.setSecurityManager(SecurityManager())
-//
-//    val parser = ArgParser("boot", skipExtraArguments = true)
-//
-//    val mavenCache by parser.option(ArgType.String, "maven-cache-location").required()
-//    val pluginCache by parser.option(ArgType.String, "plugin-cache-location").required()
-//    val pluginArguments by parser.option(ArgType.String, "plugins").required()
-//
-//    parser.parse(args)
-//
-////    Boot.maven = initMaven(mavenCache) { populateFrom ->
-////        val mavenCentral = SimpleMaven.createContext(
-////            SimpleMavenRepositorySettings.mavenCentral(
-////                preferredHash = HashType.SHA1
-////            )
-////        )
-////
-////        val yakCentral = SimpleMaven.createContext(
-////            SimpleMavenRepositorySettings.default(
-////                "http://repo.yakclient.net/snapshots",
-////                preferredHash = HashType.SHA1
-////            )
-////        )
-////
-////        val mavenLocal = SimpleMaven.createContext(
-////            SimpleMavenRepositorySettings.local()
-////        )
-////
-////        val allRepos = listOf(mavenCentral, yakCentral, mavenLocal);
-////
-////        { dependency: String ->
-////            allRepos.find { it.populateFrom(dependency) }
-////        }.also { implementation ->
-////            implementation("org.jetbrains.kotlin:kotlin-stdlib:1.7.10")
-////            implementation("io.arrow-kt:arrow-core:1.1.2")
-////
-////            implementation("com.durganmcbroom:event-api:1.0-SNAPSHOT")
-////            implementation("org.jetbrains.kotlinx:kotlinx-cli:0.3.5")
-////            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.4")
-////            implementation("net.yakclient:archives:1.0-SNAPSHOT")
-////            implementation("com.durganmcbroom:artifact-resolver:1.0-SNAPSHOT")
-////            implementation("com.durganmcbroom:artifact-resolver-simple-maven:1.0-SNAPSHOT")
-////            implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-xml:2.13.4")
-////            implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.13.4")
-////            implementation("net.yakclient:common-util:1.0-SNAPSHOT")
-////        }
-////    }
-//
-//
-//
-////    val appRef = readApp(appPath)
-////    val (app, handle) = setupApp(appRef)
-//
-////    Boot.eventManager.accept(ApplicationLoadEvent(appRef, handle))
-////
-////    val instance = app.newInstance(args)
-////
-////    Boot.eventManager.accept(ApplicationLaunchEvent(handle, app))
-////
-////    instance.start(args)
-//}
+
+// Boot context
+public data class BootContext internal constructor(
+    val dependencyProviders: DependencyProviders = DependencyProviders()
+)
 
 public fun enableAllComponents(
     node: SoftwareComponentNode,
     alreadyEnabled: Set<SoftwareComponentDescriptor> = HashSet(),
+    boot: BootContext
 ): Set<SoftwareComponentNode> {
-    val enabledChildren = node.children.flatMapTo(HashSet(), ::enableAllComponents)
+    val enabledChildren = node.children.flatMapTo(HashSet()) { enableAllComponents(it, alreadyEnabled, boot) }
 
-    val enabled = if (!alreadyEnabled.contains(node.descriptor)) node.component?.onEnable(ComponentLoadContext(node.configuration)) != null else false
+    val enabled = if (!alreadyEnabled.contains(node.descriptor)) node.component?.onEnable(
+        ComponentContext(
+            node.configuration,
+            boot
+        )
+    ) != null else false
 
     return if (enabled) enabledChildren + node else enabledChildren
 }
 
-public fun withBootDependencies(init: (MavenContext.(String) -> Boolean) -> Unit): (MavenContext.(String) -> Boolean) -> Unit =
+public fun withBootDependencies(init: (MavenContext.(String) -> Boolean) -> Unit = {}): (MavenContext.(String) -> Boolean) -> Unit =
     { populateFrom ->
         val mavenCentral = SimpleMaven.createContext(
             SimpleMavenRepositorySettings.mavenCentral(
@@ -272,65 +271,7 @@ public fun withBootDependencies(init: (MavenContext.(String) -> Boolean) -> Unit
         init(populateFrom)
     }
 
-
-//private fun parsePluginRequests(
-//    plugins: String,
-//): List<Pair<PluginArtifactRequest, PluginRepositorySettings>> {
-//    val mapper = ObjectMapper().registerModule(KotlinModule.Builder().build())
-//    mapper.configure(JsonParser.Feature.ALLOW_SINGLE_QUOTES, true)
-//
-//    data class CLIRepositorySettings(
-//        val type: String,
-//        val url: String,
-//        val hashType: HashType = HashType.SHA1,
-//        val releases: Boolean = true,
-//        val snapshots: Boolean = true,
-//    )
-//
-//    data class CLIArtifactRequest(
-//        val descriptor: String,
-//        val isTransitive: Boolean = true,
-//        val includeScopes: Set<String> = setOf(),
-//        val excludeArtifacts: Set<String> = setOf(),
-//        val repository: CLIRepositorySettings,
-//    )
-//
-//    val requests = mapper.readValue<List<CLIArtifactRequest>>(plugins)
-//
-//    return requests.map { req ->
-//        val repository by req::repository
-//
-//        val request = PluginArtifactRequest(
-//            req.descriptor,
-//            req.isTransitive,
-//            req.includeScopes,
-//            req.excludeArtifacts
-//        )
-//
-//        val layout =
-//            if (repository.type == PluginRuntimeModelRepository.PLUGIN_REPO_TYPE) {
-//                SimpleMavenDefaultLayout(
-//                    repository.url,
-//                    repository.hashType,
-//                    repository.releases,
-//                    repository.snapshots
-//                )
-//            } else if (repository.type == PluginRuntimeModelRepository.LOCAL_PLUGIN_REPO_TYPE) SimpleMavenRepositorySettings.local(
-//                repository.url,
-//                repository.hashType
-//            ).layout else throw java.lang.IllegalArgumentException("Unknown plugin repository type: '${repository.type}'")
-//
-//
-//        val settings = PluginRepositorySettings(
-//            layout,
-//            repository.hashType,
-//        )
-//
-//        request to settings
-//    }
-//}
-
-public fun initSoftwareComponentGraph(cache: String): SoftwareComponentGraph {
+private fun initSoftwareComponentGraph(cache: String, dependencyProviders: DependencyProviders): SoftwareComponentGraph {
     val cachePath = Path.of(cache)
 
     return SoftwareComponentGraph(
@@ -340,17 +281,17 @@ public fun initSoftwareComponentGraph(cache: String): SoftwareComponentGraph {
             Archives.Finders.JPM_FINDER as ArchiveFinder<ArchiveReference>,
             Archives.Resolvers.JPM_RESOLVER
         ),
+        dependencyProviders
     )
 }
 
-public fun initMaven(
+public fun createMavenProvider(
     cacheLocation: String,
     initDependencies: (MavenContext.(String) -> Boolean) -> Unit,
-): MavenDependencyGraph {
+): DependencyGraphProvider<*, *> {
     val dependencyGraph = createMavenDependencyGraph(cacheLocation, initDependencies)
 
-    DependencyProviders.add(object :
-        DependencyGraphProvider<SimpleMavenArtifactRequest, SimpleMavenRepositorySettings> {
+    return object : DependencyGraphProvider<SimpleMavenArtifactRequest, SimpleMavenRepositorySettings> {
         override val name: String = "simple-maven"
         override val graph: DependencyGraph<SimpleMavenArtifactRequest, *, SimpleMavenRepositorySettings> =
             dependencyGraph
@@ -372,29 +313,29 @@ public fun initMaven(
         override fun parseSettings(settings: Map<String, String>): SimpleMavenRepositorySettings? {
             val releasesEnabled = settings["releasesEnabled"] ?: "true"
             val snapshotsEnabled = settings["snapshotsEnabled"] ?: "true"
-            val url = settings["url"] ?: return null
+            val location = settings["location"] ?: return null
             val preferredHash = settings["preferredHash"] ?: "SHA1"
+            val type = settings["type"] ?: "default"
 
             val hashType = HashType.valueOf(preferredHash)
 
-            return SimpleMavenRepositorySettings(
-                SimpleMavenDefaultLayout(
-                    url,
-                    hashType,
+            return when (type) {
+                "default" -> SimpleMavenRepositorySettings.default(
+                    location,
                     releasesEnabled.toBoolean(),
-                    snapshotsEnabled.toBoolean()
-                ),
-                hashType
-            )
+                    snapshotsEnabled.toBoolean(),
+                    hashType
+                )
+                "local" -> SimpleMavenRepositorySettings.local(location, hashType)
+                else -> return null
+            }
         }
-    })
-
-    return dependencyGraph
+    }
 }
 
 private typealias MavenContext = ResolutionContext<SimpleMavenArtifactRequest, ArtifactStub<SimpleMavenArtifactRequest, SimpleMavenRepositoryStub>, ArtifactReference<SimpleMavenArtifactMetadata, ArtifactStub<SimpleMavenArtifactRequest, SimpleMavenRepositoryStub>>>
 
-private fun createMavenDependencyGraph(
+internal fun createMavenDependencyGraph(
     cachePath: String,
     initDependencies: (MavenContext.(String) -> Boolean) -> Unit,
 ): MavenDependencyGraph {
@@ -419,8 +360,6 @@ private fun createMavenDependencyGraph(
 public fun populateDependenciesSafely(
     initDependencies: (MavenContext.(String) -> Boolean) -> Unit,
 ): MutableMap<ArchiveKey<SimpleMavenArtifactRequest>, DependencyNode> {
-//    val initialGraph: MutableMap<ArchiveKey<SimpleMavenArtifactRequest>, DependencyNode> = HashMap()
-
     class UnVersionedArchiveKey(request: SimpleMavenArtifactRequest) :
         ArchiveKey<SimpleMavenArtifactRequest>(request) {
         val group by request.descriptor::group
@@ -501,80 +440,3 @@ public fun populateDependenciesSafely(
 
     return moduleAwareGraph
 }
-
-//private const val APP_ENTRY_RESOURCE_LOCATION = "META-INF/app.json"
-//
-//private data class BootAppProperties(
-//    val name: String,
-//    val appClassName: String,
-//    val dependencies: List<BootAppDependency>,
-//)
-//
-//private data class BootAppDependency(
-//    val type: String,
-//    val request: Map<String, String>,
-//    val repository: Map<String, String>,
-//)
-//
-//private val mapper = ObjectMapper().registerModule(KotlinModule.Builder().build())
-//
-//private fun parseAppProperties(properties: InputStream): BootAppProperties {
-//    return mapper.readValue(properties)
-//}
-//
-//private fun readApp(app: String): ArchiveReference {
-//    val path = Path.of(app)
-//
-//    check(Files.exists(path)) { "Given argument 'app-entry' (value: '$app') cannot be found in the file system!" }
-//
-//    return Archives.find(path, Archives.Finders.JPM_FINDER)
-//}
-//
-//private fun setupApp(ref: ArchiveReference): Pair<BootApplication, ArchiveHandle> {
-//    val appPath = ref.location.path
-//
-//    val properties = ref.reader[APP_ENTRY_RESOURCE_LOCATION]
-//        ?.let { parseAppProperties(it.resource.open()) }
-//        ?: throw IllegalStateException("Application Entry Point: '$appPath' should have a property file named: $'$APP_ENTRY_RESOURCE_LOCATION'")
-//
-//    val dependencies = properties.dependencies.map {
-//        val provider: DependencyGraphProvider<*, *>? = DependencyProviders.getByType(it.type)
-//
-//        provider?.getArtifact(it.repository, it.request)?.orNull()
-//            ?: throw IllegalArgumentException("Failed to load artifact '${it.request}' of type '${it.type}' from repository '${it.repository}'")
-//    }
-//
-//    fun handleOrChildren(node: DependencyNode): Set<ArchiveHandle> = node.handleOrChildren()
-//
-//    val children = dependencies.flatMapTo(HashSet(), ::handleOrChildren) + ModuleLayer.boot().modules()
-//        .map(JpmArchives::moduleToArchive)
-//
-//    val handle = Archives.resolve(
-//        ref,
-//        IntegratedLoader(
-//            sp = ArchiveSourceProvider(ref),
-//            cp = DelegatingClassProvider(
-//                children
-//                    .map(::ArchiveClassProvider)
-//            ),
-//            parent = ClassLoader.getSystemClassLoader()
-//        ),
-//        Archives.Resolvers.JPM_RESOLVER,
-//        children
-//    ).archive
-//
-//    val tryLoadClass = runCatching { handle.classloader.loadClass(properties.appClassName) }
-//
-//    val entrypointClass = tryLoadClass.getOrNull()
-//        ?: throw IllegalStateException("Failed to load class '${properties.appClassName}' from Entrypoint jar: '$appPath'")
-//    val entrypointConstructor = runCatching { entrypointClass.getConstructor() }.getOrNull()
-//        ?: throw IllegalStateException("ApplicationEntrypoint class: '${properties.appClassName}' must have a no-arg constructor!")
-//    val entrypoint = runCatching { entrypointConstructor.newInstance() }.let {
-//        it.getOrNull()
-//            ?: throw IllegalStateException("Failed to instantiate type: '${properties.appClassName}' during entrypoint construction. Error was: '${it.exceptionOrNull()?.message}'")
-//    }
-//
-//    return (entrypoint as? BootApplication
-//        ?: throw IllegalStateException("Type given as application entrypoint is not a child of '${BootApplication::class.java.name}'.")) to handle
-//}
-

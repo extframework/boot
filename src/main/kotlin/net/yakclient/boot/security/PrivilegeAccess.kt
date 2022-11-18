@@ -27,7 +27,5 @@ public object PrivilegeAccess {
 
         return Privileges(mutableListOf(privilege))
     }
-
-//    public fun Privileges.toMutablePrivileges(): MutablePrivilegeList = MutablePrivilegeList(toMutableList())
 }
 

@@ -1,4 +1,4 @@
-package net.yakclient.boot.store
+package net.yakclient.boot.util
 
 import com.fasterxml.jackson.core.JsonGenerator
 import com.fasterxml.jackson.core.JsonParser

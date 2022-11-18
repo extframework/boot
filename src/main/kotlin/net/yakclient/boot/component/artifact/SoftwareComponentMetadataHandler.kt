@@ -13,12 +13,14 @@ import com.fasterxml.jackson.module.kotlin.readValue
 import net.yakclient.boot.component.SoftwareComponentModel
 import net.yakclient.boot.component.SoftwareComponentModelRepository.Companion.LOCAL
 import net.yakclient.boot.component.SoftwareComponentModelRepository.Companion.DEFAULT
+import net.yakclient.boot.dependency.DependencyProviders
 
 public class SoftwareComponentMetadataHandler(
     settings: SoftwareComponentRepositorySettings,
 ) : SimpleMavenMetadataHandler(settings) {
     private val mapper = ObjectMapper().registerModule(KotlinModule())
 
+    // TODO, refactor so that we use maven instead of doing settings/request parsing ourselves
     override fun requestMetadata(
         desc: SoftwareComponentDescriptor,
     ): Either<MetadataRequestException, SoftwareComponentArtifactMetadata> = either.eager {
@@ -35,15 +37,13 @@ public class SoftwareComponentMetadataHandler(
             desc,
             jarResource,
             model.children.map {
-                val pGroup = checkNotNull(it.request["group"]) {"Invalid Software Component model ('$desc')! Component dependency does not contain group name!"}
-                val pArtifact = checkNotNull(it.request["artifact"]) {"Invalid Software Component model ('$desc')! Component dependency does not contain artifact name!"}
-                val pVersion = checkNotNull(it.request["version"]) {"Invalid pSoftware Component model ('$desc')! Component dependency does not contain version!"}
+                val descriptor = checkNotNull(it.request["descriptor"]) {"Invalid Software Component model ('$desc')! Component dependency does not contain descriptor!"}
 
                 val repository = run {
                     val repo by it::repository
                     check(repo.type == DEFAULT || repo.type == LOCAL) { "Invalid repository type: ${repo.type} must be '$DEFAULT'. Found in metadata of plugin: '$desc'" }
 
-                    val url by repo.settings
+                    val location by repo.settings
                     val releasesEnabled = repo.settings["releasesEnabled"]?.toBoolean() ?: true
                     val snapshotsEnabled = repo.settings["snapshotsEnabled"]?.toBoolean() ?: true
 
@@ -51,7 +51,7 @@ public class SoftwareComponentMetadataHandler(
                         PomRepository(
                             null,
                             null,
-                            url,
+                            location,
                             repo.type,
                             PomRepositoryPolicy(releasesEnabled),
                             PomRepositoryPolicy(snapshotsEnabled)
@@ -60,7 +60,7 @@ public class SoftwareComponentMetadataHandler(
                 }
 
                 SoftwareComponentChildInfo(
-                    SoftwareComponentDescriptor(pGroup, pArtifact, pVersion, null),
+                    SoftwareComponentDescriptor.parseDescription(descriptor) ?: throw IllegalStateException("Failed to parse extension descriptor: '$descriptor' when loading extension '$desc'"),
                     listOf(repository),
                     "compile"
                 )
