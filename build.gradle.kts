@@ -5,7 +5,6 @@ plugins {
     kotlin("jvm") version "1.7.10"
     id("org.javamodularity.moduleplugin") version "1.8.12"
 
-    id("signing")
     id("maven-publish")
     id("org.jetbrains.dokka") version "1.6.0"
     application
@@ -16,24 +15,6 @@ plugins {
 
 group = "net.yakclient"
 version = "1.0-SNAPSHOT"
-
-repositories {
-    mavenCentral()
-    maven {
-        name = "Durgan McBroom GitHub Packages"
-        url = uri("https://maven.pkg.github.com/durganmcbroom/artifact-resolver")
-        credentials {
-            username = project.findProperty("dm.gpr.user") as? String
-                ?: throw IllegalArgumentException("Need a Github package registry username!")
-            password = project.findProperty("dm.gpr.key") as? String
-                ?: throw IllegalArgumentException("Need a Github package registry key!")
-        }
-    }
-    maven {
-        isAllowInsecureProtocol = true
-        url = uri("http://maven.yakclient.net/snapshots")
-    }
-}
 
 application {
     mainClass.set("net.yakclient.boot.BootKt")
@@ -74,6 +55,8 @@ dependencies {
     implementation("net.yakclient:common-util:1.0-SNAPSHOT") {
         isChanging = true
     }
+    implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.7.22")
+
 }
 
 //val shadowJar by tasks
@@ -144,12 +127,24 @@ publishing {
 allprojects {
     apply(plugin = "org.jetbrains.kotlin.jvm")
     apply(plugin = "maven-publish")
+    apply(plugin = "org.jetbrains.dokka")
+
 
     group = "net.yakclient"
     version = "1.0-SNAPSHOT"
 
     repositories {
         mavenCentral()
+        maven {
+            name = "Durgan McBroom GitHub Packages"
+            url = uri("https://maven.pkg.github.com/durganmcbroom/artifact-resolver")
+            credentials {
+                username = project.findProperty("dm.gpr.user") as? String
+                    ?: throw IllegalArgumentException("Need a Github package registry username!")
+                password = project.findProperty("dm.gpr.key") as? String
+                    ?: throw IllegalArgumentException("Need a Github package registry key!")
+            }
+        }
         maven {
             isAllowInsecureProtocol = true
             url = uri("http://maven.yakclient.net/snapshots")

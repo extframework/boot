@@ -11,12 +11,12 @@ module yakclient.boot {
     requires arrow.core.jvm;
     requires jdk.unsupported;
     requires kotlin.reflect;
-//    requires transitive durganmcbroom.event.api;
 
     opens net.yakclient.boot.dependency to com.fasterxml.jackson.databind, kotlin.reflect;
-    opens net.yakclient.boot to com.fasterxml.jackson.databind, kotlin.reflect;
+    opens net.yakclient.boot to com.fasterxml.jackson.databind, kotlin.reflect, yakclient.boot.test;
     opens net.yakclient.boot.maven to com.fasterxml.jackson.databind, kotlin.reflect;
     opens net.yakclient.boot.component to com.fasterxml.jackson.databind, kotlin.reflect;
+
 
     exports net.yakclient.boot.store;
     exports net.yakclient.boot;

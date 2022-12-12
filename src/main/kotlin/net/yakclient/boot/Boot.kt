@@ -25,6 +25,7 @@ import java.security.Policy
 import java.util.*
 import java.util.logging.Level
 import java.util.logging.Logger
+import kotlin.collections.HashSet
 
 @ExperimentalCli
 public fun main(args: Array<String>) {
@@ -44,25 +45,26 @@ public fun main(args: Array<String>) {
     // Parse args
     val mavenCache by parser.option(ArgType.String, "maven-cache-location")
         .default("$workingDir${File.separator}cache${File.separator}maven")
+
     val softwareComponentCache by parser.option(ArgType.String, "software-component-cache-location")
         .default("$workingDir${File.separator}cache${File.separator}software-component")
 
     // Create Boot context for later use
     val bootContext = BootContext()
 
-    // Convenience methods
-    fun initMaven(init: (MavenContext.(String) -> Boolean) -> Unit) = bootContext.dependencyProviders.add(
-        createMavenProvider(mavenCache, init)
-    )
-
     fun echo(value: String) = logger.log(Level.INFO, value)
 
     echo("Setting up Software Component Graph.")
-    val softwareComponentGraph = initSoftwareComponentGraph(softwareComponentCache, bootContext.dependencyProviders)
+    val softwareComponentGraph by lazy {
+        initSoftwareComponentGraph(
+            softwareComponentCache,
+            bootContext.dependencyProviders
+        )
+    }
 
     // Start of cli commands
     class CacheComponent : Subcommand(
-        "cacheComponent",
+        "cache",
         "Installs a single software component into the cache for later use."
     ) {
         val descriptor by option(ArgType.String, "descriptor").required()
@@ -76,7 +78,11 @@ public fun main(args: Array<String>) {
 
         override fun execute() {
             echo("Setting up maven")
-            initMaven(withBootDependencies())
+            initMaven(
+                bootContext,
+                withBootDependencies(),
+                mavenCache
+            )
 
             val settings = when (type) {
                 DEFAULT -> SoftwareComponentRepositorySettings.default(
@@ -138,7 +144,11 @@ public fun main(args: Array<String>) {
 
         override fun execute() {
             echo("Setting up maven")
-            initMaven(withBootDependencies())
+            initMaven(
+                bootContext,
+                withBootDependencies(),
+                mavenCache
+            )
 
             echo("Starting to load components '${components.joinToString()}'")
 
@@ -181,7 +191,11 @@ public fun main(args: Array<String>) {
             echo("This isn't implemented yet.")
 
             echo("Setting up maven")
-            initMaven {}
+            initMaven(
+                bootContext,
+                {},
+                mavenCache
+            )
 
             val config = if (configuration.isNotBlank())
                 configuration
@@ -208,8 +222,17 @@ public fun main(args: Array<String>) {
     parser.parse(args)
 }
 
+// Convenience methods
+private fun initMaven(
+    bootContext: BootContext,
+    init: (MavenPopulateContext.(String) -> Boolean) -> Unit,
+    mavenCache: String
+) = bootContext.dependencyProviders.add(
+    createMavenProvider(mavenCache, init)
+)
+
 // Boot context
-public data class BootContext internal constructor(
+public data class BootContext(
     val dependencyProviders: DependencyProviders = DependencyProviders()
 )
 
@@ -230,7 +253,7 @@ public fun enableAllComponents(
     return if (enabled) enabledChildren + node else enabledChildren
 }
 
-public fun withBootDependencies(init: (MavenContext.(String) -> Boolean) -> Unit = {}): (MavenContext.(String) -> Boolean) -> Unit =
+public fun withBootDependencies(init: (MavenPopulateContext.(String) -> Boolean) -> Unit = {}): (MavenPopulateContext.(String) -> Boolean) -> Unit =
     { populateFrom ->
         val mavenCentral = SimpleMaven.createContext(
             SimpleMavenRepositorySettings.mavenCentral(
@@ -271,7 +294,10 @@ public fun withBootDependencies(init: (MavenContext.(String) -> Boolean) -> Unit
         init(populateFrom)
     }
 
-private fun initSoftwareComponentGraph(cache: String, dependencyProviders: DependencyProviders): SoftwareComponentGraph {
+private fun initSoftwareComponentGraph(
+    cache: String,
+    dependencyProviders: DependencyProviders
+): SoftwareComponentGraph {
     val cachePath = Path.of(cache)
 
     return SoftwareComponentGraph(
@@ -287,7 +313,7 @@ private fun initSoftwareComponentGraph(cache: String, dependencyProviders: Depen
 
 public fun createMavenProvider(
     cacheLocation: String,
-    initDependencies: (MavenContext.(String) -> Boolean) -> Unit,
+    initDependencies: (MavenPopulateContext.(String) -> Boolean) -> Unit,
 ): DependencyGraphProvider<*, *> {
     val dependencyGraph = createMavenDependencyGraph(cacheLocation, initDependencies)
 
@@ -300,13 +326,13 @@ public fun createMavenProvider(
             val descriptorName = request["descriptor"] ?: return null
             val isTransitive = request["isTransitive"] ?: "true"
             val scopes = request["includeScopes"] ?: "compile,runtime,import"
-            val excludeArtifacts = request["excludeArtifacts"] ?: ""
+            val excludeArtifacts = request["excludeArtifacts"]
 
             return SimpleMavenArtifactRequest(
                 SimpleMavenDescriptor.parseDescription(descriptorName) ?: return null,
                 isTransitive.toBoolean(),
                 scopes.split(',').toSet(),
-                excludeArtifacts.split(',').toSet()
+                excludeArtifacts?.split(',')?.toSet() ?: setOf()
             )
         }
 
@@ -333,11 +359,11 @@ public fun createMavenProvider(
     }
 }
 
-private typealias MavenContext = ResolutionContext<SimpleMavenArtifactRequest, ArtifactStub<SimpleMavenArtifactRequest, SimpleMavenRepositoryStub>, ArtifactReference<SimpleMavenArtifactMetadata, ArtifactStub<SimpleMavenArtifactRequest, SimpleMavenRepositoryStub>>>
+public typealias MavenPopulateContext = ResolutionContext<SimpleMavenArtifactRequest, ArtifactStub<SimpleMavenArtifactRequest, SimpleMavenRepositoryStub>, ArtifactReference<SimpleMavenArtifactMetadata, ArtifactStub<SimpleMavenArtifactRequest, SimpleMavenRepositoryStub>>>
 
 internal fun createMavenDependencyGraph(
     cachePath: String,
-    initDependencies: (MavenContext.(String) -> Boolean) -> Unit,
+    initDependencies: (MavenPopulateContext.(String) -> Boolean) -> Unit,
 ): MavenDependencyGraph {
     val moduleAwareGraph = populateDependenciesSafely(initDependencies)
 
@@ -358,7 +384,7 @@ internal fun createMavenDependencyGraph(
 }
 
 public fun populateDependenciesSafely(
-    initDependencies: (MavenContext.(String) -> Boolean) -> Unit,
+    initDependencies: (MavenPopulateContext.(String) -> Boolean) -> Unit,
 ): MutableMap<ArchiveKey<SimpleMavenArtifactRequest>, DependencyNode> {
     class UnVersionedArchiveKey(request: SimpleMavenArtifactRequest) :
         ArchiveKey<SimpleMavenArtifactRequest>(request) {
@@ -393,7 +419,7 @@ public fun populateDependenciesSafely(
             }
         }
 
-    fun MavenContext.populate(
+    fun MavenPopulateContext.populate(
         ref: SimpleMavenArtifactReference,
         request: SimpleMavenArtifactRequest,
     ): DependencyNode {
@@ -418,7 +444,7 @@ public fun populateDependenciesSafely(
         return node
     }
 
-    fun MavenContext.populateFrom(
+    fun MavenPopulateContext.populateFrom(
         request: SimpleMavenArtifactRequest,
     ): Boolean {
         val repo = repositoryContext.artifactRepository
