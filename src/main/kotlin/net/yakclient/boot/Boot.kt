@@ -188,8 +188,6 @@ public fun main(args: Array<String>) {
         val configuration by option(ArgType.String, "configuration").required()
 
         override fun execute() {
-            echo("This isn't implemented yet.")
-
             echo("Setting up maven")
             initMaven(
                 bootContext,
@@ -289,6 +287,7 @@ public fun withBootDependencies(init: (MavenPopulateContext.(String) -> Boolean)
             implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-xml:2.13.4")
             implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.13.4")
             implementation("net.yakclient:common-util:1.0-SNAPSHOT")
+            implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.7.22")
         }
 
         init(populateFrom)
@@ -415,7 +414,7 @@ public fun populateDependenciesSafely(
     val moduleAwareGraph: MutableMap<ArchiveKey<SimpleMavenArtifactRequest>, DependencyNode> =
         object : MutableMap<ArchiveKey<SimpleMavenArtifactRequest>, DependencyNode> by delegate {
             override fun get(key: ArchiveKey<SimpleMavenArtifactRequest>): DependencyNode? {
-                return delegate[UnVersionedArchiveKey(key.request)]
+                return delegate[UnVersionedArchiveKey(key.request)] ?: delegate[key]
             }
         }
 

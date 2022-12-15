@@ -11,6 +11,7 @@ module yakclient.boot {
     requires arrow.core.jvm;
     requires jdk.unsupported;
     requires kotlin.reflect;
+    requires kotlin.stdlib.jdk8;
 
     opens net.yakclient.boot.dependency to com.fasterxml.jackson.databind, kotlin.reflect;
     opens net.yakclient.boot to com.fasterxml.jackson.databind, kotlin.reflect, yakclient.boot.test;
