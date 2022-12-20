@@ -13,9 +13,7 @@ public object ContainerLoader {
         volume: ContainerVolume,
         privilegeManager: PrivilegeManager,
     ): Container<P> {
-        val process = loader.load(info)
-
-        val container = Container(loader.load(info), process.archive, volume, privilegeManager)
+        val container = Container(loader.load(info), volume, privilegeManager)
         handle.handle = container
 
         return container

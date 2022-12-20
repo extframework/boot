@@ -6,7 +6,6 @@ import net.yakclient.boot.container.volume.ContainerVolume
 
 public data class Container<out T: ContainerProcess>(
     public val process: T,
-    public val handle: ArchiveHandle,
     public val volume: ContainerVolume,
     public val privilegeManager: PrivilegeManager
 )
