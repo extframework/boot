@@ -1,5 +1,7 @@
 package net.yakclient.boot.loader
 
+import net.yakclient.boot.util.packageFormat
+
 public class DelegatingClassProvider(
     delegates: List<ClassProvider>
 ) : ClassProvider {

@@ -1,5 +1,6 @@
 package net.yakclient.boot.loader
 
+import net.yakclient.boot.util.packageFormat
 import java.net.URL
 import java.nio.ByteBuffer
 

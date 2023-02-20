@@ -1,6 +1,8 @@
 package net.yakclient.boot.loader
 
 import net.yakclient.archives.ArchiveReference
+import net.yakclient.boot.util.dotClassFormat
+import net.yakclient.boot.util.packageFormat
 import net.yakclient.common.util.readInputStream
 import java.net.URL
 import java.nio.ByteBuffer
