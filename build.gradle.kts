@@ -43,7 +43,7 @@ dependencies {
 
     implementation("org.jetbrains.kotlinx:kotlinx-cli:0.3.5")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.4")
-    implementation("net.yakclient:archives:1.0-SNAPSHOT") {
+    implementation("net.yakclient:archives:1.1-SNAPSHOT") {
         isChanging = true
     }
     implementation("com.durganmcbroom:artifact-resolver:1.0-SNAPSHOT") {
