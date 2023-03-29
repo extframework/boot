@@ -140,7 +140,7 @@ allprojects {
 
     publishing {
         repositories {
-            if (project.hasProperty("maven-user") && project.hasProperty("maven-pass")) maven {
+            if (project.hasProperty("maven-user") && project.hasProperty("maven-secret")) maven {
                 logger.quiet("Maven user and password found.")
                 val repo = if ((version as String).endsWith("-SNAPSHOT")) "snapshots" else "releases"
 
