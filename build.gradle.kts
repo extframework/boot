@@ -61,21 +61,6 @@ dependencies {
 
 }
 
-//val shadowJar by tasks
-//
-//val relocateShadowJar by tasks.registering(ConfigureShadowRelocation::class) {
-//    target = shadowJar as ShadowJar
-//    prefix = "net/yakclient/boot/internal/dependencies" // Default value is "shadow"
-//}
-//
-//shadowJar.dependsOn(relocateShadowJar)
-
-//tasks.withType<ShadowJar> {
-//   dependencies {
-//       include(dependency("org.jetbrains.kotlinx:kotlinx-cli:0.3.5"))
-//   }
-//}
-
 task<Jar>("sourcesJar") {
     archiveClassifier.set("sources")
     from(sourceSets.main.get().allSource)
@@ -157,7 +142,7 @@ allprojects {
         repositories {
             if (project.hasProperty("maven-user") && project.hasProperty("maven-pass")) maven {
                 logger.quiet("Maven user and password found.")
-                val repo = if (project.findProperty("isSnapshot") == "true") "snapshots" else "releases"
+                val repo = if ((version as String).endsWith("-SNAPSHOT")) "snapshots" else "releases"
 
                 isAllowInsecureProtocol = true
 
@@ -165,7 +150,7 @@ allprojects {
 
                 credentials {
                     username = project.findProperty("maven-user") as String
-                    password = project.findProperty("maven-pass") as String
+                    password = project.findProperty("maven-secret") as String
                 }
                 authentication {
                     create<BasicAuthentication>("basic")
