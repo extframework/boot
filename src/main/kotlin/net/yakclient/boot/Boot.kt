@@ -261,7 +261,7 @@ public fun withBootDependencies(init: (MavenPopulateContext.(String) -> Boolean)
 
         val yakCentral = SimpleMaven.createContext(
             SimpleMavenRepositorySettings.default(
-                "http://repo.yakclient.net/snapshots",
+                "http://maven.yakclient.net/snapshots",
                 preferredHash = HashType.SHA1
             )
         )
