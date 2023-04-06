@@ -1,7 +1,6 @@
 package net.yakclient.boot.test
 
 import net.yakclient.boot.BootContext
-import net.yakclient.boot.MavenPopulateContext
 import net.yakclient.boot.component.ComponentContext
 import net.yakclient.boot.component.SoftwareComponent
 import net.yakclient.boot.createMavenProvider
@@ -15,14 +14,13 @@ public fun <T : SoftwareComponent> testEnable(
     context: Map<String, String>,
 
     mavenCache: String = System.getProperty("user.dir"),
-    initMaven: (MavenPopulateContext.(String) -> Boolean) -> Unit = {}
 ) {
     read(component::class)
 
     val bootContext: BootContext = constructInternal()
 
     bootContext.dependencyProviders.add(
-        createMavenProvider(mavenCache, initMaven)
+        createMavenProvider(mavenCache)
     )
 
     component.onEnable(

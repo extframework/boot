@@ -37,7 +37,7 @@ public open class BasicArchiveResolutionProvider<T : ArchiveReference, R : Resol
     }
 }
 
-public object JpmResolutionProvider : BasicArchiveResolutionProvider<ArchiveReference, JpmResolutionResult>(
-    Archives.Finders.JPM_FINDER as ArchiveFinder<ArchiveReference>,
-    Archives.Resolvers.JPM_RESOLVER
-)
+//public object JpmResolutionProvider : BasicArchiveResolutionProvider<ArchiveReference, JpmResolutionResult>(
+//    Archives.Finders.JPM_FINDER as ArchiveFinder<ArchiveReference>,
+//    Archives.Resolvers.JPM_RESOLVER
+//)

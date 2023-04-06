@@ -7,13 +7,11 @@ import net.yakclient.common.util.resolve
 import java.nio.file.Path
 import kotlin.test.Test
 
-private typealias MavenContext = ResolutionContext<SimpleMavenArtifactRequest, ArtifactStub<SimpleMavenArtifactRequest, SimpleMavenRepositoryStub>, ArtifactReference<SimpleMavenArtifactMetadata, ArtifactStub<SimpleMavenArtifactRequest, SimpleMavenRepositoryStub>>>
-
 class TestDependencyGraph {
     @Test
     fun `Test maven basic dependency loading`() {
         val basePath = Path.of(System.getProperty("user.dir")) resolve "cache/lib"
-        val graph = createMavenDependencyGraph(basePath.toString()) {}
+        val graph = createMavenDependencyGraph(basePath.toString())
 
         val loader = graph.cacherOf(
             SimpleMavenRepositorySettings.mavenCentral(

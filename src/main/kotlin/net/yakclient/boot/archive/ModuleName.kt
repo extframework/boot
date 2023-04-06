@@ -31,8 +31,8 @@ public fun moduleNameFor(artifact: SafeResource, name: String): String {
     var currentEntry = zip.nextEntry
 
     while (currentEntry != null) {
-        if (currentEntry.name == "module-info.class") moduleName = readModuleInfoName(zip)
-        if (currentEntry.name == "MANIFEST.MF") automaticName = readManifestName(zip)
+        if (currentEntry.name.contains("module-info.class")) moduleName = readModuleInfoName(zip)
+        if (currentEntry.name.contains( "MANIFEST.MF")) automaticName = readManifestName(zip)
 
         zip.closeEntry()
         currentEntry = zip.nextEntry

@@ -78,8 +78,7 @@ public abstract class DependencyGraph<K : ArtifactRequest<*>, S : ArtifactStub<K
         public fun put(key: ArchiveKey<K>, node: DependencyNode)
     }
 
-
-    private fun load(
+    protected open fun load(
         context: GraphContext<K>,
         data: DependencyData<K>,
     ): Either<ArchiveLoadException, DependencyNode> = either.eager {

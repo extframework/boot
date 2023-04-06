@@ -25,14 +25,14 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.util.logging.Level
 
-public class MavenDependencyGraph(
+public open class MavenDependencyGraph(
     private val path: Path,
     store: DataStore<SimpleMavenArtifactRequest, DependencyData<SimpleMavenArtifactRequest>>,
     archiveResolver: ArchiveResolutionProvider<ResolutionResult>,
     initialGraph: MutableMap<ArchiveKey<SimpleMavenArtifactRequest>, DependencyNode> = HashMap(),
     // TODO not all privileges
     privilegeManager: PrivilegeManager = PrivilegeManager(null, PrivilegeAccess.allPrivileges()) {},
-    private val stubResolutionProvider : (SimpleMavenArtifactRepository) -> ArtifactStubResolver<*, SimpleMavenArtifactStub, SimpleMavenArtifactReference> = SimpleMavenArtifactRepository::stubResolver,
+    private val stubResolutionProvider: (SimpleMavenArtifactRepository) -> ArtifactStubResolver<*, SimpleMavenArtifactStub, SimpleMavenArtifactReference> = SimpleMavenArtifactRepository::stubResolver,
     private val factory: RepositoryFactory<SimpleMavenRepositorySettings, SimpleMavenArtifactRequest, SimpleMavenArtifactStub, SimpleMavenArtifactReference, SimpleMavenArtifactRepository> = SimpleMaven
 ) : DependencyGraph<SimpleMavenArtifactRequest, SimpleMavenArtifactStub, SimpleMavenRepositorySettings>(
     store, factory, archiveResolver, initialGraph, privilegeManager

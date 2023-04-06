@@ -1,31 +1,38 @@
 package net.yakclient.boot
 
 import arrow.core.Either
-import com.durganmcbroom.artifact.resolver.*
+import arrow.core.right
+import com.durganmcbroom.artifact.resolver.ArtifactReference
+import com.durganmcbroom.artifact.resolver.ArtifactStub
+import com.durganmcbroom.artifact.resolver.ResolutionContext
 import com.durganmcbroom.artifact.resolver.simple.maven.*
 import kotlinx.cli.*
 import net.yakclient.archives.*
-import net.yakclient.boot.archive.ArchiveKey
+import net.yakclient.boot.archive.ArchiveLoadException
 import net.yakclient.boot.archive.BasicArchiveResolutionProvider
 import net.yakclient.boot.archive.moduleNameFor
-import net.yakclient.boot.component.*
+import net.yakclient.boot.component.ComponentContext
+import net.yakclient.boot.component.SoftwareComponentDataAccess
+import net.yakclient.boot.component.SoftwareComponentGraph
 import net.yakclient.boot.component.SoftwareComponentModelRepository.Companion.DEFAULT
 import net.yakclient.boot.component.SoftwareComponentModelRepository.Companion.LOCAL
+import net.yakclient.boot.component.SoftwareComponentNode
 import net.yakclient.boot.component.artifact.SoftwareComponentArtifactRequest
 import net.yakclient.boot.component.artifact.SoftwareComponentDescriptor
 import net.yakclient.boot.component.artifact.SoftwareComponentRepositorySettings
-import net.yakclient.boot.dependency.*
+import net.yakclient.boot.dependency.DependencyGraph
+import net.yakclient.boot.dependency.DependencyGraphProvider
+import net.yakclient.boot.dependency.DependencyProviders
 import net.yakclient.boot.maven.MavenDataAccess
 import net.yakclient.boot.maven.MavenDependencyGraph
 import net.yakclient.boot.store.CachingDataStore
-import net.yakclient.boot.util.toSafeResource
+import net.yakclient.common.util.resource.LocalResource
 import java.io.File
 import java.nio.file.Path
 import java.security.Policy
-import java.util.*
 import java.util.logging.Level
 import java.util.logging.Logger
-import kotlin.collections.HashSet
+import kotlin.reflect.KClass
 
 @ExperimentalCli
 public fun main(args: Array<String>) {
@@ -80,7 +87,6 @@ public fun main(args: Array<String>) {
             echo("Setting up maven")
             initMaven(
                 bootContext,
-                withBootDependencies(),
                 mavenCache
             )
 
@@ -89,10 +95,12 @@ public fun main(args: Array<String>) {
                     location,
                     preferredHash = HashType.SHA1
                 )
+
                 LOCAL -> SoftwareComponentRepositorySettings.local(
                     location,
                     preferredHash = HashType.SHA1
                 )
+
                 else -> throw IllegalArgumentException("Unknown Software Component repository type: '$type'. Only known types are '$DEFAULT' (for remote repositories) and '$LOCAL' (for local repositories)")
             }
 
@@ -146,7 +154,6 @@ public fun main(args: Array<String>) {
             echo("Setting up maven")
             initMaven(
                 bootContext,
-                withBootDependencies(),
                 mavenCache
             )
 
@@ -191,7 +198,6 @@ public fun main(args: Array<String>) {
             echo("Setting up maven")
             initMaven(
                 bootContext,
-                {},
                 mavenCache
             )
 
@@ -223,10 +229,9 @@ public fun main(args: Array<String>) {
 // Convenience methods
 private fun initMaven(
     bootContext: BootContext,
-    init: (MavenPopulateContext.(String) -> Boolean) -> Unit,
     mavenCache: String
 ) = bootContext.dependencyProviders.add(
-    createMavenProvider(mavenCache, init)
+    createMavenProvider(mavenCache)
 )
 
 // Boot context
@@ -251,47 +256,6 @@ public fun enableAllComponents(
     return if (enabled) enabledChildren + node else enabledChildren
 }
 
-public fun withBootDependencies(init: (MavenPopulateContext.(String) -> Boolean) -> Unit = {}): (MavenPopulateContext.(String) -> Boolean) -> Unit =
-    { populateFrom ->
-        val mavenCentral = SimpleMaven.createContext(
-            SimpleMavenRepositorySettings.mavenCentral(
-                preferredHash = HashType.SHA1
-            )
-        )
-
-        val yakCentral = SimpleMaven.createContext(
-            SimpleMavenRepositorySettings.default(
-                "http://maven.yakclient.net/snapshots",
-                preferredHash = HashType.SHA1
-            )
-        )
-
-        val mavenLocal = SimpleMaven.createContext(
-            SimpleMavenRepositorySettings.local()
-        )
-
-        val allRepos = listOf(mavenCentral, yakCentral, mavenLocal);
-
-        { dependency: String ->
-            allRepos.find { it.populateFrom(dependency) }
-        }.also { implementation ->
-            implementation("org.jetbrains.kotlin:kotlin-stdlib:1.7.10")
-            implementation("io.arrow-kt:arrow-core:1.1.2")
-
-            implementation("com.durganmcbroom:event-api:1.0-SNAPSHOT")
-            implementation("org.jetbrains.kotlinx:kotlinx-cli:0.3.5")
-            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.4")
-            implementation("net.yakclient:archives:1.0-SNAPSHOT")
-            implementation("com.durganmcbroom:artifact-resolver:1.0-SNAPSHOT")
-            implementation("com.durganmcbroom:artifact-resolver-simple-maven:1.0-SNAPSHOT")
-            implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-xml:2.13.4")
-            implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.13.4")
-            implementation("net.yakclient:common-util:1.0-SNAPSHOT")
-            implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.7.22")
-        }
-
-        init(populateFrom)
-    }
 
 private fun initSoftwareComponentGraph(
     cache: String,
@@ -312,9 +276,8 @@ private fun initSoftwareComponentGraph(
 
 public fun createMavenProvider(
     cacheLocation: String,
-    initDependencies: (MavenPopulateContext.(String) -> Boolean) -> Unit,
 ): DependencyGraphProvider<*, *> {
-    val dependencyGraph = createMavenDependencyGraph(cacheLocation, initDependencies)
+    val dependencyGraph = createMavenDependencyGraph(cacheLocation)
 
     return object : DependencyGraphProvider<SimpleMavenArtifactRequest, SimpleMavenRepositorySettings> {
         override val name: String = "simple-maven"
@@ -351,6 +314,7 @@ public fun createMavenProvider(
                     snapshotsEnabled.toBoolean(),
                     hashType
                 )
+
                 "local" -> SimpleMavenRepositorySettings.local(location, hashType)
                 else -> return null
             }
@@ -360,108 +324,139 @@ public fun createMavenProvider(
 
 public typealias MavenPopulateContext = ResolutionContext<SimpleMavenArtifactRequest, ArtifactStub<SimpleMavenArtifactRequest, SimpleMavenRepositoryStub>, ArtifactReference<SimpleMavenArtifactMetadata, ArtifactStub<SimpleMavenArtifactRequest, SimpleMavenRepositoryStub>>>
 
+private data class BasicResolutionResult(override val archive: ArchiveHandle) : ResolutionResult
+
+private const val DASH_DOT_PATTERN = "-(\\d+(\\.|$))"
+
 internal fun createMavenDependencyGraph(
     cachePath: String,
-    initDependencies: (MavenPopulateContext.(String) -> Boolean) -> Unit,
 ): MavenDependencyGraph {
-    val moduleAwareGraph = populateDependenciesSafely(initDependencies)
-
     val basePath = Path.of(cachePath)
     val graph = MavenDependencyGraph(
         basePath,
         CachingDataStore(
             MavenDataAccess(basePath)
         ),
-        BasicArchiveResolutionProvider(
+        object : BasicArchiveResolutionProvider<ArchiveReference, BasicResolutionResult>(
             Archives.Finders.JPM_FINDER as ArchiveFinder<ArchiveReference>,
-            Archives.Resolvers.JPM_RESOLVER
-        ),
-        moduleAwareGraph
+            object : ArchiveResolver<ArchiveReference, BasicResolutionResult> {
+                private val delegate = Archives.Resolvers.JPM_RESOLVER
+                override val type: KClass<ArchiveReference> by delegate::type
+
+                override fun resolve(
+                    archiveRefs: List<ArchiveReference>,
+                    clProvider: ClassLoaderProvider<ArchiveReference>,
+                    parents: Set<ArchiveHandle>
+                ): List<BasicResolutionResult> = delegate.resolve(archiveRefs, clProvider, parents).map {
+                    BasicResolutionResult(it.archive)
+                }
+            }
+        ) {
+            override fun resolve(
+                resource: Path,
+                classLoader: ClassLoaderProvider<ArchiveReference>,
+                parents: Set<ArchiveHandle>
+            ): Either<ArchiveLoadException, BasicResolutionResult> {
+                val fileName = resource.fileName.toString()
+                val artifactName =
+                    fileName.substring(0, Regex(DASH_DOT_PATTERN).find(fileName)?.range?.first ?: (fileName.length))
+
+                val name = moduleNameFor(LocalResource(resource.toUri()), artifactName)
+
+                val maybeModule = ModuleLayer.boot().findModule(name).orElseGet { null }
+
+                return maybeModule
+                    ?.let(JpmArchives::moduleToArchive)
+                    ?.let(::BasicResolutionResult)
+                    ?.right() ?: super.resolve(resource, classLoader, parents)
+            }
+        },
+        HashMap()
     )
 
     return graph
 }
 
-public fun populateDependenciesSafely(
-    initDependencies: (MavenPopulateContext.(String) -> Boolean) -> Unit,
-): MutableMap<ArchiveKey<SimpleMavenArtifactRequest>, DependencyNode> {
-    class UnVersionedArchiveKey(request: SimpleMavenArtifactRequest) :
-        ArchiveKey<SimpleMavenArtifactRequest>(request) {
-        val group by request.descriptor::group
-        val artifact by request.descriptor::artifact
-        val classifier by request.descriptor::classifier
-
-        override fun equals(other: Any?): Boolean {
-            if (this === other) return true
-            if (other !is UnVersionedArchiveKey) return false
-
-            if (group != other.group) return false
-            if (artifact != other.artifact) return false
-            if (classifier != other.classifier) return false
-
-            return true
-        }
-
-        override fun hashCode(): Int {
-            var result = group.hashCode()
-            result = 31 * result + artifact.hashCode()
-            result = 31 * result + (classifier?.hashCode() ?: 0)
-            return result
-        }
-    }
-
-    val delegate = HashMap<ArchiveKey<SimpleMavenArtifactRequest>, DependencyNode>()
-    val moduleAwareGraph: MutableMap<ArchiveKey<SimpleMavenArtifactRequest>, DependencyNode> =
-        object : MutableMap<ArchiveKey<SimpleMavenArtifactRequest>, DependencyNode> by delegate {
-            override fun get(key: ArchiveKey<SimpleMavenArtifactRequest>): DependencyNode? {
-                return delegate[UnVersionedArchiveKey(key.request)] ?: delegate[key]
-            }
-        }
-
-    fun MavenPopulateContext.populate(
-        ref: SimpleMavenArtifactReference,
-        request: SimpleMavenArtifactRequest,
-    ): DependencyNode {
-        val metadata = ref.metadata
-
-        val children = ref.children
-            .map { resolverContext.stubResolver.resolve(it) to it.request }
-            .mapNotNull { it.first.orNull()?.to(it.second) }
-            .mapTo(HashSet()) { populate(it.first, it.second) }
-
-        val nameOr = metadata.resource?.let { moduleNameFor(it.toSafeResource(), metadata.descriptor.artifact) }
-        val moduleHandle =
-            nameOr?.let(ModuleLayer.boot()::findModule)?.orElseGet { null }?.let(JpmArchives::moduleToArchive)
-
-        val node = DependencyNode(
-            moduleHandle,
-            children
-        )
-
-        delegate[UnVersionedArchiveKey(request)] = node
-
-        return node
-    }
-
-    fun MavenPopulateContext.populateFrom(
-        request: SimpleMavenArtifactRequest,
-    ): Boolean {
-        val repo = repositoryContext.artifactRepository
-        val ref = repo.get(request).orNull() ?: return false
-
-        populate(ref, request)
-
-        return true
-    }
-
-    initDependencies { desc ->
-        populateFrom(
-            SimpleMavenArtifactRequest(
-                desc,
-                includeScopes = setOf("compile", "runtime", "import")
-            )
-        )
-    }
-
-    return moduleAwareGraph
-}
+//public fun populateDependenciesSafely(
+//    initDependencies: (MavenPopulateContext.(String) -> Boolean) -> Unit,
+//): MutableMap<ArchiveKey<SimpleMavenArtifactRequest>, DependencyNode> {
+//    class UnVersionedArchiveKey(request: SimpleMavenArtifactRequest) :
+//        ArchiveKey<SimpleMavenArtifactRequest>(request) {
+//        val group by request.descriptor::group
+//        val artifact by request.descriptor::artifact
+//        val classifier by request.descriptor::classifier
+//
+//        override fun equals(other: Any?): Boolean {
+//            if (this === other) return true
+//            if (other !is UnVersionedArchiveKey) return false
+//
+//            if (group != other.group) return false
+//            if (artifact != other.artifact) return false
+//            if (classifier != other.classifier) return false
+//
+//            return true
+//        }
+//
+//        override fun hashCode(): Int {
+//            var result = group.hashCode()
+//            result = 31 * result + artifact.hashCode()
+//            result = 31 * result + (classifier?.hashCode() ?: 0)
+//            return result
+//        }
+//    }
+//
+//    val delegate = HashMap<ArchiveKey<SimpleMavenArtifactRequest>, DependencyNode>()
+//    val moduleAwareGraph: MutableMap<ArchiveKey<SimpleMavenArtifactRequest>, DependencyNode> =
+//        object : MutableMap<ArchiveKey<SimpleMavenArtifactRequest>, DependencyNode> by delegate {
+//            override fun get(key: ArchiveKey<SimpleMavenArtifactRequest>): DependencyNode? {
+//                return delegate[UnVersionedArchiveKey(key.request)] ?: delegate[key]
+//            }
+//        }
+//
+//    fun MavenPopulateContext.populate(
+//        ref: SimpleMavenArtifactReference,
+//        request: SimpleMavenArtifactRequest,
+//    ): DependencyNode {
+//        val metadata = ref.metadata
+//
+//        val children = ref.children
+//            .map { resolverContext.stubResolver.resolve(it) to it.request }
+//            .mapNotNull { it.first.orNull()?.to(it.second) }
+//            .mapTo(HashSet()) { populate(it.first, it.second) }
+//
+//        val nameOr = metadata.resource?.let { moduleNameFor(it.toSafeResource(), metadata.descriptor.artifact) }
+//        val moduleHandle =
+//            nameOr?.let(ModuleLayer.boot()::findModule)?.orElseGet { null }?.let(JpmArchives::moduleToArchive)
+//
+//        val node = DependencyNode(
+//            moduleHandle,
+//            children
+//        )
+//
+//        delegate[UnVersionedArchiveKey(request)] = node
+//
+//        return node
+//    }
+//
+//    fun MavenPopulateContext.populateFrom(
+//        request: SimpleMavenArtifactRequest,
+//    ): Boolean {
+//        val repo = repositoryContext.artifactRepository
+//        val ref = repo.get(request).orNull() ?: return false
+//
+//        populate(ref, request)
+//
+//        return true
+//    }
+//
+//    initDependencies { desc ->
+//        populateFrom(
+//            SimpleMavenArtifactRequest(
+//                desc,
+//                includeScopes = setOf("compile", "runtime", "import")
+//            )
+//        )
+//    }
+//
+//    return moduleAwareGraph
+//}
