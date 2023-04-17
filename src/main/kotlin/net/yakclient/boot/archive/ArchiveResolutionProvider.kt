@@ -3,7 +3,6 @@ package net.yakclient.boot.archive
 import arrow.core.Either
 import arrow.core.continuations.either
 import net.yakclient.archives.*
-import net.yakclient.archives.jpm.JpmResolutionResult
 import java.nio.file.Path
 import kotlin.io.path.exists
 

@@ -94,7 +94,7 @@ public class SoftwareComponentGraph internal constructor(
                 )
                 resolutionProvider.resolve(
                     it,
-                    { a -> SofwareComponentClassLoader(a, parents) },
+                    { a -> SofwareComponentClassLoader(this::class.java.classLoader, a, parents) },
                     parents
                 )
             }?.bind()
