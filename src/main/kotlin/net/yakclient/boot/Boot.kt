@@ -1,16 +1,14 @@
 package net.yakclient.boot
 
 import arrow.core.Either
-import arrow.core.right
 import com.durganmcbroom.artifact.resolver.ArtifactReference
 import com.durganmcbroom.artifact.resolver.ArtifactStub
 import com.durganmcbroom.artifact.resolver.ResolutionContext
 import com.durganmcbroom.artifact.resolver.simple.maven.*
 import kotlinx.cli.*
 import net.yakclient.archives.*
-import net.yakclient.boot.archive.ArchiveLoadException
+import net.yakclient.archives.zip.ZipResolutionResult
 import net.yakclient.boot.archive.BasicArchiveResolutionProvider
-import net.yakclient.boot.archive.moduleNameFor
 import net.yakclient.boot.component.ComponentContext
 import net.yakclient.boot.component.SoftwareComponentDataAccess
 import net.yakclient.boot.component.SoftwareComponentGraph
@@ -26,19 +24,17 @@ import net.yakclient.boot.dependency.DependencyProviders
 import net.yakclient.boot.maven.MavenDataAccess
 import net.yakclient.boot.maven.MavenDependencyGraph
 import net.yakclient.boot.store.CachingDataStore
-import net.yakclient.common.util.resource.LocalResource
 import java.io.File
 import java.nio.file.Path
 import java.security.Policy
 import java.util.logging.Level
 import java.util.logging.Logger
-import kotlin.reflect.KClass
 
 @ExperimentalCli
 public fun main(args: Array<String>) {
     // Setup security policies
-    Policy.setPolicy(ContainerPolicy())
-    System.setSecurityManager(SecurityManager())
+//    Policy.setPolicy(ContainerPolicy())
+//    System.setSecurityManager(SecurityManager())
 
     // Setup logger
     val logger = Logger.getLogger("boot")
@@ -256,7 +252,6 @@ public fun enableAllComponents(
     return if (enabled) enabledChildren + node else enabledChildren
 }
 
-
 private fun initSoftwareComponentGraph(
     cache: String,
     dependencyProviders: DependencyProviders
@@ -267,8 +262,8 @@ private fun initSoftwareComponentGraph(
         cachePath,
         CachingDataStore(SoftwareComponentDataAccess(cachePath)),
         BasicArchiveResolutionProvider(
-            Archives.Finders.JPM_FINDER as ArchiveFinder<ArchiveReference>,
-            Archives.Resolvers.JPM_RESOLVER
+            Archives.Finders.ZIP_FINDER as ArchiveFinder<ArchiveReference>,
+            Archives.Resolvers.ZIP_RESOLVER
         ),
         dependencyProviders
     )
@@ -331,48 +326,53 @@ private const val DASH_DOT_PATTERN = "-(\\d+(\\.|$))"
 internal fun createMavenDependencyGraph(
     cachePath: String,
 ): MavenDependencyGraph {
+    val resolutionProvider =  object : BasicArchiveResolutionProvider<ArchiveReference, ZipResolutionResult>(
+        Archives.Finders.ZIP_FINDER as ArchiveFinder<ArchiveReference>,
+        Archives.Resolvers.ZIP_RESOLVER,
+    ) {}
     val basePath = Path.of(cachePath)
     val graph = MavenDependencyGraph(
-        basePath,
-        CachingDataStore(
+         basePath,
+         CachingDataStore(
             MavenDataAccess(basePath)
         ),
-        object : BasicArchiveResolutionProvider<ArchiveReference, BasicResolutionResult>(
-            Archives.Finders.JPM_FINDER as ArchiveFinder<ArchiveReference>,
-            object : ArchiveResolver<ArchiveReference, BasicResolutionResult> {
-                private val delegate = Archives.Resolvers.JPM_RESOLVER
-                override val type: KClass<ArchiveReference> by delegate::type
-
-                override fun resolve(
-                    archiveRefs: List<ArchiveReference>,
-                    clProvider: ClassLoaderProvider<ArchiveReference>,
-                    parents: Set<ArchiveHandle>
-                ): List<BasicResolutionResult> = delegate.resolve(archiveRefs, clProvider, parents).map {
-                    BasicResolutionResult(it.archive)
-                }
-            }
-        ) {
-            override fun resolve(
-                resource: Path,
-                classLoader: ClassLoaderProvider<ArchiveReference>,
-                parents: Set<ArchiveHandle>
-            ): Either<ArchiveLoadException, BasicResolutionResult> {
-                val fileName = resource.fileName.toString()
-                val artifactName =
-                    fileName.substring(0, Regex(DASH_DOT_PATTERN).find(fileName)?.range?.first ?: (fileName.length))
-
-                val name = moduleNameFor(LocalResource(resource.toUri()), artifactName)
-
-                val maybeModule = ModuleLayer.boot().findModule(name).orElseGet { null }
-
-                return maybeModule
-                    ?.let(JpmArchives::moduleToArchive)
-                    ?.let(::BasicResolutionResult)
-                    ?.right() ?: super.resolve(resource, classLoader, parents)
-            }
-        },
-        HashMap()
+        resolutionProvider
+//         HashMap<ArchiveKey<SimpleMavenArtifactRequest>, DependencyNode>(),
     )
+//        object : BasicArchiveResolutionProvider<ArchiveReference, BasicResolutionResult>(
+//            Archives.Finders.ZIP_FINDER as ArchiveFinder<ArchiveReference>,
+//            object : ArchiveResolver<ArchiveReference, BasicResolutionResult> {
+//                private val delegate = Archives.Resolvers.ZIP_RESOLVER
+//                override val type: KClass<ArchiveReference> by delegate::type
+//
+//                override fun resolve(
+//                    archiveRefs: List<ArchiveReference>,
+//                    clProvider: ClassLoaderProvider<ArchiveReference>,
+//                    parents: Set<ArchiveHandle>
+//                ): List<BasicResolutionResult> = delegate.resolve(archiveRefs, clProvider, parents).map {
+//                    BasicResolutionResult(it.archive)
+//                }
+//            }
+//        ) {
+//            override fun resolve(
+//                resource: Path,
+//                classLoader: ClassLoaderProvider<ArchiveReference>,
+//                parents: Set<ArchiveHandle>
+//            ): Either<ArchiveLoadException, BasicResolutionResult> {
+//                val fileName = resource.fileName.toString()
+//                val artifactName =
+//                    fileName.substring(0, Regex(DASH_DOT_PATTERN).find(fileName)?.range?.first ?: (fileName.length))
+//
+//                val name = moduleNameFor(LocalResource(resource.toUri()), artifactName)
+//
+//                val maybeModule = ModuleLayer.boot().findModule(name).orElseGet { null }
+//
+//                return maybeModule
+//                    ?.let(JpmArchives::moduleToArchive)
+//                    ?.let(::BasicResolutionResult)
+//                    ?.right() ?: super.resolve(resource, classLoader, parents)
+//            }
+//        },
 
     return graph
 }
@@ -460,3 +460,37 @@ internal fun createMavenDependencyGraph(
 //
 //    return moduleAwareGraph
 //}
+
+////module yakclient.boot {
+////    requires kotlin.stdlib;
+////    requires durganmcbroom.artifact.resolver;
+////    requires yakclient.archives;
+////    requires java.logging;
+////    requires com.fasterxml.jackson.databind;
+////    requires com.fasterxml.jackson.kotlin;
+////    requires yakclient.common.util;
+////    requires durganmcbroom.artifact.resolver.simple.maven;
+////    requires kotlinx.cli.jvm;
+////    requires arrow.core.jvm;
+////    requires jdk.unsupported;
+////    requires kotlin.reflect;
+////    requires kotlin.stdlib.jdk8;
+////
+////    opens net.yakclient.boot.dependency to com.fasterxml.jackson.databind, kotlin.reflect;
+////    opens net.yakclient.boot to com.fasterxml.jackson.databind, kotlin.reflect, yakclient.boot.test;
+////    opens net.yakclient.boot.maven to com.fasterxml.jackson.databind, kotlin.reflect;
+////    opens net.yakclient.boot.component to com.fasterxml.jackson.databind, kotlin.reflect;
+////
+////
+////    exports net.yakclient.boot.store;
+////    exports net.yakclient.boot;
+////    exports net.yakclient.boot.maven;
+////    exports net.yakclient.boot.loader;
+////    exports net.yakclient.boot.dependency;
+////    exports net.yakclient.boot.container;
+////    exports net.yakclient.boot.security;
+////    exports net.yakclient.boot.component;
+////    exports net.yakclient.boot.archive;
+////    exports net.yakclient.boot.util;
+////    exports net.yakclient.boot.container.volume;
+////}

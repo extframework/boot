@@ -18,7 +18,7 @@ version = "1.0-SNAPSHOT"
 
 application {
     mainClass.set("net.yakclient.boot.BootKt")
-    mainModule.set("yakclient.boot")
+//    mainModule.set("yakclient.boot")
 
 
     applicationDefaultJvmArgs = listOf(
