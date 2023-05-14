@@ -25,11 +25,6 @@ application {
         "-Xms512m",
         "-Xmx4G",
         "-XstartOnFirstThread",
-        "-Djava.security.manager=allow",
-        "--add-exports",
-        "kotlin.reflect/kotlin.reflect.jvm.internal=com.fasterxml.jackson.kotlin",
-        "--add-reads",
-        "kotlin.stdlib=kotlinx.coroutines.core.jvm"
     )
 }
 
