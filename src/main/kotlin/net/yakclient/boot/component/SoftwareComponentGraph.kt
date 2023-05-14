@@ -127,19 +127,13 @@ public class SoftwareComponentGraph internal constructor(
             val desc by request::descriptor
 
             if (!graph.contains(desc))  {
-                val softwareComponentData = store[desc]
-                println(softwareComponentData)
-                val data = softwareComponentData ?: either.eager {
+                if( !store.contains(desc)) {
                     val artifact = resolver.getAndResolve(request)
                         .mapLeft(ArchiveLoadException::ArtifactLoadException)
                         .bind()
 
                     cache(artifact)
-
-                    store[desc]!!
-                }.bind()
-
-                load(data).bind()
+                }
             }
         }
 

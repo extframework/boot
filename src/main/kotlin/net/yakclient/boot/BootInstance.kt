@@ -8,6 +8,7 @@ import com.durganmcbroom.artifact.resolver.simple.maven.*
 import kotlinx.cli.*
 import net.yakclient.archives.*
 import net.yakclient.archives.zip.ZipResolutionResult
+import net.yakclient.boot.archive.ArchiveLoadException
 import net.yakclient.boot.archive.BasicArchiveResolutionProvider
 import net.yakclient.boot.component.ComponentContext
 import net.yakclient.boot.component.SoftwareComponentDataAccess
@@ -26,16 +27,88 @@ import net.yakclient.boot.maven.MavenDependencyGraph
 import net.yakclient.boot.store.CachingDataStore
 import java.io.File
 import java.nio.file.Path
-import java.security.Policy
 import java.util.logging.Level
 import java.util.logging.Logger
 
+public data class BootInstance(
+    val dependencyProviders: DependencyProviders,
+    val mavenCache: String,
+    val softwareComponentCache: String,
+) {
+    private val softwareComponentGraph by lazy {
+        initSoftwareComponentGraph(
+            softwareComponentCache,
+            dependencyProviders
+        )
+    }
+
+    init {
+        initMaven(
+            dependencyProviders,
+            mavenCache
+        )
+    }
+
+    @Throws(ArchiveLoadException::class)
+    public fun cache(
+        request: SoftwareComponentArtifactRequest,
+        location: SoftwareComponentRepositorySettings,
+        configuration: Map<String, String>
+    ): Boolean {
+        val cacher = softwareComponentGraph.cacherOf(
+            location,
+        )
+
+        val cacheAttempt = cacher.cache(
+            request
+        )
+        val success = cacheAttempt.tapLeft { throw it }.isRight()
+
+        return success && softwareComponentGraph.cacheConfiguration(request.descriptor, configuration)
+    }
+
+    @Throws(ArchiveLoadException::class)
+    public fun startAll(
+        components: List<SoftwareComponentArtifactRequest>
+    ) {
+        val nodes: List<SoftwareComponentNode> = components.map { req ->
+            val get = softwareComponentGraph.get(req)
+
+            if (get is Either.Right) {
+                get.value
+            } else {
+                throw (get as Either.Left).value
+            }
+        }
+
+        val enabled = HashSet<SoftwareComponentDescriptor>()
+
+        nodes.forEach {
+            enabled.addAll(enableAllComponents(it, this, enabled).map(SoftwareComponentNode::descriptor))
+        }
+    }
+
+    public fun configure(
+        descriptor: SoftwareComponentDescriptor,
+        configuration: Map<String, String>
+    ): Boolean = softwareComponentGraph.cacheConfiguration(
+        descriptor,
+        configuration
+    )
+
+    public companion object {
+        public fun new(base: String) : BootInstance {
+            return BootInstance(
+                DependencyProviders(),
+                "$base/maven",
+                "$base/components"
+            )
+        }
+    }
+}
+
 @ExperimentalCli
 public fun main(args: Array<String>) {
-    // Setup security policies
-//    Policy.setPolicy(ContainerPolicy())
-//    System.setSecurityManager(SecurityManager())
-
     // Setup logger
     val logger = Logger.getLogger("boot")
 
@@ -53,17 +126,12 @@ public fun main(args: Array<String>) {
         .default("$workingDir${File.separator}cache${File.separator}software-component")
 
     // Create Boot context for later use
-    val bootContext = BootContext()
+    val boot by lazy { BootInstance(
+        DependencyProviders(),
+        mavenCache, softwareComponentCache
+    ) }
 
     fun echo(value: String) = logger.log(Level.INFO, value)
-
-    echo("Setting up Software Component Graph.")
-    val softwareComponentGraph by lazy {
-        initSoftwareComponentGraph(
-            softwareComponentCache,
-            bootContext.dependencyProviders
-        )
-    }
 
     // Start of cli commands
     class CacheComponent : Subcommand(
@@ -81,10 +149,6 @@ public fun main(args: Array<String>) {
 
         override fun execute() {
             echo("Setting up maven")
-            initMaven(
-                bootContext,
-                mavenCache
-            )
 
             val settings = when (type) {
                 DEFAULT -> SoftwareComponentRepositorySettings.default(
@@ -100,82 +164,44 @@ public fun main(args: Array<String>) {
                 else -> throw IllegalArgumentException("Unknown Software Component repository type: '$type'. Only known types are '$DEFAULT' (for remote repositories) and '$LOCAL' (for local repositories)")
             }
 
-            echo("Creating a software component cacher")
-            val cacher = softwareComponentGraph.cacherOf(
-                settings,
-            )
-
             val request = SoftwareComponentArtifactRequest(
                 descriptor,
             )
 
-            echo("Caching")
-            val cacheAttempt = cacher.cache(
-                request
-            )
-
-            echo("Successfully cached the component: '$descriptor'!")
-
-            if (cacheAttempt.isLeft()) {
-                echo("Failed to cache component: '$descriptor'. Throwing exception.")
-                cacheAttempt.tapLeft { throw it }
-            }
-
-            if (configuration.isNotBlank()) {
+            val configuration = if (configuration.isNotBlank()) {
                 echo("Parsing and setting configuration for component '$descriptor'")
 
-                val parsedConfig = configuration
+                configuration
                     .split(",")
                     .associate {
                         val split = it.split("=")
 
                         split[0] to split.getOrElse(1) { "" }
                     }
+            } else HashMap()
 
-                softwareComponentGraph.cacheConfiguration(
-                    request.descriptor,
-                    parsedConfig
-                )
+            try {
+                boot.cache(request, settings, configuration)
+                echo("Successfully cached the component: '$descriptor'!")
+            } catch (ex: ArchiveLoadException) {
+                echo("Failed to cache component, an error occurred. Throwing.")
+                throw ex
             }
         }
     }
 
     class StartComponents : Subcommand(
         "start",
-        "Starts any given number of components from the cache into the current runtime"
+        "Starts any given number of components and their children."
     ) {
         val components by argument(ArgType.String).vararg()
 
         override fun execute() {
-            echo("Setting up maven")
-            initMaven(
-                bootContext,
-                mavenCache
+            echo("Loading components: '${components.joinToString()}'")
+
+            boot.startAll(
+                components.map { SoftwareComponentArtifactRequest(it) }
             )
-
-            echo("Starting to load components '${components.joinToString()}'")
-
-            val nodes: List<SoftwareComponentNode> = components.map {
-                SoftwareComponentArtifactRequest(it)
-            }.map { req ->
-                echo("Loading component: '$req'")
-
-                val get = softwareComponentGraph.get(req)
-
-                if (get is Either.Right) {
-                    echo("Successfully loaded '$req' and all of its children.")
-                    get.value
-                } else {
-                    echo("Failed to load '$req'. This is a fatal exception.")
-                    throw (get as Either.Left).value
-                }
-            }
-
-            val enabled = HashSet<SoftwareComponentDescriptor>()
-
-            nodes.forEach {
-                enabled.addAll(enableAllComponents(it, enabled, bootContext).map(SoftwareComponentNode::descriptor))
-            }
         }
     }
 
@@ -191,12 +217,6 @@ public fun main(args: Array<String>) {
         val configuration by option(ArgType.String, "configuration").required()
 
         override fun execute() {
-            echo("Setting up maven")
-            initMaven(
-                bootContext,
-                mavenCache
-            )
-
             val config = if (configuration.isNotBlank())
                 configuration
                     .split(",")
@@ -207,13 +227,14 @@ public fun main(args: Array<String>) {
                     } else mapOf()
 
             echo("Caching")
-            softwareComponentGraph.cacheConfiguration(
-                SimpleMavenDescriptor.parseDescription(descriptor)
+            val success = boot.configure(
+                SoftwareComponentDescriptor.parseDescription(descriptor)
                     ?: throw IllegalArgumentException("Failed to parse descriptor: '$descriptor'"),
                 config
             )
 
-            echo("Successfully cached configuration for component '$descriptor'")
+            if (success) echo("Successfully cached configuration for component '$descriptor'")
+            else echo("Error, unable to cache configuration for component: '$descriptor'. Make sure that you have already cached the component itself and try again.")
         }
     }
 
@@ -224,23 +245,20 @@ public fun main(args: Array<String>) {
 
 // Convenience methods
 private fun initMaven(
-    bootContext: BootContext,
+    dependencyProviders: DependencyProviders,
     mavenCache: String
-) = bootContext.dependencyProviders.add(
+) = dependencyProviders.add(
     createMavenProvider(mavenCache)
 )
 
-// Boot context
-public data class BootContext(
-    val dependencyProviders: DependencyProviders = DependencyProviders()
-)
+
 
 public fun enableAllComponents(
     node: SoftwareComponentNode,
+    boot: BootInstance,
     alreadyEnabled: Set<SoftwareComponentDescriptor> = HashSet(),
-    boot: BootContext
 ): Set<SoftwareComponentNode> {
-    val enabledChildren = node.children.flatMapTo(HashSet()) { enableAllComponents(it, alreadyEnabled, boot) }
+    val enabledChildren = node.children.flatMapTo(HashSet()) { enableAllComponents(it,boot, alreadyEnabled ) }
 
     val enabled = if (!alreadyEnabled.contains(node.descriptor)) node.component?.onEnable(
         ComponentContext(
@@ -326,14 +344,14 @@ private const val DASH_DOT_PATTERN = "-(\\d+(\\.|$))"
 internal fun createMavenDependencyGraph(
     cachePath: String,
 ): MavenDependencyGraph {
-    val resolutionProvider =  object : BasicArchiveResolutionProvider<ArchiveReference, ZipResolutionResult>(
+    val resolutionProvider = object : BasicArchiveResolutionProvider<ArchiveReference, ZipResolutionResult>(
         Archives.Finders.ZIP_FINDER as ArchiveFinder<ArchiveReference>,
         Archives.Resolvers.ZIP_RESOLVER,
     ) {}
     val basePath = Path.of(cachePath)
     val graph = MavenDependencyGraph(
-         basePath,
-         CachingDataStore(
+        basePath,
+        CachingDataStore(
             MavenDataAccess(basePath)
         ),
         resolutionProvider

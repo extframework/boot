@@ -1,9 +1,8 @@
 package net.yakclient.boot.test
 
-import net.yakclient.boot.BootContext
+import net.yakclient.boot.BootInstance
 import net.yakclient.boot.component.ComponentContext
 import net.yakclient.boot.component.SoftwareComponent
-import net.yakclient.boot.createMavenProvider
 import java.lang.reflect.Constructor
 import kotlin.reflect.KClass
 
@@ -13,20 +12,16 @@ public fun <T : SoftwareComponent> testEnable(
     component: T,
     context: Map<String, String>,
 
-    mavenCache: String = System.getProperty("user.dir"),
+    base: String = System.getProperty("user.dir"),
 ) {
     read(component::class)
 
-    val bootContext: BootContext = constructInternal()
-
-    bootContext.dependencyProviders.add(
-        createMavenProvider(mavenCache)
-    )
+    val boot = BootInstance.new(base)
 
     component.onEnable(
         ComponentContext(
             context,
-            bootContext
+            boot
         )
     )
 }
