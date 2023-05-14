@@ -17,7 +17,7 @@ group = "net.yakclient"
 version = "1.0-SNAPSHOT"
 
 application {
-    mainClass.set("net.yakclient.boot.BootKt")
+    mainClass.set("net.yakclient.boot.BootInstanceKt")
 //    mainModule.set("yakclient.boot")
 
 
