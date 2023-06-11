@@ -3,6 +3,17 @@ dependencies {
     implementation("net.yakclient:common-util:1.0-SNAPSHOT") {
         isChanging = true
     }
+    implementation("net.yakclient:archives:1.1-SNAPSHOT") {
+        isChanging = true
+    }
+    implementation("com.durganmcbroom:artifact-resolver:1.0-SNAPSHOT") {
+        isChanging = true
+    }
+    implementation("com.durganmcbroom:artifact-resolver-simple-maven:1.0-SNAPSHOT") {
+        isChanging = true
+    }
+    implementation("io.arrow-kt:arrow-core:1.1.2")
+
 }
 
 task<Jar>("sourcesJar") {

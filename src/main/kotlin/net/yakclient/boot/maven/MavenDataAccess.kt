@@ -1,8 +1,6 @@
 package net.yakclient.boot.maven
 
 import com.durganmcbroom.artifact.resolver.ArtifactMetadata
-import com.durganmcbroom.artifact.resolver.ArtifactRequest
-import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenArtifactRequest
 import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenDescriptor
 import com.fasterxml.jackson.annotation.JsonIgnore
 import com.fasterxml.jackson.databind.ObjectMapper
@@ -20,119 +18,84 @@ import kotlin.io.path.writeBytes
 private const val VERSIONED_METADATA_NAME = "artifact-metadata.json"
 
 public open class MavenDataAccess(
-    private val path: Path,
-) : DataAccess<SimpleMavenArtifactRequest, DependencyData<SimpleMavenArtifactRequest>> {
+        private val path: Path,
+) : DataAccess<SimpleMavenDescriptor, DependencyData<SimpleMavenDescriptor>> {
     private val mapper: ObjectMapper by lazy(::initMapper)
 
     private data class SerializableMavenDescriptor(
-        val group: String,
-        val artifact: String,
-        val version: String,
-        val classifier: String?,
+            val group: String,
+            val artifact: String,
+            val version: String,
+            val classifier: String?,
     ) : ArtifactMetadata.Descriptor {
         @JsonIgnore
         override val name: String = ""
     }
 
-    private data class SerializableMavenArtifactRequest(
-        override val descriptor: SerializableMavenDescriptor,
-        val isTransitive: Boolean = true,
-        val includeScopes: Set<String> = setOf(),
-        val excludeArtifacts: Set<String> = setOf(),
-    ) : ArtifactRequest<SerializableMavenDescriptor>
+//    private data class SerializableMavenArtifactRequest(
+//        override val descriptor: SerializableMavenDescriptor,
+//    ) : Descr<SerializableMavenDescriptor>
 
     protected open fun initMapper(): ObjectMapper {
-        val kotlinModule = KotlinModule.Builder()
-            .build()
+        val kotlinModule = KotlinModule.Builder().build()
 
         val mapper = ObjectMapper()
 
         return mapper.registerModule(kotlinModule)
     }
 
-    private fun readMetadataFile(versionedPath: Path): Map<SimpleMavenArtifactRequest, DependencyData<SimpleMavenArtifactRequest>> {
+    private fun readMetadataFile(versionedPath: Path): Map<SimpleMavenDescriptor, DependencyData<SimpleMavenDescriptor>> {
         val metadataPath = versionedPath resolve VERSIONED_METADATA_NAME
 
         if (!Files.exists(metadataPath)) {
             metadataPath.make()
-            metadataPath.writeBytes(mapper.writeValueAsBytes(ArrayList<DependencyData<SimpleMavenArtifactRequest>>()))
+            metadataPath.writeBytes(mapper.writeValueAsBytes(ArrayList<DependencyData<SerializableMavenDescriptor>>()))
         }
 
-        val content = mapper.readValue<List<DependencyData<SerializableMavenArtifactRequest>>>(metadataPath.toFile())
+        val content = mapper.readValue<List<DependencyData<SerializableMavenDescriptor>>>(metadataPath.toFile())
 
-        val mappedContent: List<DependencyData<SimpleMavenArtifactRequest>> = content.map {
-            fun toRealRequest(
-                req: SerializableMavenArtifactRequest,
-            ): SimpleMavenArtifactRequest = SimpleMavenArtifactRequest(
-                SimpleMavenDescriptor(
-                    req.descriptor.group,
-                    req.descriptor.artifact,
-                    req.descriptor.version,
-                    req.descriptor.classifier
-                ),
-                req.isTransitive,
-                req.includeScopes,
-                req.excludeArtifacts,
-            )
+        val mappedContent: List<DependencyData<SimpleMavenDescriptor>> = content.map {
+            fun toRealDescriptor(
+                    req: SerializableMavenDescriptor,
+            ): SimpleMavenDescriptor = SimpleMavenDescriptor(req.group, req.artifact, req.version, req.classifier)
 
-            DependencyData(
-                toRealRequest(it.key),
-                it.archive,
-                it.children.map(::toRealRequest)
-            )
+
+            DependencyData(toRealDescriptor(it.key), it.archive, it.children.map(::toRealDescriptor))
         }
 
-        return mappedContent
-            .associateBy { it.key }
+        return mappedContent.associateBy { it.key }
     }
 
     private fun writeMetadataFile(
-        versionedPath: Path,
-        content: Map<SimpleMavenArtifactRequest, DependencyData<SimpleMavenArtifactRequest>>,
+            versionedPath: Path,
+            content: Map<SimpleMavenDescriptor, DependencyData<SimpleMavenDescriptor>>,
     ) {
         val metadataPath = versionedPath resolve VERSIONED_METADATA_NAME
 
         if (!Files.exists(metadataPath)) metadataPath.make()
 
         val list = content.values.toList().map {
-            DependencyData(
-                SerializableMavenArtifactRequest(
-                    SerializableMavenDescriptor(
-                        it.key.descriptor.group,
-                        it.key.descriptor.artifact,
-                        it.key.descriptor.version,
-                        it.key.descriptor.classifier,
-                    ),
-                    it.key.isTransitive,
-                    it.key.includeScopes,
-                    it.key.excludeArtifacts
-                ),
-                it.archive,
-                it.children.map { child ->
-                    SerializableMavenArtifactRequest(
-                        SerializableMavenDescriptor(
-                            child.descriptor.group,
-                            child.descriptor.artifact,
-                            child.descriptor.version,
-                            child.descriptor.classifier,
-                        ),
-                        child.isTransitive,
-                        child.includeScopes,
-                        child.excludeArtifacts
-                    )
-                }
-            )
+            DependencyData(SerializableMavenDescriptor(
+                    it.key.group,
+                    it.key.artifact,
+                    it.key.version,
+                    it.key.classifier,
+            ), it.archive, it.children.map { child ->
+                SerializableMavenDescriptor(
+                        child.group,
+                        child.artifact,
+                        child.version,
+                        child.classifier,
+                )
+            })
         }
         val value = mapper.writeValueAsBytes(list)
 
         metadataPath.writeBytes(value)
     }
 
-    override fun read(key: SimpleMavenArtifactRequest): DependencyData<SimpleMavenArtifactRequest>? {
-        val desc by key::descriptor
-
-        val artifactPath =
-            path resolve desc.group.replace('.', File.separatorChar) resolve desc.artifact resolve desc.version
+    override fun read(key: SimpleMavenDescriptor): DependencyData<SimpleMavenDescriptor>? {
+        val artifactPath = path resolve key.group.replace('.', File.separatorChar) resolve key.artifact resolve key.version
 
         val metadata = readMetadataFile(artifactPath)
 
@@ -140,13 +103,10 @@ public open class MavenDataAccess(
     }
 
     override fun write(
-        key: SimpleMavenArtifactRequest,
-        value: DependencyData<SimpleMavenArtifactRequest>,
+            key: SimpleMavenDescriptor,
+            value: DependencyData<SimpleMavenDescriptor>,
     ) {
-        val desc by key::descriptor
-
-        val versionedPath =
-            path resolve desc.group.replace('.', File.separatorChar) resolve desc.artifact resolve desc.version
+        val versionedPath = path resolve key.group.replace('.', File.separatorChar) resolve key.artifact resolve key.version
 
         val metadata = readMetadataFile(versionedPath)
 

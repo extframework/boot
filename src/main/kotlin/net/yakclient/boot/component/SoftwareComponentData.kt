@@ -9,7 +9,6 @@ public data class SoftwareComponentData(
     val children: List<SoftwareComponentDescriptor>,
     val dependencies: List<SoftwareComponentDependencyData>,
     val runtimeModel: SoftwareComponentModel,
-    val configuration: Map<String, String>
 )
 
 public data class SoftwareComponentDependencyData(

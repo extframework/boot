@@ -1,47 +1,129 @@
 package net.yakclient.boot.test
 
+import net.yakclient.archives.ArchiveFinder
+import net.yakclient.archives.ArchiveReference
+import net.yakclient.archives.Archives
 import net.yakclient.boot.BootInstance
-import net.yakclient.boot.component.ComponentContext
-import net.yakclient.boot.component.SoftwareComponent
+import net.yakclient.boot.archive.BasicArchiveResolutionProvider
+import net.yakclient.boot.component.*
+import net.yakclient.boot.component.artifact.SoftwareComponentArtifactRequest
+import net.yakclient.boot.component.artifact.SoftwareComponentDescriptor
+import net.yakclient.boot.component.artifact.SoftwareComponentRepositorySettings
+import net.yakclient.boot.dependency.DependencyTypeProvider
+import net.yakclient.boot.main.initMaven
+import net.yakclient.boot.store.CachingDataStore
+import net.yakclient.common.util.resolve
 import java.lang.reflect.Constructor
-import kotlin.reflect.KClass
+import java.nio.file.Files
+import java.nio.file.Path
 
-private class BootTest private constructor()
+public fun testBootInstance(
+        dependencies: Map<SoftwareComponentDescriptor, Class<out ComponentFactory<*, *>>>,
+        location: Path = Files.createTempDirectory("boot-test"),
+        dependencyTypes: DependencyTypeProvider = DependencyTypeProvider()
+) : BootInstance {
+    class TestGraph(
+            private val boot: BootInstance
+    ): SoftwareComponentGraph(
+            location,
+            CachingDataStore(SoftwareComponentDataAccess(location)),
+            BasicArchiveResolutionProvider(
+                    Archives.Finders.ZIP_FINDER as ArchiveFinder<ArchiveReference>,
+                    Archives.Resolvers.ZIP_RESOLVER
+            ),
+            dependencyTypes,
+            boot,
+            dependencies.mapValuesTo(HashMap()) {
+                SoftwareComponentNode(
+                        it.key,
+                        null,
+                        setOf(),
+                        setOf(),
+                        SoftwareComponentModel(
+                                "",
+                                "", null, listOf(), listOf()
+                        ),
+                        run {
+                            fun <T : Any> Class<T>.tryGetConstructor(vararg params: Class<*>): Constructor<T>? = net.yakclient.common.util.runCatching(NoSuchMethodException::class) { this.getConstructor(*params) }
 
-public fun <T : SoftwareComponent> testEnable(
-    component: T,
-    context: Map<String, String>,
+                            fun loadFactory(cls: Class<out ComponentFactory<*, *>>): ComponentFactory<*, *> {
+                                return (cls.tryGetConstructor(BootInstance::class.java)?.newInstance(boot)
+                                        ?: cls.tryGetConstructor()?.newInstance()) as ComponentFactory<*, *>
+                            }
+                            
+                            loadFactory(it.value)
+                        }
+                )
+            }
+    ) {
+    }
 
-    base: String = System.getProperty("user.dir"),
-) {
-    read(component::class)
+    return object: BootInstance {
+        override val location: Path = location
+        override val dependencyTypes: DependencyTypeProvider = dependencyTypes
+        override val componentGraph: SoftwareComponentGraph = TestGraph(this)
 
-    val boot = BootInstance.new(base)
+        init {
+            initMaven(
+                    dependencyTypes,
+                    location resolve "m2"
+            )
+        }
 
-    component.onEnable(
-        ComponentContext(
-            context,
-            boot
-        )
-    )
+        override fun isCached(descriptor: SoftwareComponentDescriptor): Boolean {
+            return componentGraph.isCached(descriptor)
+        }
+
+        override fun cache(request: SoftwareComponentArtifactRequest, location: SoftwareComponentRepositorySettings) {
+            componentGraph.cacherOf(location).cache(request)
+        }
+
+        override fun <T : ComponentConfiguration, I : ComponentInstance<T>> new(descriptor: SoftwareComponentDescriptor, factoryType: Class<out ComponentFactory<T, I>>, configuration: T): I {
+            val it = componentGraph.get(descriptor).tapLeft { throw it }.orNull()!!
+
+            check(factoryType.isInstance(it.factory))
+
+            return (it.factory as? ComponentFactory<T, I>)?.new(configuration)
+                    ?: throw IllegalArgumentException("Cannot start a Component with no factory, you must start its children instead. Use the Software component graph to do this.")
+        }
+
+    }
 }
 
-public fun <T: SoftwareComponent> testDisable(
-    component: T,
-) {
-    read(component::class)
-
-    component.onDisable()
-}
-
-private fun <T: Any> read(type: KClass<T>) {
-    BootTest::class.java.module.addReads(type.java.module)
-}
-
-private inline fun <reified T> constructInternal(vararg params: List<Any>): T =
-    T::class.java.getConstructor(*params.map { it::class.java }.toTypedArray())
-        .takeIf(Constructor<T>::trySetAccessible)
-        ?.newInstance(*params)
-        ?: throw IllegalArgumentException("Failed to construct internal type: '${T::class.qualifiedName}")
+////public fun <T : SoftwareComponent> testEnable(
+////    component: T,
+////    context: Map<String, String>,
+////
+////    base: String = System.getProperty("user.dir"),
+////) {
+////    read(component::class)
+////
+////    val boot = BootInstance.new(base)
+////
+////    component.onEnable(
+////        ComponentContext(
+////            context,
+////            boot
+////        )
+////    )
+////}
+////
+////public fun <T: SoftwareComponent> testDisable(
+////    component: T,
+////) {
+////    read(component::class)
+////
+////    component.onDisable()
+////}
+//
+//private fun <T: Any> read(type: KClass<T>) {
+//    BootTest::class.java.module.addReads(type.java.module)
+//}
+//
+//private inline fun <reified T> constructInternal(vararg params: List<Any>): T =
+//    T::class.java.getConstructor(*params.map { it::class.java }.toTypedArray())
+//        .takeIf(Constructor<T>::trySetAccessible)
+//        ?.newInstance(*params)
+//        ?: throw IllegalArgumentException("Failed to construct internal type: '${T::class.qualifiedName}")
 
 

@@ -3,12 +3,10 @@ import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 
 plugins {
     kotlin("jvm") version "1.7.10"
-    id("org.javamodularity.moduleplugin") version "1.8.12"
 
     id("maven-publish")
     id("org.jetbrains.dokka") version "1.6.0"
     application
-    java
 
     id("com.github.johnrengelman.shadow") version "7.1.2"
 }
@@ -17,9 +15,7 @@ group = "net.yakclient"
 version = "1.0-SNAPSHOT"
 
 application {
-    mainClass.set("net.yakclient.boot.BootInstanceKt")
-//    mainModule.set("yakclient.boot")
-
+    mainClass.set("net.yakclient.boot.main.BootKt")
 
     applicationDefaultJvmArgs = listOf(
         "-Xms512m",
@@ -27,6 +23,8 @@ application {
         "-XstartOnFirstThread",
     )
 }
+
+
 
 configurations.all {
     resolutionStrategy.cacheChangingModulesFor(24, "hours")
@@ -53,7 +51,6 @@ dependencies {
         isChanging = true
     }
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.7.22")
-
 }
 
 task<Jar>("sourcesJar") {

@@ -13,7 +13,6 @@ import com.fasterxml.jackson.module.kotlin.readValue
 import net.yakclient.boot.component.SoftwareComponentModel
 import net.yakclient.boot.component.SoftwareComponentModelRepository.Companion.LOCAL
 import net.yakclient.boot.component.SoftwareComponentModelRepository.Companion.DEFAULT
-import net.yakclient.boot.dependency.DependencyProviders
 
 public class SoftwareComponentMetadataHandler(
     settings: SoftwareComponentRepositorySettings,

@@ -1,12 +1,8 @@
 package net.yakclient.boot.maven
 
-import com.durganmcbroom.artifact.resolver.ArtifactReference
-import com.durganmcbroom.artifact.resolver.ArtifactStubResolver
-import com.durganmcbroom.artifact.resolver.RepositoryFactory
-import com.durganmcbroom.artifact.resolver.ResolutionContext
+import com.durganmcbroom.artifact.resolver.*
 import com.durganmcbroom.artifact.resolver.simple.maven.*
 import net.yakclient.archives.ResolutionResult
-import net.yakclient.boot.archive.ArchiveKey
 import net.yakclient.boot.archive.ArchiveResolutionProvider
 import net.yakclient.boot.dependency.DependencyData
 import net.yakclient.boot.dependency.DependencyGraph
@@ -27,17 +23,17 @@ import java.util.logging.Level
 
 public open class MavenDependencyGraph(
     private val path: Path,
-    store: DataStore<SimpleMavenArtifactRequest, DependencyData<SimpleMavenArtifactRequest>>,
+    store: DataStore<SimpleMavenDescriptor, DependencyData<SimpleMavenDescriptor>>,
     archiveResolver: ArchiveResolutionProvider<ResolutionResult>,
-    initialGraph: MutableMap<ArchiveKey<SimpleMavenArtifactRequest>, DependencyNode> = HashMap(),
+    initialGraph: MutableMap<SimpleMavenDescriptor, DependencyNode> = HashMap(),
     // TODO not all privileges
     privilegeManager: PrivilegeManager = PrivilegeManager(null, PrivilegeAccess.allPrivileges()) {},
     private val stubResolutionProvider: (SimpleMavenArtifactRepository) -> ArtifactStubResolver<*, SimpleMavenArtifactStub, SimpleMavenArtifactReference> = SimpleMavenArtifactRepository::stubResolver,
     private val factory: RepositoryFactory<SimpleMavenRepositorySettings, SimpleMavenArtifactRequest, SimpleMavenArtifactStub, SimpleMavenArtifactReference, SimpleMavenArtifactRepository> = SimpleMaven
-) : DependencyGraph<SimpleMavenArtifactRequest, SimpleMavenArtifactStub, SimpleMavenRepositorySettings>(
+) : DependencyGraph<SimpleMavenDescriptor,  SimpleMavenRepositorySettings>(
     store, factory, archiveResolver, initialGraph, privilegeManager
 ) {
-    override fun cacherOf(settings: SimpleMavenRepositorySettings): ArchiveCacher<*> {
+    override fun cacherOf(settings: SimpleMavenRepositorySettings): MavenDependencyCacher {
         val artifactRepository = factory.createNew(settings)
 
         return MavenDependencyCacher(
@@ -49,9 +45,7 @@ public open class MavenDependencyGraph(
         )
     }
 
-    override fun writeResource(request: SimpleMavenArtifactRequest, resource: SafeResource): Path {
-        val descriptor by request::descriptor
-
+    override fun writeResource(descriptor: SimpleMavenDescriptor, resource: SafeResource): Path {
         val jarName = "${descriptor.artifact}-${descriptor.version}.jar"
         val jarPath = path resolve descriptor.group.replace(
             '.',
@@ -72,39 +66,41 @@ public open class MavenDependencyGraph(
         return jarPath
     }
 
-    private inner class MavenDependencyCacher(
+    public inner class MavenDependencyCacher(
         resolver: ResolutionContext<SimpleMavenArtifactRequest, SimpleMavenArtifactStub, ArtifactReference<*, SimpleMavenArtifactStub>>,
-    ) : DependencyCacher(resolver) {
-        override fun newLocalGraph(): LocalGraph = MavenLocalGraph()
+    ) : DependencyCacher<SimpleMavenArtifactRequest, SimpleMavenArtifactStub>(resolver) {
+//        override fun newLocalGraph(): LocalGraph = MavenLocalGraph()
 
-        private inner class MavenLocalGraph : LocalGraph() {
-            override fun getKey(request: SimpleMavenArtifactRequest): VersionIndependentDependencyKey {
-                class VersionIndependentMavenKey : VersionIndependentDependencyKey {
-                    private val group by request.descriptor::group
-                    private val artifact by request.descriptor::artifact
-                    private val classifier by request.descriptor::classifier
-
-                    override fun equals(other: Any?): Boolean {
-                        if (this === other) return true
-                        if (other !is VersionIndependentMavenKey) return false
-
-                        if (group != other.group) return false
-                        if (artifact != other.artifact) return false
-                        if (classifier != other.classifier) return false
-
-                        return true
-                    }
-
-                    override fun hashCode(): Int {
-                        var result = group.hashCode()
-                        result = 31 * result + artifact.hashCode()
-                        result = 31 * result + (classifier?.hashCode() ?: 0)
-                        return result
-                    }
-                }
-
-                return VersionIndependentMavenKey()
-            }
-        }
+//        private inner class MavenLocalGraph : LocalGraph() {
+//            override fun getKey(request: SimpleMavenArtifactRequest): VersionIndependentDependencyKey {
+//                class VersionIndependentMavenKey : VersionIndependentDependencyKey {
+//                    private val group by request.descriptor::group
+//                    private val artifact by request.descriptor::artifact
+//                    private val classifier by request.descriptor::classifier
+//
+//                    override fun equals(other: Any?): Boolean {
+//                        if (this === other) return true
+//                        if (other !is VersionIndependentMavenKey) return false
+//
+//                        if (group != other.group) return false
+//                        if (artifact != other.artifact) return false
+//                        if (classifier != other.classifier) return false
+//
+//                        return true
+//                    }
+//
+//                    override fun hashCode(): Int {
+//                        var result = group.hashCode()
+//                        result = 31 * result + artifact.hashCode()
+//                        result = 31 * result + (classifier?.hashCode() ?: 0)
+//                        return result
+//                    }
+//                }
+//
+//                return VersionIndependentMavenKey()
+//            }
+//        }
     }
+
+
 }

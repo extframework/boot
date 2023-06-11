@@ -2,20 +2,22 @@ package net.yakclient.boot.dependency
 
 import arrow.core.Either
 import arrow.core.continuations.either
+import com.durganmcbroom.artifact.resolver.ArtifactMetadata
 import com.durganmcbroom.artifact.resolver.ArtifactRequest
 import com.durganmcbroom.artifact.resolver.RepositorySettings
+import net.yakclient.boot.archive.ArchiveGraph
 import net.yakclient.boot.archive.ArchiveLoadException
 
-public interface DependencyGraphProvider<R: ArtifactRequest<*>, S: RepositorySettings> {
+public interface DependencyGraphProvider<K: ArtifactMetadata.Descriptor, R: ArtifactRequest<K>, S: RepositorySettings> {
     public val name: String
-    public val graph: DependencyGraph<R, *, S>
+    public val graph: DependencyGraph<K, S>
 
     public fun parseRequest(request: Map<String, String>) : R?
 
     public fun parseSettings(settings: Map<String, String>): S?
 }
 
-public fun <S : RepositorySettings, R : ArtifactRequest<*>> DependencyGraphProvider<R, S>.getArtifact(
+public fun <K: ArtifactMetadata.Descriptor, S : RepositorySettings, R : ArtifactRequest<K>> DependencyGraphProvider<K, R, S>.cacheArtifact(
     pSettings: Map<String, String>,
     pRequest: Map<String, String>,
 ): Either<ArchiveLoadException, Unit> = either.eager {
@@ -23,7 +25,7 @@ public fun <S : RepositorySettings, R : ArtifactRequest<*>> DependencyGraphProvi
 
     val request = parseRequest(pRequest) ?: shift(ArchiveLoadException.DependencyInfoParseFailed("Failed to parse artifact request: '$pRequest'"))
 
-    val loader = graph.cacherOf(settings)
+    val loader= graph.cacherOf(settings)
 
-    loader.cache(request).bind()
+    (loader as DependencyGraph<*, *>.DependencyCacher<R, *>).cache(request).bind()
 }

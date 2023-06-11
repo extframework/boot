@@ -11,6 +11,5 @@ public data class SoftwareComponentNode(
     override val children: Set<SoftwareComponentNode>,
     val dependencies: Set<DependencyNode>,
     val model: SoftwareComponentModel,
-    val component: SoftwareComponent?,
-    val configuration: Map<String, String>
+    val factory: ComponentFactory<*, *>?,
 ) : ArchiveNode
