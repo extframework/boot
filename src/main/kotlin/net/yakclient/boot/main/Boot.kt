@@ -50,7 +50,7 @@ public fun main(args: Array<String>) {
         override fun execute() {
             echo("Setting up maven")
 
-            val settings = when (type) {
+            val settings = when (type.lowercase()) {
                 SoftwareComponentModelRepository.DEFAULT -> SoftwareComponentRepositorySettings.default(
                         location,
                         preferredHash = HashType.SHA1
@@ -80,11 +80,10 @@ public fun main(args: Array<String>) {
 
     class StartComponents : Subcommand(
             "start",
-            "Starts any given number of components and their children."
+            "Starts a component and its children."
     ) {
         val component by argument(ArgType.String)
-        val configPath by option(ArgType.String, "configuration", "d")
-
+        val configPath by option(ArgType.String, "configuration", "c").default("")
         override fun execute() {
             val node = boot.componentGraph.get(
                     checkNotNull(SoftwareComponentDescriptor.parseDescription(component)) { "Invalid component descriptor: '$component'" }
@@ -94,9 +93,7 @@ public fun main(args: Array<String>) {
             val factory = node.factory as? ComponentFactory<ComponentConfiguration, ComponentInstance<ComponentConfiguration>>
                     ?: throw IllegalArgumentException("Cannot start component: '$component' because it does not have a factory, is either a library or only a transitive component.")
 
-            val configTree = configPath?.let {
-                ContextNodeValueImpl(ObjectMapper().readValue<Any>(File(it)))
-            } ?: ContextNodeValueImpl(Unit)
+            val configTree = if (configPath.isEmpty()) ContextNodeValueImpl(Unit) else ContextNodeValueImpl(ObjectMapper().readValue<Any>(File(configPath)))
 
             val realConfig = node.factory.parseConfiguration(configTree)
 

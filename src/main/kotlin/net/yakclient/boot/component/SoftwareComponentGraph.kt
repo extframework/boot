@@ -110,7 +110,7 @@ public open class SoftwareComponentGraph (
     private fun <T : Any> Class<T>.tryGetConstructor(vararg params: Class<*>): Constructor<T>? = net.yakclient.common.util.runCatching(NoSuchMethodException::class) { this.getConstructor(*params) }
 
 
-    protected fun loadFactory(archive: ArchiveHandle, runtimeModel: SoftwareComponentModel): ComponentFactory<*, *> {
+    private fun loadFactory(archive: ArchiveHandle, runtimeModel: SoftwareComponentModel): ComponentFactory<*, *> {
         val loadClass = archive.classloader.loadClass(runtimeModel.entrypoint)
         return (loadClass.tryGetConstructor(BootInstance::class.java)?.newInstance(bootInstance)
                 ?: loadClass.tryGetConstructor()?.newInstance()) as ComponentFactory<*, *>
@@ -205,7 +205,6 @@ public open class SoftwareComponentGraph (
                     metadata.children
                             .map(SoftwareComponentChildInfo::descriptor),
                     metadata.dependencies.map {
-
                         SoftwareComponentDependencyData(it.type, it.request)
                     },
                     metadata.runtimeModel,
