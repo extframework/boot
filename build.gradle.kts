@@ -31,6 +31,7 @@ configurations.all {
 }
 
 dependencies {
+    implementation(project("object-container"))
     implementation(kotlin("stdlib"))
     implementation("io.arrow-kt:arrow-core:1.1.2")
 

@@ -9,7 +9,7 @@ import net.yakclient.boot.component.*
 import net.yakclient.boot.component.artifact.SoftwareComponentArtifactRequest
 import net.yakclient.boot.component.artifact.SoftwareComponentDescriptor
 import net.yakclient.boot.component.artifact.SoftwareComponentRepositorySettings
-import net.yakclient.boot.dependency.DependencyTypeProvider
+import net.yakclient.boot.dependency.DependencyTypeContainer
 import net.yakclient.boot.main.initMaven
 import net.yakclient.boot.store.CachingDataStore
 import net.yakclient.common.util.resolve
@@ -20,7 +20,7 @@ import java.nio.file.Path
 public fun testBootInstance(
         dependencies: Map<SoftwareComponentDescriptor, Class<out ComponentFactory<*, *>>>,
         location: Path = Files.createTempDirectory("boot-test"),
-        dependencyTypes: DependencyTypeProvider = DependencyTypeProvider()
+        dependencyTypes: DependencyTypeContainer = DependencyTypeContainer()
 ) : BootInstance {
     class TestGraph(
             private val boot: BootInstance
@@ -60,7 +60,7 @@ public fun testBootInstance(
 
     return object: BootInstance {
         override val location: Path = location
-        override val dependencyTypes: DependencyTypeProvider = dependencyTypes
+        override val dependencyTypes: DependencyTypeContainer = dependencyTypes
         override val componentGraph: SoftwareComponentGraph = TestGraph(this)
 
         init {

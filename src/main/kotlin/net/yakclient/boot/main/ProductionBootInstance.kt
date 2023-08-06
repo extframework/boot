@@ -16,20 +16,24 @@ import net.yakclient.boot.component.artifact.SoftwareComponentDescriptor
 import net.yakclient.boot.component.artifact.SoftwareComponentRepositorySettings
 import net.yakclient.boot.dependency.DependencyGraph
 import net.yakclient.boot.dependency.DependencyGraphProvider
-import net.yakclient.boot.dependency.DependencyTypeProvider
+import net.yakclient.boot.dependency.DependencyTypeContainer
 import net.yakclient.boot.maven.MavenDataAccess
 import net.yakclient.boot.maven.MavenDependencyGraph
 import net.yakclient.boot.store.CachingDataStore
 import net.yakclient.common.util.resolve
 import java.nio.file.Path
 
-public class ProductionBootInstance(override val location: Path, override val dependencyTypes: DependencyTypeProvider) : BootInstance {
-    override val componentGraph: SoftwareComponentGraph = initSoftwareComponentGraph(location resolve "cmpts", dependencyTypes, this)
+public class ProductionBootInstance(
+    override val location: Path,
+    override val dependencyTypes: DependencyTypeContainer
+) : BootInstance {
+    override val componentGraph: SoftwareComponentGraph =
+        initSoftwareComponentGraph(location resolve "cmpts", dependencyTypes, this)
 
     init {
         initMaven(
-                dependencyTypes,
-                location resolve "m2"
+            dependencyTypes,
+            location resolve "m2"
         )
     }
 
@@ -39,60 +43,68 @@ public class ProductionBootInstance(override val location: Path, override val de
 
     override fun cache(request: SoftwareComponentArtifactRequest, location: SoftwareComponentRepositorySettings) {
         val cacher = componentGraph.cacherOf(
-                location,
+            location,
         )
 
         cacher.cache(
-                request
+            request
         )
     }
 
-    override fun <T : ComponentConfiguration, I : ComponentInstance<T>> new(descriptor: SoftwareComponentDescriptor, factoryType: Class<out ComponentFactory<T, I>>, configuration: T): I {
+    override fun <T : ComponentConfiguration, I : ComponentInstance<T>> new(
+        descriptor: SoftwareComponentDescriptor,
+        factoryType: Class<out ComponentFactory<T, I>>,
+        configuration: T
+    ): I {
         val it = componentGraph.get(descriptor).tapLeft { throw it }.orNull()!!
 
         check(factoryType.isInstance(it.factory))
 
         val factory = it.factory as? ComponentFactory<T, I>
-                ?: throw IllegalArgumentException("Cannot start a Component with no factory, you must start its children instead. Use the Software component graph to do this.")
+            ?: throw IllegalArgumentException("Cannot start a Component with no factory, you must start its children instead. Use the Software component graph to do this.")
 
         return factory.new(configuration)
     }
 }
 
 public fun initMaven(
-        dependencyProviders: DependencyTypeProvider,
-        cache: Path
-): Unit = dependencyProviders.add(
+    types: DependencyTypeContainer,
+    cache: Path
+) {
+    types.register(
+        "simple-maven",
         createMavenProvider(cache)
-)
+    )
+}
 
 
 private fun initSoftwareComponentGraph(
-        cache: Path,
-        dependencyProviders: DependencyTypeProvider,
-        boot: BootInstance
+    cache: Path,
+    types: DependencyTypeContainer,
+    boot: BootInstance
 ): SoftwareComponentGraph {
     return SoftwareComponentGraph(
-            cache,
-            CachingDataStore(SoftwareComponentDataAccess(cache)),
-            BasicArchiveResolutionProvider(
-                    Archives.Finders.ZIP_FINDER as ArchiveFinder<ArchiveReference>,
-                    Archives.Resolvers.ZIP_RESOLVER
-            ),
-            dependencyProviders,
-            boot, HashMap()
+        cache,
+        CachingDataStore(SoftwareComponentDataAccess(cache)),
+        BasicArchiveResolutionProvider(
+            Archives.Finders.ZIP_FINDER as ArchiveFinder<ArchiveReference>,
+            Archives.Resolvers.ZIP_RESOLVER
+        ),
+        types,
+        boot, HashMap()
     )
 }
 
 public fun createMavenProvider(
-        cache: Path,
+    cache: Path,
 ): DependencyGraphProvider<*, *, *> {
     val dependencyGraph = createMavenDependencyGraph(cache)
 
-    return object : DependencyGraphProvider<SimpleMavenDescriptor, SimpleMavenArtifactRequest, SimpleMavenRepositorySettings> {
+    return object :
+        DependencyGraphProvider<SimpleMavenDescriptor, SimpleMavenArtifactRequest, SimpleMavenRepositorySettings> {
         override val name: String = "simple-maven"
         override val graph: DependencyGraph<SimpleMavenDescriptor, SimpleMavenRepositorySettings> =
-                dependencyGraph
+            dependencyGraph
 
         override fun parseRequest(request: Map<String, String>): SimpleMavenArtifactRequest? {
             val descriptorName = request["descriptor"] ?: return null
@@ -101,10 +113,10 @@ public fun createMavenProvider(
             val excludeArtifacts = request["excludeArtifacts"]
 
             return SimpleMavenArtifactRequest(
-                    SimpleMavenDescriptor.parseDescription(descriptorName) ?: return null,
-                    isTransitive.toBoolean(),
-                    scopes.split(',').toSet(),
-                    excludeArtifacts?.split(',')?.toSet() ?: setOf()
+                SimpleMavenDescriptor.parseDescription(descriptorName) ?: return null,
+                isTransitive.toBoolean(),
+                scopes.split(',').toSet(),
+                excludeArtifacts?.split(',')?.toSet() ?: setOf()
             )
         }
 
@@ -119,10 +131,10 @@ public fun createMavenProvider(
 
             return when (type) {
                 "default" -> SimpleMavenRepositorySettings.default(
-                        location,
-                        releasesEnabled.toBoolean(),
-                        snapshotsEnabled.toBoolean(),
-                        hashType
+                    location,
+                    releasesEnabled.toBoolean(),
+                    snapshotsEnabled.toBoolean(),
+                    hashType
                 )
 
                 "local" -> SimpleMavenRepositorySettings.local(location, hashType)
@@ -133,18 +145,18 @@ public fun createMavenProvider(
 }
 
 public fun createMavenDependencyGraph(
-        cachePath: Path,
+    cachePath: Path,
 ): MavenDependencyGraph {
     val resolutionProvider = object : BasicArchiveResolutionProvider<ArchiveReference, ZipResolutionResult>(
-            Archives.Finders.ZIP_FINDER as ArchiveFinder<ArchiveReference>,
-            Archives.Resolvers.ZIP_RESOLVER,
+        Archives.Finders.ZIP_FINDER as ArchiveFinder<ArchiveReference>,
+        Archives.Resolvers.ZIP_RESOLVER,
     ) {}
     val graph = MavenDependencyGraph(
-            cachePath,
-            CachingDataStore(
-                    MavenDataAccess(cachePath)
-            ),
-            resolutionProvider
+        cachePath,
+        CachingDataStore(
+            MavenDataAccess(cachePath)
+        ),
+        resolutionProvider
     )
 
 

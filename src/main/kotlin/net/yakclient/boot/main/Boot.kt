@@ -4,7 +4,6 @@ import com.durganmcbroom.artifact.resolver.simple.maven.HashType
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import kotlinx.cli.*
-import net.yakclient.boot.BootInstance
 import net.yakclient.boot.archive.ArchiveLoadException
 import net.yakclient.boot.component.ComponentConfiguration
 import net.yakclient.boot.component.ComponentFactory
@@ -14,7 +13,7 @@ import net.yakclient.boot.component.artifact.SoftwareComponentArtifactRequest
 import net.yakclient.boot.component.artifact.SoftwareComponentDescriptor
 import net.yakclient.boot.component.artifact.SoftwareComponentRepositorySettings
 import net.yakclient.boot.component.context.impl.ContextNodeValueImpl
-import net.yakclient.boot.dependency.DependencyTypeProvider
+import net.yakclient.boot.dependency.DependencyTypeContainer
 import java.io.File
 import java.nio.file.Path
 import java.util.logging.Level
@@ -34,7 +33,7 @@ public fun main(args: Array<String>) {
     // Parse args
 
     // Create Boot context for later use
-    val boot by lazy { ProductionBootInstance(Path.of(workingDir), DependencyTypeProvider()) }
+    val boot by lazy { ProductionBootInstance(Path.of(workingDir), DependencyTypeContainer()) }
 
     fun echo(value: String) = logger.log(Level.INFO, value)
 

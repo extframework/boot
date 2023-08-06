@@ -32,7 +32,7 @@ public open class SoftwareComponentGraph (
         private val path: Path,
         private val store: DataStore<SoftwareComponentDescriptor, SoftwareComponentData>,
         private val resolutionProvider: ArchiveResolutionProvider<*>,
-        private val dependencyProviders: DependencyTypeProvider,
+        private val dependencyProviders: DependencyTypeContainer,
         private val bootInstance: BootInstance,
         private val mutableGraph: MutableMap<SoftwareComponentDescriptor, SoftwareComponentNode> = HashMap()
 ) : ArchiveGraph<SoftwareComponentDescriptor, SoftwareComponentNode, SoftwareComponentRepositorySettings>(SoftwareComponentRepositoryFactory) {
@@ -77,7 +77,7 @@ public open class SoftwareComponentGraph (
                     }.bindMap().bind()
 
             val dependencies = data.dependencies.map {
-                dependencyProviders.getByType(it.type)?.getArtifact(it.request)?.bind() ?: shift(
+                dependencyProviders.get(it.type)?.getArtifact(it.request)?.bind() ?: shift(
                         ArchiveLoadException.DependencyTypeNotFound(it.type)
                 )
             }
@@ -191,7 +191,7 @@ public open class SoftwareComponentGraph (
                     .forEach(::cache)
 
             metadata.dependencies.forEach { i ->
-                val provider = dependencyProviders.getByType(i.type)
+                val provider = dependencyProviders.get(i.type)
                         ?: throw IllegalArgumentException("Invalid repository: '${i.type}'. Failed to find provider for this type.")
                 provider.cacheArtifact(
                         i.repositorySettings,
