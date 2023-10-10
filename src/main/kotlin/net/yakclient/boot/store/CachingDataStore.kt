@@ -1,15 +1,17 @@
 package net.yakclient.boot.store
 
+import java.util.concurrent.ConcurrentHashMap
+
 public class CachingDataStore<in K, V>(
-    override val access: DataAccess<K, V>
-) : DataStore<K, V> {
-    private val cache : MutableMap<K, V> = HashMap()
+    access: DataAccess<K, V>
+) : DelegatingDataStore<K, V>(access) {
+    private val cache : MutableMap<K, V> = ConcurrentHashMap()
 
     override fun get(key: K): V?  =
-        cache[key] ?: access.read(key)?.also { cache[key] = it }
+        cache[key] ?: super.get(key)
 
     override fun put(key: K, value: V) {
-        access.write(key, value)
+        super.put(key, value)
         cache[key] = value
     }
 }

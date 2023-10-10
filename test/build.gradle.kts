@@ -1,5 +1,7 @@
 dependencies {
     implementation(project(":"))
+    implementation(project(":object-container"))
+
     implementation("net.yakclient:common-util:1.0-SNAPSHOT") {
         isChanging = true
     }
@@ -13,7 +15,11 @@ dependencies {
         isChanging = true
     }
     implementation("io.arrow-kt:arrow-core:1.1.2")
-
+    implementation("com.durganmcbroom:jobs:1.0-SNAPSHOT")
+    implementation("com.durganmcbroom:jobs-logging:1.0-SNAPSHOT")
+    implementation("com.durganmcbroom:jobs-coroutines:1.0-SNAPSHOT")
+    implementation("com.durganmcbroom:jobs-progress:1.0-SNAPSHOT")
+    implementation("com.durganmcbroom:jobs-progress-simple:1.0-SNAPSHOT")
 }
 
 task<Jar>("sourcesJar") {

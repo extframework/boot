@@ -1,6 +1,7 @@
 package net.yakclient.boot.archive
 
 import com.durganmcbroom.artifact.resolver.ArtifactException
+import com.durganmcbroom.artifact.resolver.ArtifactMetadata
 
 public sealed class ArchiveLoadException : Exception() {
     public data class ArtifactLoadException(val exception: ArtifactException) : ArchiveLoadException() {
@@ -24,4 +25,6 @@ public sealed class ArchiveLoadException : Exception() {
     public object ArtifactNotCached : ArchiveLoadException()
 
     public data class IllegalState(val reason: String) : ArchiveLoadException()
+
+    public data class CircularArtifactException(val trace: List<ArtifactMetadata.Descriptor>) : ArchiveLoadException()
 }

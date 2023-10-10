@@ -1,6 +1,6 @@
 package net.yakclient.boot.dependency
 
-import net.yakclient.`object`.ObjectContainerImpl
+import net.yakclient.`object`.MutableObjectContainer
 
 //public class DependencyTypeProvider : ServiceMapCollector<String, DependencyGraphProvider<*, *, *>>({
 //    it.name
@@ -8,4 +8,4 @@ import net.yakclient.`object`.ObjectContainerImpl
 //    public fun getByType(name: String): DependencyGraphProvider<*, *, *>? = services[name]
 //}
 
-public class DependencyTypeContainer : ObjectContainerImpl<DependencyGraphProvider<*, *, *>>()
+public typealias DependencyTypeContainer = MutableObjectContainer<DependencyGraphProvider<*, *, *>>

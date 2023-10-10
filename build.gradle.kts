@@ -27,7 +27,7 @@ application {
 
 
 configurations.all {
-    resolutionStrategy.cacheChangingModulesFor(24, "hours")
+    resolutionStrategy.cacheChangingModulesFor(0, "seconds")
 }
 
 dependencies {
@@ -52,6 +52,19 @@ dependencies {
         isChanging = true
     }
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.7.22")
+
+    implementation("com.durganmcbroom:jobs:1.0-SNAPSHOT") {
+        isChanging = true
+    }
+    implementation("com.durganmcbroom:jobs-logging:1.0-SNAPSHOT") {
+        isChanging = true
+    }
+    implementation("com.durganmcbroom:jobs-progress:1.0-SNAPSHOT") {
+        isChanging = true
+    }
+    implementation("com.durganmcbroom:jobs-progress-simple:1.0-SNAPSHOT") {
+        isChanging = true
+    }
 }
 
 task<Jar>("sourcesJar") {
@@ -115,16 +128,7 @@ allprojects {
 
     repositories {
         mavenCentral()
-        maven {
-            name = "Durgan McBroom GitHub Packages"
-            url = uri("https://maven.pkg.github.com/durganmcbroom/artifact-resolver")
-            credentials {
-                username = project.findProperty("dm.gpr.user") as? String
-                    ?: throw IllegalArgumentException("Need a Github package registry username!")
-                password = project.findProperty("dm.gpr.key") as? String
-                    ?: throw IllegalArgumentException("Need a Github package registry key!")
-            }
-        }
+        mavenLocal()
         maven {
             isAllowInsecureProtocol = true
             url = uri("http://maven.yakclient.net/snapshots")
