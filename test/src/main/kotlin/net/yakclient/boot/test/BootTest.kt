@@ -1,5 +1,7 @@
 package net.yakclient.boot.test
 
+import bootFactories
+import kotlinx.coroutines.runBlocking
 import net.yakclient.archives.ArchiveFinder
 import net.yakclient.archives.ArchiveReference
 import net.yakclient.archives.Archives
@@ -13,60 +15,63 @@ import net.yakclient.boot.dependency.DependencyTypeContainer
 import net.yakclient.boot.main.initMaven
 import net.yakclient.boot.store.CachingDataStore
 import net.yakclient.common.util.resolve
+import net.yakclient.`object`.ObjectContainerImpl
+import orThrow
 import java.lang.reflect.Constructor
 import java.nio.file.Files
 import java.nio.file.Path
 
 public fun testBootInstance(
-        dependencies: Map<SoftwareComponentDescriptor, Class<out ComponentFactory<*, *>>>,
-        location: Path = Files.createTempDirectory("boot-test"),
-        dependencyTypes: DependencyTypeContainer = DependencyTypeContainer()
-) : BootInstance {
+    dependencies: Map<SoftwareComponentDescriptor, Class<out ComponentFactory<*, *>>>,
+    location: Path = Files.createTempDirectory("boot-test"),
+    dependencyTypes: DependencyTypeContainer = ObjectContainerImpl()
+): BootInstance {
     class TestGraph(
-            private val boot: BootInstance
-    ): SoftwareComponentGraph(
-            location,
-            CachingDataStore(SoftwareComponentDataAccess(location)),
-            BasicArchiveResolutionProvider(
-                    Archives.Finders.ZIP_FINDER as ArchiveFinder<ArchiveReference>,
-                    Archives.Resolvers.ZIP_RESOLVER
-            ),
-            dependencyTypes,
-            boot,
-            dependencies.mapValuesTo(HashMap()) {
-                SoftwareComponentNode(
-                        it.key,
-                        null,
-                        setOf(),
-                        setOf(),
-                        SoftwareComponentModel(
-                                "",
-                                "", null, listOf(), listOf()
-                        ),
-                        run {
-                            fun <T : Any> Class<T>.tryGetConstructor(vararg params: Class<*>): Constructor<T>? = net.yakclient.common.util.runCatching(NoSuchMethodException::class) { this.getConstructor(*params) }
+        private val boot: BootInstance
+    ) : SoftwareComponentGraph(
+        location,
+        CachingDataStore(SoftwareComponentDataAccess(location)),
+        BasicArchiveResolutionProvider(
+            Archives.Finders.ZIP_FINDER as ArchiveFinder<ArchiveReference>,
+            Archives.Resolvers.ZIP_RESOLVER
+        ),
+        dependencyTypes,
+        boot,
+        dependencies.mapValuesTo(HashMap()) {
+            SoftwareComponentNode(
+                it.key,
+                null,
+                setOf(),
+                setOf(),
+                SoftwareComponentModel(
+                    "",
+                    "", null, listOf(), listOf()
+                ),
+                run {
+                    fun <T : Any> Class<T>.tryGetConstructor(vararg params: Class<*>): Constructor<T>? =
+                        net.yakclient.common.util.runCatching(NoSuchMethodException::class) { this.getConstructor(*params) }
 
-                            fun loadFactory(cls: Class<out ComponentFactory<*, *>>): ComponentFactory<*, *> {
-                                return (cls.tryGetConstructor(BootInstance::class.java)?.newInstance(boot)
-                                        ?: cls.tryGetConstructor()?.newInstance()) as ComponentFactory<*, *>
-                            }
-                            
-                            loadFactory(it.value)
-                        }
-                )
-            }
+                    fun loadFactory(cls: Class<out ComponentFactory<*, *>>): ComponentFactory<*, *> {
+                        return (cls.tryGetConstructor(BootInstance::class.java)?.newInstance(boot)
+                            ?: cls.tryGetConstructor()?.newInstance()) as ComponentFactory<*, *>
+                    }
+
+                    loadFactory(it.value)
+                }
+            )
+        }
     ) {
     }
 
-    return object: BootInstance {
+    return object : BootInstance {
         override val location: Path = location
         override val dependencyTypes: DependencyTypeContainer = dependencyTypes
         override val componentGraph: SoftwareComponentGraph = TestGraph(this)
 
         init {
             initMaven(
-                    dependencyTypes,
-                    location resolve "m2"
+                dependencyTypes,
+                location resolve "m2"
             )
         }
 
@@ -74,19 +79,23 @@ public fun testBootInstance(
             return componentGraph.isCached(descriptor)
         }
 
-        override fun cache(request: SoftwareComponentArtifactRequest, location: SoftwareComponentRepositorySettings) {
-            componentGraph.cacherOf(location).cache(request)
+        override fun cache(request: SoftwareComponentArtifactRequest, location: SoftwareComponentRepositorySettings) = runBlocking {
+            componentGraph.cacherOf(location).cache(request).orThrow()
         }
 
-        override fun <T : ComponentConfiguration, I : ComponentInstance<T>> new(descriptor: SoftwareComponentDescriptor, factoryType: Class<out ComponentFactory<T, I>>, configuration: T): I {
-            val it = componentGraph.get(descriptor).tapLeft { throw it }.orNull()!!
+        override fun <T : ComponentConfiguration, I : ComponentInstance<T>> new(
+            descriptor: SoftwareComponentDescriptor,
+            factoryType: Class<out ComponentFactory<T, I>>,
+            configuration: T
+        ): I =
+            runBlocking(bootFactories()) {
+                val it = componentGraph.get(descriptor).orThrow()
 
-            check(factoryType.isInstance(it.factory))
+                check(factoryType.isInstance(it.factory))
 
-            return (it.factory as? ComponentFactory<T, I>)?.new(configuration)
-                    ?: throw IllegalArgumentException("Cannot start a Component with no factory, you must start its children instead. Use the Software component graph to do this.")
-        }
-
+                ((it.factory as? ComponentFactory<T, I>)?.new(configuration)
+                    ?: throw IllegalArgumentException("Cannot start a Component with no factory, you must start its children instead. Use the Software component graph to do this."))
+            }
     }
 }
 

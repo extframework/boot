@@ -1,9 +1,11 @@
 package net.yakclient.boot.main
 
+import bootFactories
 import com.durganmcbroom.artifact.resolver.simple.maven.HashType
 import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenArtifactRequest
 import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenDescriptor
 import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenRepositorySettings
+import kotlinx.coroutines.runBlocking
 import net.yakclient.archives.ArchiveFinder
 import net.yakclient.archives.ArchiveReference
 import net.yakclient.archives.Archives
@@ -21,6 +23,8 @@ import net.yakclient.boot.maven.MavenDataAccess
 import net.yakclient.boot.maven.MavenDependencyGraph
 import net.yakclient.boot.store.CachingDataStore
 import net.yakclient.common.util.resolve
+import orThrow
+import withWeight
 import java.nio.file.Path
 
 public class ProductionBootInstance(
@@ -46,9 +50,9 @@ public class ProductionBootInstance(
             location,
         )
 
-        cacher.cache(
-            request
-        )
+        runBlocking(bootFactories()) {
+            cacher.cache(request)
+        }.orThrow()
     }
 
     override fun <T : ComponentConfiguration, I : ComponentInstance<T>> new(
@@ -56,14 +60,16 @@ public class ProductionBootInstance(
         factoryType: Class<out ComponentFactory<T, I>>,
         configuration: T
     ): I {
-        val it = componentGraph.get(descriptor).tapLeft { throw it }.orNull()!!
+        return runBlocking {
+            val it = componentGraph.get(descriptor).orThrow()
 
-        check(factoryType.isInstance(it.factory))
+            check(factoryType.isInstance(it.factory))
 
-        val factory = it.factory as? ComponentFactory<T, I>
-            ?: throw IllegalArgumentException("Cannot start a Component with no factory, you must start its children instead. Use the Software component graph to do this.")
+            val factory = it.factory as? ComponentFactory<T, I>
+                ?: throw IllegalArgumentException("Cannot start a Component with no factory, you must start its children instead. Use the Software component graph to do this.")
 
-        return factory.new(configuration)
+            factory.new(configuration)
+        }
     }
 }
 

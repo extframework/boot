@@ -1,9 +1,11 @@
 package net.yakclient.boot.main
 
+import bootFactories
 import com.durganmcbroom.artifact.resolver.simple.maven.HashType
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import kotlinx.cli.*
+import kotlinx.coroutines.runBlocking
 import net.yakclient.boot.archive.ArchiveLoadException
 import net.yakclient.boot.component.ComponentConfiguration
 import net.yakclient.boot.component.ComponentFactory
@@ -14,6 +16,8 @@ import net.yakclient.boot.component.artifact.SoftwareComponentDescriptor
 import net.yakclient.boot.component.artifact.SoftwareComponentRepositorySettings
 import net.yakclient.boot.component.context.impl.ContextNodeValueImpl
 import net.yakclient.boot.dependency.DependencyTypeContainer
+import net.yakclient.`object`.ObjectContainerImpl
+import orThrow
 import java.io.File
 import java.nio.file.Path
 import java.util.logging.Level
@@ -28,12 +32,11 @@ public fun main(args: Array<String>) {
     val parser = ArgParser("boot")
 
     // Get working dir
-
     val workingDir by parser.option(ArgType.String, "working-dir", "w").required()
     // Parse args
 
     // Create Boot context for later use
-    val boot by lazy { ProductionBootInstance(Path.of(workingDir), DependencyTypeContainer()) }
+    val boot by lazy { ProductionBootInstance(Path.of(workingDir), ObjectContainerImpl()) }
 
     fun echo(value: String) = logger.log(Level.INFO, value)
 
@@ -84,22 +87,27 @@ public fun main(args: Array<String>) {
         val component by argument(ArgType.String)
         val configPath by option(ArgType.String, "configuration", "c").default("")
         override fun execute() {
-            val node = boot.componentGraph.get(
+            runBlocking(bootFactories()) {
+                val node =  boot.componentGraph.get(
                     checkNotNull(SoftwareComponentDescriptor.parseDescription(component)) { "Invalid component descriptor: '$component'" }
-            ).tapLeft { throw it }.orNull()!!
+                ).orThrow()
 
-            echo("Parsing configuration: '$configPath'")
-            val factory = node.factory as? ComponentFactory<ComponentConfiguration, ComponentInstance<ComponentConfiguration>>
-                    ?: throw IllegalArgumentException("Cannot start component: '$component' because it does not have a factory, is either a library or only a transitive component.")
+                echo("Parsing configuration: '$configPath'")
+                val factory =
+                    node.factory as? ComponentFactory<ComponentConfiguration, ComponentInstance<ComponentConfiguration>>
+                        ?: throw IllegalArgumentException("Cannot start component: '$component' because it does not have a factory, is either a library or only a transitive component.")
 
-            val configTree = if (configPath.isEmpty()) ContextNodeValueImpl(Unit) else ContextNodeValueImpl(ObjectMapper().readValue<Any>(File(configPath)))
+                val configTree = if (configPath.isEmpty()) ContextNodeValueImpl(Unit) else ContextNodeValueImpl(
+                    ObjectMapper().readValue<Any>(File(configPath))
+                )
 
-            val realConfig = node.factory.parseConfiguration(configTree)
+                val realConfig = node.factory.parseConfiguration(configTree)
 
-            val instance = factory.new(realConfig)
+                val instance = factory.new(realConfig)
 
-            echo("Starting Instance")
-            instance.start()
+                echo("Starting Instance")
+                instance.start()
+            }
         }
     }
 

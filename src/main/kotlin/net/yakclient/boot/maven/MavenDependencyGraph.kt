@@ -1,25 +1,25 @@
 package net.yakclient.boot.maven
 
-import com.durganmcbroom.artifact.resolver.*
+import com.durganmcbroom.artifact.resolver.ArtifactReference
+import com.durganmcbroom.artifact.resolver.ArtifactStubResolver
+import com.durganmcbroom.artifact.resolver.RepositoryFactory
+import com.durganmcbroom.artifact.resolver.ResolutionContext
 import com.durganmcbroom.artifact.resolver.simple.maven.*
+import kotlinx.coroutines.coroutineScope
 import net.yakclient.archives.ResolutionResult
 import net.yakclient.boot.archive.ArchiveResolutionProvider
 import net.yakclient.boot.dependency.DependencyData
 import net.yakclient.boot.dependency.DependencyGraph
 import net.yakclient.boot.dependency.DependencyNode
-import net.yakclient.boot.dependency.VersionIndependentDependencyKey
 import net.yakclient.boot.security.PrivilegeAccess
 import net.yakclient.boot.security.PrivilegeManager
 import net.yakclient.boot.store.DataStore
-import net.yakclient.common.util.make
+import net.yakclient.common.util.copyTo
 import net.yakclient.common.util.resolve
 import net.yakclient.common.util.resource.SafeResource
 import java.io.File
-import java.io.FileOutputStream
-import java.nio.channels.Channels
 import java.nio.file.Files
 import java.nio.file.Path
-import java.util.logging.Level
 
 public open class MavenDependencyGraph(
     private val path: Path,
@@ -30,7 +30,7 @@ public open class MavenDependencyGraph(
     privilegeManager: PrivilegeManager = PrivilegeManager(null, PrivilegeAccess.allPrivileges()) {},
     private val stubResolutionProvider: (SimpleMavenArtifactRepository) -> ArtifactStubResolver<*, SimpleMavenArtifactStub, SimpleMavenArtifactReference> = SimpleMavenArtifactRepository::stubResolver,
     private val factory: RepositoryFactory<SimpleMavenRepositorySettings, SimpleMavenArtifactRequest, SimpleMavenArtifactStub, SimpleMavenArtifactReference, SimpleMavenArtifactRepository> = SimpleMaven
-) : DependencyGraph<SimpleMavenDescriptor,  SimpleMavenRepositorySettings>(
+) : DependencyGraph<SimpleMavenDescriptor, SimpleMavenRepositorySettings>(
     store, factory, archiveResolver, initialGraph, privilegeManager
 ) {
     override fun cacherOf(settings: SimpleMavenRepositorySettings): MavenDependencyCacher {
@@ -45,26 +45,18 @@ public open class MavenDependencyGraph(
         )
     }
 
-    override fun writeResource(descriptor: SimpleMavenDescriptor, resource: SafeResource): Path {
-        val jarName = "${descriptor.artifact}-${descriptor.version}.jar"
-        val jarPath = path resolve descriptor.group.replace(
-            '.',
-            File.separatorChar
-        ) resolve descriptor.artifact resolve descriptor.version resolve jarName
+    override suspend fun writeResource(descriptor: SimpleMavenDescriptor, resource: SafeResource): Path =
+        coroutineScope {
+            val jarName = "${descriptor.artifact}-${descriptor.version}.jar"
+            val jarPath = path resolve descriptor.group.replace(
+                '.',
+                File.separatorChar
+            ) resolve descriptor.artifact resolve descriptor.version resolve jarName
 
-        if (!Files.exists(jarPath)) {
-            logger.log(Level.INFO, "Downloading dependency: '$descriptor'")
+            if (!Files.exists(jarPath)) resource copyTo jarPath
 
-            Channels.newChannel(resource.open()).use { cin ->
-                jarPath.make()
-                FileOutputStream(jarPath.toFile()).use { fout ->
-                    fout.channel.transferFrom(cin, 0, Long.MAX_VALUE)
-                }
-            }
+            jarPath
         }
-
-        return jarPath
-    }
 
     public inner class MavenDependencyCacher(
         resolver: ResolutionContext<SimpleMavenArtifactRequest, SimpleMavenArtifactStub, ArtifactReference<*, SimpleMavenArtifactStub>>,
@@ -101,6 +93,4 @@ public open class MavenDependencyGraph(
 //            }
 //        }
     }
-
-
 }

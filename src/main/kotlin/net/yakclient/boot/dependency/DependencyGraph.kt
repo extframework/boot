@@ -1,26 +1,34 @@
 package net.yakclient.boot.dependency
 
-import arrow.core.Either
-import arrow.core.continuations.either
-import arrow.core.right
+import asOutput
 import com.durganmcbroom.artifact.resolver.*
-import net.yakclient.archives.*
-import net.yakclient.boot.archive.*
+import com.durganmcbroom.jobs.JobName
+import com.durganmcbroom.jobs.JobResult
+import com.durganmcbroom.jobs.JobResult.Success
+import com.durganmcbroom.jobs.job
+import com.durganmcbroom.jobs.logging.info
+import kotlinx.coroutines.async
+import net.yakclient.archives.ResolutionResult
+import net.yakclient.boot.archive.ArchiveGraph
+import net.yakclient.boot.archive.ArchiveLoadException
+import net.yakclient.boot.archive.ArchiveResolutionProvider
+import net.yakclient.boot.archive.handleOrChildren
 import net.yakclient.boot.security.PrivilegeAccess
 import net.yakclient.boot.security.PrivilegeManager
 import net.yakclient.boot.store.DataStore
 import net.yakclient.boot.util.toSafeResource
 import net.yakclient.common.util.resource.SafeResource
+import withWeight
 import java.nio.file.Path
 
 public abstract class DependencyGraph<K : ArtifactMetadata.Descriptor, in R : RepositorySettings>(
-        private val store: DataStore<K, DependencyData<K>>,
-        public override val repositoryFactory: RepositoryFactory<R, out ArtifactRequest<K>, *, *, *>,
-        private val archiveResolver: ArchiveResolutionProvider<ResolutionResult>,
-        private val mutableGraph: MutableMap<K, DependencyNode> = HashMap(),
-        private val privilegeManager: PrivilegeManager = PrivilegeManager(null, PrivilegeAccess.emptyPrivileges()) {},
+    private val store: DataStore<K, DependencyData<K>>,
+    public override val repositoryFactory: RepositoryFactory<R, out ArtifactRequest<K>, *, *, *>,
+    private val archiveResolver: ArchiveResolutionProvider<ResolutionResult>,
+    private val mutableGraph: MutableMap<K, DependencyNode> = HashMap(),
+    private val privilegeManager: PrivilegeManager = PrivilegeManager(null, PrivilegeAccess.emptyPrivileges()) {},
 ) : ArchiveGraph<K, DependencyNode, R>(
-        repositoryFactory
+    repositoryFactory
 ) {
     override val graph: Map<K, DependencyNode>
         get() = mutableGraph.toMap()
@@ -29,9 +37,9 @@ public abstract class DependencyGraph<K : ArtifactMetadata.Descriptor, in R : Re
 
     override fun isCached(descriptor: K): Boolean = store.contains(descriptor)
 
-    override fun get(descriptor: K): Either<ArchiveLoadException, DependencyNode> {
-        return mutableGraph[descriptor]?.right() ?: either.eager {
-            val data = store[descriptor] ?: shift(ArchiveLoadException.ArtifactNotCached)
+    override suspend fun get(descriptor: K): JobResult<DependencyNode, ArchiveLoadException> {
+        return mutableGraph[descriptor]?.let(::Success) ?: run {
+            val data = store[descriptor] ?: return JobResult.Failure(ArchiveLoadException.ArtifactNotCached)
 
             val context = object : GraphContext<K> {
                 override fun get(key: K): DependencyNode? = mutableGraph[key]
@@ -41,7 +49,7 @@ public abstract class DependencyGraph<K : ArtifactMetadata.Descriptor, in R : Re
                 }
             }
 
-            load(context, data).bind()
+            load(context, data)
         }
     }
 
@@ -78,51 +86,57 @@ public abstract class DependencyGraph<K : ArtifactMetadata.Descriptor, in R : Re
         public fun put(key: K, node: DependencyNode)
     }
 
-    protected open fun load(
-            context: GraphContext<K>,
-            data: DependencyData<K>,
-    ): Either<ArchiveLoadException, DependencyNode> = either.eager {
-        context[data.key] ?: either.eager eagerLoadFromData@{
+    protected open suspend fun load(
+        context: GraphContext<K>,
+        data: DependencyData<K>,
+    ): JobResult<DependencyNode, ArchiveLoadException> = job(JobName("Load dependency: '${data.key.name}'")) {
+        context[data.key] ?: run {
             val children = data.children
-                    .map(store::get)
-                    .map { it ?: shift(ArchiveLoadException.ArchiveGraphInvalidated) }
-                    .map { load(context, it) }
-                    .mapTo(HashSet()) { it.bind() }
+                .map(store::get)
+                .map { it ?: fail(ArchiveLoadException.ArchiveGraphInvalidated) }
+                .map { dependencyData ->
+                    async {
+                        withWeight(1) {
+                            load(context, dependencyData)
+                        }
+                    }
+                }.mapTo(HashSet()) { it.await().attempt() }
 
-            val resource = data.archive ?: return@eagerLoadFromData DependencyNode(null, children)
+            val resource = data.archive ?: return@job DependencyNode(null, children)
 
             val handles = children.flatMapTo(HashSet()) { it.handleOrChildren() }
 
             val handle = archiveResolver.resolve(resource, {
                 DependencyClassLoader(it, handles, privilegeManager)
-            }, handles).bind().archive
+            }, handles).attempt()
 
-            DependencyNode(handle, children).also {
+            DependencyNode(handle.archive, children).also {
                 context.put(data.key, it)
             }
-        }.bind()
+        }
     }
 
-    protected abstract fun writeResource(descriptor: K, resource: SafeResource): Path
+    protected abstract suspend fun writeResource(descriptor: K, resource: SafeResource): Path
 
-    public abstract inner class DependencyCacher<E: ArtifactRequest<K>, S : ArtifactStub<E, *>,>(
-            resolver: ResolutionContext<E, S, ArtifactReference<*, S>>,
+    public abstract inner class DependencyCacher<E : ArtifactRequest<K>, S : ArtifactStub<E, *>>(
+        resolver: ResolutionContext<E, S, ArtifactReference<*, S>>,
     ) : ArchiveCacher<E, S>(
-            resolver,
+        resolver,
     ) {
-//        protected abstract fun newLocalGraph(): LocalGraph
-
-        override fun cache(request: E): Either<ArchiveLoadException, Unit> = either.eager {
+        override suspend fun cache(request: E): JobResult<Unit, ArchiveLoadException> {
             if (!mutableGraph.contains(request.descriptor) && !store.contains(request.descriptor)) {
                 val unboundRef = resolver.repositoryContext.artifactRepository
-                        .get(request)
+                    .get(request).asOutput()
 
                 val ref = unboundRef
-                        .mapLeft(ArchiveLoadException::ArtifactLoadException)
-                        .bind()
+                    .mapFailure(ArchiveLoadException::ArtifactLoadException)
 
-                cache(request, ref).bind()
+                if (ref.wasFailure()) return JobResult.Failure(ref.failureOrNull()!!)
+
+                return cache(request, ref.orNull()!!, ArtifactTrace(request, null)).map { }
             }
+
+            return Success(Unit)
         }
 
 
@@ -141,32 +155,49 @@ public abstract class DependencyGraph<K : ArtifactMetadata.Descriptor, in R : Re
 //            }
 //        }
 
-        private fun cache(
-                request: E,
-                ref: ArtifactReference<*, S>,
-        ): Either<ArchiveLoadException, DependencyData<K>> = either.eager {
-            ref.children.forEach { stub ->
-                val resolve = resolver.resolverContext.stubResolver
-                        .resolve(stub)
 
-                val childRef = resolve
-                        .mapLeft(ArchiveLoadException::ArtifactLoadException)
-                        .bind()
+        private suspend fun cache(
+            request: E,
+            ref: ArtifactReference<*, S>,
+            trace: ArtifactTrace<E>,
+        ): JobResult<DependencyData<K>, ArchiveLoadException> =
+            job(JobName("Cache dependency: '${request.descriptor.name}'")) {
+                if (trace.isCircular()) {
+                    fail(ArchiveLoadException.CircularArtifactException(trace.toList().map { it.descriptor }))
+                }
 
-                cache(stub.request, childRef).bind()
-            }
+                if (store.contains(request.descriptor)) {
+                    info("Dependency: '${request.descriptor}' already cached, returning early.")
+                    return@job store[request.descriptor]!!
+                }
 
-            val data = DependencyData(
+                ref.children.map { stub ->
+                    val resolve = resolver.resolverContext.stubResolver
+                        .resolve(stub).asOutput()
+
+                    val childRef = resolve
+                        .mapFailure(ArchiveLoadException::ArtifactLoadException)
+                        .attempt()
+
+                    async {
+                        withWeight(1) {
+                            cache(stub.request, childRef, trace.child(stub.request))
+                        }
+                    }
+                }.forEach { it.await().attempt() }
+
+                val data = DependencyData(
                     request.descriptor,
-                    ref.metadata.resource?.toSafeResource()?.let { writeResource(request.descriptor, it) },
-                    ref.children.map{it.request}.map { it.descriptor }
-            )
-            if (!store.contains(request.descriptor)) store.put(
+                    ref.metadata.resource?.toSafeResource()
+                        ?.let { writeResource(request.descriptor, it) },
+                    ref.children.map { it.request }.map { it.descriptor }
+                )
+                store.put(
                     request.descriptor, data
-            )
+                )
 
-            data
-        }
+                data
+            }
 
 //        protected abstract inner class LocalGraph {
 //            private val localGraph: MutableMap<VersionIndependentDependencyKey, DependencyNode> = HashMap()
@@ -189,5 +220,24 @@ public abstract class DependencyGraph<K : ArtifactMetadata.Descriptor, in R : Re
 //
 //            protected abstract fun getKey(request: K): VersionIndependentDependencyKey
 //        }
+    }
+
+    private data class ArtifactTrace<E : ArtifactRequest<*>>(
+        val request: E,
+        val parent: ArtifactTrace<E>?
+    ) {
+        fun child(request: E) = ArtifactTrace(request, this)
+
+        fun isCircular(toCheck: List<E> = listOf()): Boolean {
+            return toCheck.any { it.descriptor == request.descriptor } || parent?.isCircular(toCheck + request) == true
+        }
+
+        fun toList(): List<E> {
+            return (parent?.toList() ?: listOf()) + request
+        }
+
+        override fun toString(): String {
+            return toList().joinToString(separator = " -> ") { it.descriptor.toString() }
+        }
     }
 }
