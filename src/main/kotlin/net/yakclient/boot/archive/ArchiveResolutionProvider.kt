@@ -1,7 +1,7 @@
 package net.yakclient.boot.archive
 
 import com.durganmcbroom.jobs.*
-import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.coroutineScope
 import net.yakclient.archives.*
 import net.yakclient.archives.jpm.JpmResolutionResult
 import net.yakclient.archives.zip.ZipResolutionResult
@@ -9,37 +9,36 @@ import java.nio.file.Path
 import kotlin.io.path.exists
 
 public interface ArchiveResolutionProvider<out R : ResolutionResult> {
-    public fun resolve(
+    public suspend fun resolve(
         resource: Path,
         classLoader: ClassLoaderProvider<ArchiveReference>,
         parents: Set<ArchiveHandle>,
-    ): JobResult<R, ArchiveLoadException>
+    ): JobResult<R, ArchiveException>
 }
 
 public open class BasicArchiveResolutionProvider<T : ArchiveReference, R : ResolutionResult>(
     protected val finder: ArchiveFinder<T>,
     protected val resolver: ArchiveResolver<T, R>,
 ) : ArchiveResolutionProvider<R> {
-    override fun resolve(
+    override suspend fun resolve(
         resource: Path,
         classLoader: ClassLoaderProvider<ArchiveReference>,
         parents: Set<ArchiveHandle>,
-    ): JobResult<R, ArchiveLoadException> {
-        if (!resource.exists()) return JobResult.Failure(ArchiveLoadException.ArchiveLoadFailed("Given path: '$resource' to archive does not exist!"))
+    ): JobResult<R, ArchiveException> = jobScope {
+        if (!resource.exists()) fail(ArchiveException.ArchiveLoadFailed("Given path: '$resource' to archive does not exist!", jobElement(ArchiveTrace)))
 
-        return runCatching {
+        runCatching {
             resolver.resolve(
                 listOf(finder.find(resource)),
                 classLoader,
                 parents
             ).first()
         }.let {
-            if (it.isFailure) JobResult.Failure(
-                ArchiveLoadException.ArchiveLoadFailed(
-                    it.exceptionOrNull()?.message ?: "Unable to determine the reason of failure."
-                )
-            )
-            else JobResult.Success(it.getOrNull()!!)
+            if (it.isFailure)
+                fail(ArchiveException.ArchiveLoadFailed(
+                    it.exceptionOrNull()?.message!!, coroutineScope { jobElement(ArchiveTrace) }
+                ))
+            else it.getOrNull()!!
         }
     }
 }

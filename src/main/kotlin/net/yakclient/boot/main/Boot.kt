@@ -6,11 +6,8 @@ import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import kotlinx.cli.*
 import kotlinx.coroutines.runBlocking
-import net.yakclient.boot.archive.ArchiveLoadException
-import net.yakclient.boot.component.ComponentConfiguration
-import net.yakclient.boot.component.ComponentFactory
-import net.yakclient.boot.component.ComponentInstance
-import net.yakclient.boot.component.SoftwareComponentModelRepository
+import net.yakclient.boot.archive.ArchiveException
+import net.yakclient.boot.component.*
 import net.yakclient.boot.component.artifact.SoftwareComponentArtifactRequest
 import net.yakclient.boot.component.artifact.SoftwareComponentDescriptor
 import net.yakclient.boot.component.artifact.SoftwareComponentRepositorySettings
@@ -36,14 +33,14 @@ public fun main(args: Array<String>) {
     // Parse args
 
     // Create Boot context for later use
-    val boot by lazy { ProductionBootInstance(Path.of(workingDir), ObjectContainerImpl()) }
+    val boot by lazy { ProductionBootInstance(Path.of(workingDir)) }
 
     fun echo(value: String) = logger.log(Level.INFO, value)
 
     // Start of cli commands
     class CacheComponent : Subcommand(
-            "cache",
-            "Installs a single software component into the cache for later use."
+        "cache",
+        "Installs a single software component into the cache for later use."
     ) {
         val descriptor by option(ArgType.String, "descriptor").required()
         val location by option(ArgType.String, "location").required()
@@ -54,26 +51,28 @@ public fun main(args: Array<String>) {
 
             val settings = when (type.lowercase()) {
                 SoftwareComponentModelRepository.DEFAULT -> SoftwareComponentRepositorySettings.default(
-                        location,
-                        preferredHash = HashType.SHA1
+                    location,
+                    preferredHash = HashType.SHA1
                 )
 
                 SoftwareComponentModelRepository.LOCAL -> SoftwareComponentRepositorySettings.local(
-                        location,
-                        preferredHash = HashType.SHA1
+                    location,
+                    preferredHash = HashType.SHA1
                 )
 
                 else -> throw IllegalArgumentException("Unknown Software Component repository type: '$type'. Only known types are '${SoftwareComponentModelRepository.DEFAULT}' (for remote repositories) and '${SoftwareComponentModelRepository.LOCAL}' (for local repositories)")
             }
 
             val request = SoftwareComponentArtifactRequest(
-                    descriptor,
+                descriptor,
             )
 
             try {
-                boot.cache(request, settings)
+                runBlocking(bootFactories()) {
+                    boot.cache(request, settings).orThrow()
+                }
                 echo("Successfully cached the component: '$descriptor'!")
-            } catch (ex: ArchiveLoadException) {
+            } catch (ex: ArchiveException) {
                 echo("Failed to cache component, an error occurred. Throwing.")
                 throw ex
             }
@@ -81,16 +80,24 @@ public fun main(args: Array<String>) {
     }
 
     class StartComponents : Subcommand(
-            "start",
-            "Starts a component and its children."
+        "start",
+        "Starts a component and its children."
     ) {
+//        val descriptor by option(ArgType.String, "descriptor").required()
+//        val location by option(ArgType.String, "location").required()
+//        val type by option(ArgType.String, "type").default(SoftwareComponentModelRepository.DEFAULT)
+
         val component by argument(ArgType.String)
         val configPath by option(ArgType.String, "configuration", "c").default("")
         override fun execute() {
             runBlocking(bootFactories()) {
-                val node =  boot.componentGraph.get(
-                    checkNotNull(SoftwareComponentDescriptor.parseDescription(component)) { "Invalid component descriptor: '$component'" }
+
+                val node = boot.archiveGraph.get(
+//                    request.toArchiveDescriptor(),
+                    checkNotNull(SoftwareComponentDescriptor.parseDescription(component)) { "Invalid component descriptor: '$component'" },
+                    boot.componentResolver
                 ).orThrow()
+//                    boot.softwareComponents.withSettings(settings)
 
                 echo("Parsing configuration: '$configPath'")
                 val factory =

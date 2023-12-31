@@ -5,63 +5,66 @@ import com.durganmcbroom.artifact.resolver.simple.maven.HashType
 import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenArtifactRequest
 import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenDescriptor
 import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenRepositorySettings
+import com.durganmcbroom.jobs.JobName
+import com.durganmcbroom.jobs.JobResult
 import kotlinx.coroutines.runBlocking
 import net.yakclient.archives.ArchiveFinder
 import net.yakclient.archives.ArchiveReference
 import net.yakclient.archives.Archives
 import net.yakclient.archives.zip.ZipResolutionResult
 import net.yakclient.boot.BootInstance
-import net.yakclient.boot.archive.BasicArchiveResolutionProvider
+import net.yakclient.boot.archive.*
 import net.yakclient.boot.component.*
 import net.yakclient.boot.component.artifact.SoftwareComponentArtifactRequest
 import net.yakclient.boot.component.artifact.SoftwareComponentDescriptor
 import net.yakclient.boot.component.artifact.SoftwareComponentRepositorySettings
-import net.yakclient.boot.dependency.DependencyGraph
-import net.yakclient.boot.dependency.DependencyGraphProvider
+import net.yakclient.boot.dependency.DependencyResolverProvider
 import net.yakclient.boot.dependency.DependencyTypeContainer
-import net.yakclient.boot.maven.MavenDataAccess
-import net.yakclient.boot.maven.MavenDependencyGraph
-import net.yakclient.boot.store.CachingDataStore
+import net.yakclient.boot.maven.MavenDependencyResolver
 import net.yakclient.common.util.resolve
 import orThrow
-import withWeight
 import java.nio.file.Path
 
 public class ProductionBootInstance(
     override val location: Path,
-    override val dependencyTypes: DependencyTypeContainer
+    override val archiveGraph: ArchiveGraph = ArchiveGraph(location resolve "archives")
 ) : BootInstance {
-    override val componentGraph: SoftwareComponentGraph =
-        initSoftwareComponentGraph(location resolve "cmpts", dependencyTypes, this)
+    override val dependencyTypes: DependencyTypeContainer = DependencyTypeContainer(archiveGraph)
+    override val componentResolver: SoftwareComponentResolver =
+        initSoftwareComponentGraph(dependencyTypes, this)
 
     init {
-        initMaven(
-            dependencyTypes,
-            location resolve "m2"
+        val maven = createMavenProvider()
+        dependencyTypes.register(
+            "simple-maven",
+            maven
         )
+        archiveGraph.registerResolver(componentResolver)
+        println()
     }
 
     override fun isCached(descriptor: SoftwareComponentDescriptor): Boolean {
-        return componentGraph.isCached(descriptor)
+        return archiveGraph[descriptor] is SoftwareComponentNode
     }
 
-    override fun cache(request: SoftwareComponentArtifactRequest, location: SoftwareComponentRepositorySettings) {
-        val cacher = componentGraph.cacherOf(
+    override suspend fun cache(
+        request: SoftwareComponentArtifactRequest,
+        location: SoftwareComponentRepositorySettings
+    ): JobResult<Unit, ArchiveException> {
+        return archiveGraph.cache(
+            request,
             location,
+            componentResolver
         )
-
-        runBlocking(bootFactories()) {
-            cacher.cache(request)
-        }.orThrow()
     }
 
-    override fun <T : ComponentConfiguration, I : ComponentInstance<T>> new(
+    public override fun <T : ComponentConfiguration, I : ComponentInstance<T>> new(
         descriptor: SoftwareComponentDescriptor,
         factoryType: Class<out ComponentFactory<T, I>>,
         configuration: T
     ): I {
-        return runBlocking {
-            val it = componentGraph.get(descriptor).orThrow()
+        return runBlocking(bootFactories() + JobName("New component: '$descriptor'")) {
+            val it = archiveGraph.get(descriptor, componentResolver).orThrow()
 
             check(factoryType.isInstance(it.factory))
 
@@ -73,44 +76,37 @@ public class ProductionBootInstance(
     }
 }
 
-public fun initMaven(
-    types: DependencyTypeContainer,
-    cache: Path
-) {
-    types.register(
-        "simple-maven",
-        createMavenProvider(cache)
-    )
-}
+//public fun initMaven(
+//    types: DependencyTypeContainer,
+//) {
+//    types.register(
+//        "simple-maven",
+//        createMavenProvider()
+//    )
+//}
 
 
 private fun initSoftwareComponentGraph(
-    cache: Path,
     types: DependencyTypeContainer,
     boot: BootInstance
-): SoftwareComponentGraph {
-    return SoftwareComponentGraph(
-        cache,
-        CachingDataStore(SoftwareComponentDataAccess(cache)),
+): SoftwareComponentResolver {
+    return SoftwareComponentResolver(
         BasicArchiveResolutionProvider(
             Archives.Finders.ZIP_FINDER as ArchiveFinder<ArchiveReference>,
             Archives.Resolvers.ZIP_RESOLVER
         ),
         types,
-        boot, HashMap()
+        boot
     )
 }
 
-public fun createMavenProvider(
-    cache: Path,
-): DependencyGraphProvider<*, *, *> {
-    val dependencyGraph = createMavenDependencyGraph(cache)
+public fun createMavenProvider(): DependencyResolverProvider<*, *, *> {
+    val dependencyGraph = createMavenDependencyGraph()
 
     return object :
-        DependencyGraphProvider<SimpleMavenDescriptor, SimpleMavenArtifactRequest, SimpleMavenRepositorySettings> {
+        DependencyResolverProvider<SimpleMavenDescriptor, SimpleMavenArtifactRequest, SimpleMavenRepositorySettings> {
         override val name: String = "simple-maven"
-        override val graph: DependencyGraph<SimpleMavenDescriptor, SimpleMavenRepositorySettings> =
-            dependencyGraph
+        override val resolver = dependencyGraph
 
         override fun parseRequest(request: Map<String, String>): SimpleMavenArtifactRequest? {
             val descriptorName = request["descriptor"] ?: return null
@@ -150,18 +146,16 @@ public fun createMavenProvider(
     }
 }
 
-public fun createMavenDependencyGraph(
-    cachePath: Path,
-): MavenDependencyGraph {
+public fun createMavenDependencyGraph(): MavenDependencyResolver {
     val resolutionProvider = object : BasicArchiveResolutionProvider<ArchiveReference, ZipResolutionResult>(
         Archives.Finders.ZIP_FINDER as ArchiveFinder<ArchiveReference>,
         Archives.Resolvers.ZIP_RESOLVER,
     ) {}
-    val graph = MavenDependencyGraph(
-        cachePath,
-        CachingDataStore(
-            MavenDataAccess(cachePath)
-        ),
+    val graph = MavenDependencyResolver(
+//        cachePath,
+//        CachingDataStore(
+//            MavenDataAccess(cachePath)
+//        ),
         resolutionProvider
     )
 

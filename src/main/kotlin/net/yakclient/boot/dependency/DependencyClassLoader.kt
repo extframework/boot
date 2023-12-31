@@ -6,7 +6,6 @@ import net.yakclient.boot.loader.ArchiveClassProvider
 import net.yakclient.boot.loader.ArchiveSourceProvider
 import net.yakclient.boot.loader.DelegatingClassProvider
 import net.yakclient.boot.loader.IntegratedLoader
-import net.yakclient.boot.security.PrivilegeAccess
 import net.yakclient.boot.security.PrivilegeManager
 import net.yakclient.boot.security.SecureSourceDefiner
 
@@ -15,6 +14,6 @@ public fun DependencyClassLoader(ref: ArchiveReference, children: Set<ArchiveHan
     sp = ArchiveSourceProvider(ref),
     sd = SecureSourceDefiner(PrivilegeManager(parent, parent.privileges) {
         it.requester.parent?.request(it.privilege)
-    }),
+    }, ref.location),
     parent = ClassLoader.getSystemClassLoader()
 )

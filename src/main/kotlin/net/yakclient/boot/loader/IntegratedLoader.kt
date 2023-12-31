@@ -37,10 +37,12 @@ public open class IntegratedLoader(
         if (mn == null) sp.getResource(name) else sp.getResource(name, mn)
 
     override fun loadClass(name: String, resolve: Boolean): Class<*> =
-        findLoadedClass(name)
-            ?: tryDefine(name, resolve)
-            ?: super.loadClass(name, resolve)
-            ?: throw ClassNotFoundException(name)
+        synchronized(getClassLoadingLock(name)) {
+            findLoadedClass(name)
+                ?: tryDefine(name, resolve)
+                ?: super.loadClass(name, resolve)
+                ?: throw ClassNotFoundException(name)
+        }
 
     private fun tryDefine(name: String, resolve: Boolean): Class<*>? = sp.getSource(name)?.let {
         sd.define(

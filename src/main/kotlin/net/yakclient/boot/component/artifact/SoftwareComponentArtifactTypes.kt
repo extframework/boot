@@ -1,5 +1,6 @@
 package net.yakclient.boot.component.artifact
 
+import com.durganmcbroom.artifact.resolver.ArtifactMetadata
 import com.durganmcbroom.artifact.resolver.ArtifactReference
 import com.durganmcbroom.artifact.resolver.ArtifactStub
 import com.durganmcbroom.artifact.resolver.CheckedResource
@@ -15,6 +16,14 @@ public typealias SoftwareComponentRepositoryStub = SimpleMavenRepositoryStub
 public typealias SoftwareComponentDescriptor = SimpleMavenDescriptor
 
 public typealias SoftwareComponentChildInfo = SimpleMavenChildInfo
+
+//public class SoftwareComponentArtifactRequestomponentChildInfo(
+//    descriptor: SoftwareComponentDescriptor,
+//    candidates: List<SimpleMavenRepositoryStub>
+//) : SimpleMavenChildInfo(
+//    descriptor, candidates
+//)
+
 
 public data class SoftwareComponentDependencyInfo(
     val type: String,

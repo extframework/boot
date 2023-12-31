@@ -7,8 +7,7 @@ import com.durganmcbroom.artifact.resolver.simple.maven.HashType
 public class SoftwareComponentArtifactStubResolver(
     override val factory: RepositoryFactory<SoftwareComponentRepositorySettings, *, SoftwareComponentArtifactStub, SoftwareComponentArtifactReference, ArtifactRepository<SoftwareComponentArtifactRequest, SoftwareComponentArtifactStub, SoftwareComponentArtifactReference>>,
     preferredHash: HashType,
-) :
-    ArtifactStubResolver<SoftwareComponentRepositoryStub, SoftwareComponentArtifactStub, SoftwareComponentArtifactReference> {
+) : ArtifactStubResolver<SoftwareComponentRepositoryStub, SoftwareComponentArtifactStub, SoftwareComponentArtifactReference> {
     override val repositoryResolver: SoftwareComponentRepositoryStubResolver = SoftwareComponentRepositoryStubResolver(preferredHash)
 
     override fun resolve(stub: SoftwareComponentArtifactStub): Either<ArtifactException, SoftwareComponentArtifactReference> {

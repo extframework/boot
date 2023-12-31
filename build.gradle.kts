@@ -2,17 +2,17 @@ import com.github.jengelman.gradle.plugins.shadow.tasks.ConfigureShadowRelocatio
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 
 plugins {
-    kotlin("jvm") version "1.7.10"
+    kotlin("jvm") version "1.9.21"
 
     id("maven-publish")
-    id("org.jetbrains.dokka") version "1.6.0"
+    id("org.jetbrains.dokka") version "1.9.10"
     application
 
     id("com.github.johnrengelman.shadow") version "7.1.2"
 }
 
 group = "net.yakclient"
-version = "1.0-SNAPSHOT"
+version = "1.1-SNAPSHOT"
 
 application {
     mainClass.set("net.yakclient.boot.main.BootKt")
@@ -24,7 +24,9 @@ application {
     )
 }
 
-
+tasks.wrapper {
+    gradleVersion = "8.5"
+}
 
 configurations.all {
     resolutionStrategy.cacheChangingModulesFor(0, "seconds")
@@ -46,7 +48,6 @@ dependencies {
     implementation("com.durganmcbroom:artifact-resolver-simple-maven:1.0-SNAPSHOT") {
         isChanging = true
     }
-    implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-xml:2.13.4")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.13.4")
     implementation("net.yakclient:common-util:1.0-SNAPSHOT") {
         isChanging = true
@@ -65,6 +66,7 @@ dependencies {
     implementation("com.durganmcbroom:jobs-progress-simple:1.0-SNAPSHOT") {
         isChanging = true
     }
+
 }
 
 task<Jar>("sourcesJar") {
@@ -124,7 +126,7 @@ allprojects {
 
 
     group = "net.yakclient"
-    version = "1.0-SNAPSHOT"
+    version = "1.1-SNAPSHOT"
 
     repositories {
         mavenCentral()
@@ -155,6 +157,8 @@ allprojects {
             } else logger.quiet("Maven user and password not found.")
         }
     }
+
+
 
     kotlin {
         explicitApi()

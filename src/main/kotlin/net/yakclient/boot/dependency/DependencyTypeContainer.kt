@@ -1,11 +1,14 @@
 package net.yakclient.boot.dependency
 
-import net.yakclient.`object`.MutableObjectContainer
+import net.yakclient.boot.archive.ArchiveGraph
+import net.yakclient.`object`.ObjectContainerImpl
 
-//public class DependencyTypeProvider : ServiceMapCollector<String, DependencyGraphProvider<*, *, *>>({
-//    it.name
-//}) {
-//    public fun getByType(name: String): DependencyGraphProvider<*, *, *>? = services[name]
-//}
 
-public typealias DependencyTypeContainer = MutableObjectContainer<DependencyGraphProvider<*, *, *>>
+public class DependencyTypeContainer (
+    private val archiveGraph: ArchiveGraph
+): ObjectContainerImpl<DependencyResolverProvider<*, *, *>>() {
+    override fun register(name: String, obj: DependencyResolverProvider<*, *, *>): Boolean {
+        archiveGraph.registerResolver(obj.resolver)
+        return super.register(name, obj)
+    }
+}

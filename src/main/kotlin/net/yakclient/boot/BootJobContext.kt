@@ -5,7 +5,6 @@ import com.durganmcbroom.jobs.progress.JobWeight
 import com.durganmcbroom.jobs.progress.WeightedProgressTrackerFactory
 import com.durganmcbroom.jobs.progress.simple.SimpleProgressNotifierFactory
 import kotlinx.coroutines.*
-import net.yakclient.boot.archive.ArchiveLoadException
 import kotlin.coroutines.CoroutineContext
 
 //package net.yakclient.boot
@@ -54,15 +53,21 @@ import kotlin.coroutines.CoroutineContext
 //    return orNull()!!
 //}
 //
-public fun <T> JobResult<T, Throwable>.orThrow() : T {
+public fun <T> JobResult<T, Throwable>.orThrow(): T {
     if (wasFailure()) throw failureOrNull()!!
     return orNull()!!
 }
+
 //
 public fun <T, E> Either<E, T>.asOutput(): JobResult<T, E> {
     return if (this.isLeft()) JobResult.Failure((this as Either.Left).value)
     else JobResult.Success((this as Either.Right).value)
 }
+
+
+
+
+
 //
 //public data class BootJobContext(
 //    override val name: String,
@@ -95,8 +100,10 @@ public suspend fun <T> withWeight(influence: Int, block: suspend CoroutineScope.
     }
 }
 
-public fun bootFactories() : CoroutineContext = WeightedProgressTrackerFactory() + SimpleLoggerFactory() + SimpleProgressNotifierFactory()
-public inline fun <T, E> JobResult<T, E>.fix(block: (E) -> T) : T {
+public fun bootFactories(): CoroutineContext =
+    WeightedProgressTrackerFactory() + SimpleLoggerFactory() + SimpleProgressNotifierFactory()
+
+public inline fun <T, E> JobResult<T, E>.fix(block: (E) -> T): T {
     if (wasFailure()) return block(failureOrNull()!!)
     return orNull()!!
 }
