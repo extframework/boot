@@ -4,15 +4,16 @@ import java.net.URL
 import java.nio.ByteBuffer
 import java.security.ProtectionDomain
 
+// TODO Parallel capable, rename cp, sp, and sd to something reasonable (and then much refactoring)
 public open class IntegratedLoader(
-    private val cp: ClassProvider = object : ClassProvider {
+    protected val cp: ClassProvider = object : ClassProvider {
         override val packages: Set<String> = HashSet()
 
         override fun findClass(name: String): Class<*>? = null
 
         override fun findClass(name: String, module: String): Class<*>? = null
     },
-    private val sp: SourceProvider = object : SourceProvider {
+    protected val sp: SourceProvider = object : SourceProvider {
         override val packages: Set<String> = HashSet()
 
         override fun getSource(name: String): ByteBuffer? = null
@@ -21,7 +22,7 @@ public open class IntegratedLoader(
 
         override fun getResource(name: String, module: String): URL? = null
     },
-    private val sd: SourceDefiner = SourceDefiner { n, b, cl, d ->
+    protected val sd: SourceDefiner = SourceDefiner { n, b, cl, d ->
         d(n, b, ProtectionDomain(null, null, cl, null))
     },
     parent: ClassLoader,
@@ -44,7 +45,7 @@ public open class IntegratedLoader(
                 ?: throw ClassNotFoundException(name)
         }
 
-    private fun tryDefine(name: String, resolve: Boolean): Class<*>? = sp.getSource(name)?.let {
+    protected open fun tryDefine(name: String, resolve: Boolean): Class<*>? = sp.getSource(name)?.let {
         sd.define(
             name,
             it, this, ::defineClass
