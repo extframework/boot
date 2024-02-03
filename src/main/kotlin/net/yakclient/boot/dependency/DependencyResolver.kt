@@ -1,71 +1,97 @@
 package net.yakclient.boot.dependency
 
 import com.durganmcbroom.artifact.resolver.*
+import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenDescriptor
 import com.durganmcbroom.jobs.JobResult
 import com.durganmcbroom.jobs.jobScope
-import net.yakclient.archives.ResolutionResult
+import net.yakclient.archives.ArchiveHandle
 import net.yakclient.boot.archive.*
+import net.yakclient.boot.loader.*
 import net.yakclient.boot.security.PrivilegeAccess
 import net.yakclient.boot.security.PrivilegeManager
-import net.yakclient.boot.util.firstNotFailureOf
 import net.yakclient.boot.util.toSafeResource
-import kotlin.reflect.KClass
+import java.security.CodeSource
+import java.security.ProtectionDomain
+import java.security.cert.Certificate
 
 public abstract class DependencyResolver<
         K : ArtifactMetadata.Descriptor,
         R : ArtifactRequest<K>,
+        N : DependencyNode<N>,
         S : RepositorySettings,
-        RStub : RepositoryStub,
-        M : ArtifactMetadata<K, *>>(
-    private val archiveResolver: ArchiveResolutionProvider<ResolutionResult>,
-    private val privilegeManager: PrivilegeManager = PrivilegeManager(null, PrivilegeAccess.emptyPrivileges()) {},
-) : ArchiveNodeResolver<K, R, DependencyNode, S, RStub, M> {
-    override val nodeType: KClass<DependencyNode> = DependencyNode::class
+        M : ArtifactMetadata<K, *>,
+        >(
+    private val parentClassLoader: ClassLoader,
+    private val resolutionProvider: ArchiveResolutionProvider<*> = ZipResolutionProvider
+) : ArchiveNodeResolver<K, R, N, S, M> {
+
+    override val nodeType: Class<in N> = DependencyNode::class.java
+
     override suspend fun load(
         data: ArchiveData<K, CachedArchiveResource>,
-        resolver: ChildResolver
-    ): JobResult<DependencyNode, ArchiveException> = jobScope {
-        val children: Set<DependencyNode> = data.children.mapTo(HashSet()) {
-            resolver.load(it.descriptor as K, this@DependencyResolver)
+        helper: ResolutionHelper
+    ): JobResult<N, ArchiveException> = jobScope {
+        val parents: Set<N> = data.parents.mapTo(HashSet()) {
+            helper.load(it)
+        }
+
+        val access = helper.newAccessTree {
+            allDirect(parents)
         }
 
         val archive = data.resources["jar.jar"]?.let {
-            val childHandles = children.flatMap { it.handleOrChildren() }.toSet()
-            archiveResolver.resolve(
+            resolutionProvider.resolve(
                 it.path,
                 { ref ->
-                    DependencyClassLoader(ref, childHandles, privilegeManager)
+                    IntegratedLoader(
+                        name = data.descriptor.name,
+                        sourceProvider = ArchiveSourceProvider(ref),
+                        resourceProvider = ArchiveResourceProvider(ref),
+                        classProvider = DelegatingClassProvider(access.targets.map { target ->
+                            target.relationship.classes
+                        }),
+                        sourceDefiner = {n, b, cl, d ->
+                            d(n, b, ProtectionDomain(CodeSource(ref.location.toURL(), arrayOf<Certificate>()), null, cl, null))
+                        },
+                        parent = parentClassLoader,
+                    )
                 },
-                childHandles
+                parents.mapNotNullTo(HashSet(), DependencyNode<*>::archive)
             ).attempt().archive
+//            ContainerLoader.load(
+//                RawArchiveContainerInfo(
+//                    data.descriptor.name,
+//                    it.path,
+//                    access
+//                ),
+//                ContainerLoader.createHandle(),
+//                RawArchiveContainerLoader(ZipResolutionProvider, parentClassLoader),
+//                RootVolume,
+//                PrivilegeManager(parentPrivilegeManager, PrivilegeAccess.emptyPrivileges())
+//            ).attempt()
         }
 
-        DependencyNode(
+        constructNode(
+            data.descriptor,
             archive,
-            children,
-            data.descriptor
+            parents,
+            access,
         )
     }
 
+    protected abstract fun constructNode(
+        descriptor: K,
+        handle: ArchiveHandle?,
+        parents: Set<N>,
+        accessTree: ArchiveAccessTree,
+    ): N
+
     override suspend fun cache(
-        ref: ArtifactReference<M, ArtifactStub<R, RStub>>,
-        helper: ArchiveCacheHelper<RStub, S>
+        metadata: M,
+        helper: ArchiveCacheHelper<K>
     ): JobResult<ArchiveData<K, CacheableArchiveResource>, ArchiveException> = jobScope {
-        ArchiveData(
-            ref.metadata.descriptor,
-            ref.metadata.resource?.let {
-                mapOf("jar.jar" to CacheableArchiveResource(it.toSafeResource()))
-            } ?: mapOf(),
-            ref.children.map { stub ->
-                val firstNotFailureOf = stub.candidates.firstNotFailureOf {
-                    helper.cache(
-                        stub.request,
-                        helper.resolve(it).casuallyAttempt(),
-                        this@DependencyResolver
-                    )
-                }
-                firstNotFailureOf.attempt()
-            }
-        )
+        helper.withResource("jar.jar", metadata.resource?.toSafeResource())
+
+        helper.newData(metadata.descriptor)
     }
 }

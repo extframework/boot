@@ -8,6 +8,7 @@ import net.yakclient.boot.component.ComponentFactory
 import net.yakclient.boot.component.ComponentInstance
 import net.yakclient.boot.component.artifact.SoftwareComponentDescriptor
 import net.yakclient.boot.component.context.ContextNodeValue
+import net.yakclient.boot.dependency.DependencyNode
 import net.yakclient.boot.maven.MavenDependencyResolver
 import net.yakclient.boot.new
 import net.yakclient.boot.test.testBootInstance
@@ -81,7 +82,7 @@ class BootTestTest {
             ).orThrow()
 
             check(node.archive == null)
-            check(node.children.isEmpty())
+            check(node.parents.isEmpty())
         }
     }
 }

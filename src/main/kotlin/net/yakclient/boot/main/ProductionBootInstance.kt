@@ -21,6 +21,9 @@ import net.yakclient.boot.component.artifact.SoftwareComponentRepositorySettings
 import net.yakclient.boot.dependency.DependencyResolverProvider
 import net.yakclient.boot.dependency.DependencyTypeContainer
 import net.yakclient.boot.maven.MavenDependencyResolver
+import net.yakclient.boot.security.PrivilegeAccess
+import net.yakclient.boot.security.PrivilegeManager
+import net.yakclient.boot.security.Privileges
 import net.yakclient.common.util.resolve
 import orThrow
 import java.nio.file.Path
@@ -91,12 +94,12 @@ private fun initSoftwareComponentGraph(
     boot: BootInstance
 ): SoftwareComponentResolver {
     return SoftwareComponentResolver(
-        BasicArchiveResolutionProvider(
-            Archives.Finders.ZIP_FINDER as ArchiveFinder<ArchiveReference>,
-            Archives.Resolvers.ZIP_RESOLVER
-        ),
         types,
-        boot
+        boot,
+        BootInstance::class.java.classLoader,
+        PrivilegeManager(null, PrivilegeAccess.emptyPrivileges()) {
+            throw SecurityException()
+        }
     )
 }
 
@@ -147,16 +150,13 @@ public fun createMavenProvider(): DependencyResolverProvider<*, *, *> {
 }
 
 public fun createMavenDependencyGraph(): MavenDependencyResolver {
-    val resolutionProvider = object : BasicArchiveResolutionProvider<ArchiveReference, ZipResolutionResult>(
-        Archives.Finders.ZIP_FINDER as ArchiveFinder<ArchiveReference>,
-        Archives.Resolvers.ZIP_RESOLVER,
-    ) {}
+//    val resolutionProvider = object : BasicArchiveResolutionProvider<ArchiveReference, ZipResolutionResult>(
+//        Archives.Finders.ZIP_FINDER as ArchiveFinder<ArchiveReference>,
+//        Archives.Resolvers.ZIP_RESOLVER,
+//    ) {}
     val graph = MavenDependencyResolver(
-//        cachePath,
-//        CachingDataStore(
-//            MavenDataAccess(cachePath)
-//        ),
-        resolutionProvider
+        parentClassLoader = BootInstance::class.java.classLoader,
+//        parentPrivilegeManager = PrivilegeManager(null, PrivilegeAccess.emptyPrivileges())
     )
 
 

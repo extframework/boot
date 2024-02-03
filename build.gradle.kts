@@ -12,7 +12,7 @@ plugins {
 }
 
 group = "net.yakclient"
-version = "1.1-SNAPSHOT"
+version = "2.0-SNAPSHOT"
 
 application {
     mainClass.set("net.yakclient.boot.main.BootKt")
@@ -30,6 +30,12 @@ tasks.wrapper {
 
 configurations.all {
     resolutionStrategy.cacheChangingModulesFor(0, "seconds")
+}
+
+tasks.compileKotlin {
+    kotlinOptions {
+        freeCompilerArgs = listOf("-Xcontext-receivers")
+    }
 }
 
 dependencies {
@@ -126,7 +132,7 @@ allprojects {
 
 
     group = "net.yakclient"
-    version = "1.1-SNAPSHOT"
+    version = "2.0-SNAPSHOT"
 
     repositories {
         mavenCentral()

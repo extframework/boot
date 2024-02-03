@@ -2,12 +2,15 @@ package net.yakclient.boot.archive
 
 import com.durganmcbroom.artifact.resolver.ArtifactMetadata
 import net.yakclient.archives.ArchiveHandle
+import net.yakclient.boot.container.ArchiveContainer
 
 public interface ArchiveNode<T: ArchiveNode<T>> {
     public val descriptor: ArtifactMetadata.Descriptor
     public val archive: ArchiveHandle?
-    public val children: Set<T>
+    public val parents: Set<T>
+    public val access: ArchiveAccessTree
+    public val resolver: ArchiveNodeResolver<*, *, T, *, *>
 }
 
-public fun ArchiveNode<*>.handleOrChildren(): Set<ArchiveHandle> =
-    archive?.let(::setOf) ?: children.flatMapTo(HashSet()) { it.handleOrChildren() }
+//public fun ArchiveNode<*>.handleOrChildren(): Set<ArchiveHandle> =
+//    archive?.let(::setOf) ?: children.flatMapTo(HashSet()) { it.handleOrChildren() }

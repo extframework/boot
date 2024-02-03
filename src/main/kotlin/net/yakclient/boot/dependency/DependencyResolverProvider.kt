@@ -10,7 +10,7 @@ import net.yakclient.boot.archive.*
 
 public interface DependencyResolverProvider<K : ArtifactMetadata.Descriptor, R : ArtifactRequest<K>, S : RepositorySettings> {
     public val name: String
-    public val resolver: DependencyResolver<K, R, S, *, *>
+    public val resolver: DependencyResolver<K, R, out DependencyNode<*>, S, *>
 
     public fun parseRequest(request: Map<String, String>): R?
 
@@ -26,8 +26,8 @@ public suspend fun <K: ArtifactMetadata.Descriptor, S : RepositorySettings, R : 
     pSettings: Map<String, String>,
     pRequest: Map<String, String>,
     trace: ArchiveTrace,
-    cacheHelper: ArchiveCacheHelper<*, *>
-): JobResult<ArchiveChild<*>, ArchiveException> = coroutineScope {
+    cacheHelper: ArchiveCacheHelper<*>
+): JobResult<ArchiveParent<*>, ArchiveException> = coroutineScope {
     val settings: S = parseSettings(pSettings)
         ?: return@coroutineScope JobResult.Failure(ArchiveException.DependencyInfoParseFailed("Failed to parse artifact repository settings: '$pSettings'", trace))
 

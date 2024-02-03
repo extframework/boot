@@ -21,11 +21,11 @@ public object PrivilegeAccess {
 
     public fun emptyPrivileges() : Privileges = Privileges(ArrayList())
 
-    public fun allPrivileges(): Privileges {
-        val privilege = AllPrivilege()
-        if (!hasPrivilege(privilege)) throw SecurityException("Insufficient privileges to create all privileges!")
-
-        return Privileges(mutableListOf(privilege))
-    }
+//    public fun allPrivileges(): Privileges {
+//        val privilege = AllPrivilege()
+//        if (!hasPrivilege(privilege)) throw SecurityException("Insufficient privileges to create all privileges!")
+//
+//        return Privileges(mutableListOf(privilege))
+//    }
 }
 

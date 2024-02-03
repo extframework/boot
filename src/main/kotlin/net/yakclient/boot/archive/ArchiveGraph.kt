@@ -1,69 +1,83 @@
 package net.yakclient.boot.archive
 
+import arrow.core.Either
+import arrow.core.getOrHandle
 import asOutput
 import com.durganmcbroom.artifact.resolver.*
 import com.durganmcbroom.jobs.*
+import com.durganmcbroom.jobs.Job
+import com.durganmcbroom.jobs.logging.LogLevel
+import com.durganmcbroom.jobs.logging.logger
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.KotlinModule
 import com.fasterxml.jackson.module.kotlin.readValue
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.*
+import net.yakclient.boot.API_VERSION
+import net.yakclient.boot.loader.ArchiveClassProvider
+import net.yakclient.boot.loader.ArchiveResourceProvider
+import net.yakclient.boot.util.ensure
 import net.yakclient.common.util.*
+import net.yakclient.common.util.resource.LocalResource
 import net.yakclient.common.util.resource.SafeResource
 import net.yakclient.`object`.MutableObjectContainer
 import net.yakclient.`object`.ObjectContainerImpl
 import orThrow
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.CopyOnWriteArraySet
+import kotlin.coroutines.EmptyCoroutineContext
+import kotlin.coroutines.coroutineContext
 import kotlin.io.path.readBytes
 import kotlin.io.path.writeBytes
 import kotlin.reflect.KClass
+import kotlin.reflect.jvm.jvmName
 
 public open class ArchiveGraph(
-    public val path: Path,
+    path: Path,
     private val mutable: MutableMap<ArtifactMetadata.Descriptor, ArchiveNode<*>> = HashMap()
 ) : Map<ArtifactMetadata.Descriptor, ArchiveNode<*>> by mutable {
-    private val resolvers: MutableObjectContainer<ArchiveNodeResolver<*, *, *, *, *, *>> = ObjectContainerImpl()
+    private val resolvers: MutableObjectContainer<ArchiveNodeResolver<*, *, *, *, *>> = ObjectContainerImpl()
+
+    public val path: Path = path resolve API_VERSION
+
 
     // Public API
-    public fun registerResolver(resolver: ArchiveNodeResolver<*, *, *, *, *, *>) {
+    public fun registerResolver(resolver: ArchiveNodeResolver<*, *, *, *, *>) {
         resolvers.register(resolver.name, resolver)
     }
 
     public suspend fun <K : ArtifactMetadata.Descriptor, T : ArchiveNode<T>> get(
         descriptor: K,
-        resolver: ArchiveNodeResolver<K, *, T, *, *, *>
+        resolver: ArchiveNodeResolver<K, *, T, *, *>
     ): JobResult<T, ArchiveException> = withContext(ArchiveTraceFactory) {
-        getInternal(descriptor, ArchiveTrace(descriptor, null), resolver)
+        getInternal(descriptor, resolver)
     }
 
-    public suspend fun <D : ArtifactMetadata.Descriptor, T : ArtifactRequest<D>, R : RepositorySettings, RStub : RepositoryStub> cache(
-        request: T,
-        repository: R,
-        resolver: ArchiveNodeResolver<D, T, *, R, RStub, *>
-    ): JobResult<Unit, ArchiveException> =
-        withContext(ArchiveTraceFactory) {
-            cacheInternal<D, T, R, RStub>(request, repository, resolver)
-        }
-
-
-    // Internal
-
-    private fun checkRegistration(resolver: ArchiveNodeResolver<*, *, *, *, *, *>) {
+    private fun checkRegistration(resolver: ArchiveNodeResolver<*, *, *, *, *>) {
         if (resolvers.has(resolver.name)) return
         registerResolver(resolver)
     }
+
     private suspend fun <K : ArtifactMetadata.Descriptor, T : ArchiveNode<T>> getInternal(
         descriptor: K,
-        trace: ArchiveTrace,
-        resolver: ArchiveNodeResolver<K, *, T, *, *, *>
-    ): JobResult<T, ArchiveException> {
+        resolver: ArchiveNodeResolver<K, *, T, *, *>,
+    ): JobResult<T, ArchiveException> = job(JobName("Get archive: '$descriptor'") + CurrentArchive(descriptor)) {
         checkRegistration(resolver)
-        return mutable[descriptor]?.let {
-            check(resolver.nodeType.isInstance(it)) { "Found archive with descriptor: '$descriptor' but it does not match the expected type of: '${resolver.nodeType.qualifiedName}'" }
 
-            JobResult.Success(it as T)
-        } ?: job(JobName("Get archive: '$descriptor'") + CurrentArchive(descriptor)) {
+        mutable[descriptor]?.let {
+            if (!resolver.nodeType.isInstance(it)) fail(
+                ArchiveException.IllegalState(
+                    "Found archive with descriptor: '$descriptor' but it does not match the expected type of: '${resolver.nodeType.name}'",
+                    coroutineContext[ArchiveTrace]!!
+                )
+            )
+
+            it as T
+        } ?: run {
+            val trace = jobElement(ArchiveTrace)
+
+            logger.log(LogLevel.INFO, "Loading archive: '$descriptor'")
+
             val metadata = (path resolve resolver.pathForDescriptor(descriptor, "archive-metadata", "json"))
                 .takeIf(Files::exists)
                 ?.let {
@@ -78,34 +92,89 @@ public open class ArchiveGraph(
                     (path resolve resolver.pathForDescriptor(descriptor, classifier, extension))
                         .let(::CachedArchiveResource)
                 },
-                metadata.children.map {
-                    ArchiveChild(
-                        it.resolver,
-                        resolvers
-                            .get(it.resolver)
-                            ?.deserializeDescriptor(it.descriptor)
-                            ?.attempt() ?: fail(
-                            ArchiveException.IllegalState(
-                                "Failed to find resolver: '${resolver.name}' when parsing descriptor for child: '${it.descriptor}'",
-                                trace
-                            )
-                        )
+                metadata.parents.map {
+                    ArchiveParent(
+                        resolver
+                            .deserializeDescriptor(it.descriptor)
+                            .attempt()
                     )
                 }
             )
 
             try {
-                resolver.load(data, object : ChildResolver {
-                    override suspend fun <T : ArtifactMetadata.Descriptor, N : ArchiveNode<N>> load(
-                        descriptor: T,
-                        resolver: ArchiveNodeResolver<T, *, N, *, *, *>
-                    ): N {
-                        return getInternal(descriptor, trace, resolver).orThrow()
-                    }
-                }).attempt().also {
+                resolver.load(data,
+                    object : ResolutionHelper {
+                        override suspend fun <T : ArtifactMetadata.Descriptor, N : ArchiveNode<N>> load(
+                            descriptor: T,
+                            resolver: ArchiveNodeResolver<T, *, N, *, *>
+                        ): N {
+                            return getInternal(
+                                descriptor,
+                                resolver,
+                            ).orThrow()
+                        }
+
+                        override suspend fun <T : ArtifactMetadata.Descriptor, N : ArchiveNode<N>> getResolver(
+                            name: String,
+                            descType: Class<T>,
+                            nodeType: Class<N>,
+                        ): JobResult<ArchiveNodeResolver<T, *, N, *, *>, ArchiveException> = jobScope {
+                            val thisResolver =
+                                resolvers.get(name) ?: fail(ArchiveException.ArchiveTypeNotFound(name, trace))
+                            ensure(nodeType.isAssignableFrom(thisResolver.nodeType)) {
+                                ArchiveException.IllegalState(
+                                    "'$name' resolvers node type: '${thisResolver.nodeType.name}' is not assignable from expected: '${nodeType.name}'.",
+                                    trace
+                                )
+                            }
+
+                            thisResolver as ArchiveNodeResolver<T, *, N, *, *>
+                        }
+
+                        override fun newAccessTree(scope: ResolutionHelper.AccessTreeScope.() -> Unit): ArchiveAccessTree {
+                            val allTargets = ArrayList<ArchiveTarget>()
+
+                            val scopeObject = object : ResolutionHelper.AccessTreeScope {
+                                override fun direct(dependency: ArchiveNode<*>) {
+                                    val directTarget = ArchiveTarget(
+                                        dependency.descriptor,
+                                        ArchiveRelationship.Direct(
+                                            ArchiveClassProvider(dependency.archive),
+                                            ArchiveResourceProvider(dependency.archive),
+                                        )
+                                    )
+
+                                    val transitiveTargets = dependency.access.targets.map {
+                                        ArchiveTarget(
+                                            it.descriptor,
+                                            ArchiveRelationship.Transitive(
+                                                it.relationship.classes,
+                                                it.relationship.resources,
+                                            )
+                                        )
+                                    }
+
+                                    allTargets.add(directTarget)
+                                    allTargets.addAll(transitiveTargets)
+                                }
+
+                                override fun rawTarget(target: ArchiveTarget) {
+                                    allTargets.add(target)
+                                }
+                            }
+                            scopeObject.scope()
+
+                            val preliminaryTree: ArchiveAccessTree = object : ArchiveAccessTree {
+                                override val descriptor: ArtifactMetadata.Descriptor = data.descriptor
+                                override val targets: Set<ArchiveTarget> = allTargets.toSet()
+                            }
+
+                            return resolver.auditor.audit(preliminaryTree)
+                        }
+                    }).attempt().also {
                     fun addAll(n: T) {
                         mutable[n.descriptor] = n
-                        n.children.forEach(::addAll)
+                        n.parents.forEach(::addAll)
                     }
 
                     addAll(it)
@@ -118,106 +187,248 @@ public open class ArchiveGraph(
 
     private data class CacheableArchiveInfo(
         val resources: List<String>,
-        val children: List<CacheableChildInfo>
+        val parents: List<CacheableParentInfo>
     )
 
-    private data class CacheableChildInfo(
+    private data class CacheableParentInfo(
         val resolver: String,
         val descriptor: Map<String, String>
     )
 
-    // Not thread safe
-    private val beingResolved: MutableSet<ArtifactMetadata.Descriptor> = HashSet()
+    private fun <D : ArtifactMetadata.Descriptor> isCached(
+        descriptor: D,
+        resolver: ArchiveNodeResolver<D, *, *, *, *>
+    ): Boolean {
+        if (contains(descriptor)) {
+            return true
+        }
+
+        val metadataPath = path resolve resolver.pathForDescriptor(descriptor, "archive-metadata", "json")
+
+        return Files.exists(metadataPath)
+    }
+
+    public suspend fun <D : ArtifactMetadata.Descriptor, T : ArtifactRequest<D>, R : RepositorySettings> cache(
+        request: T,
+        repository: R,
+        resolver: ArchiveNodeResolver<D, T, *, R, *>
+    ): JobResult<Unit, ArchiveException> {
+        if (isCached(request.descriptor, resolver)) return JobResult.Success(Unit)
+
+        return job(JobName("Resolve artifact: '${request.descriptor.name}'")) {
+            @Suppress(CAST)
+            val factory =
+                resolver.factory as RepositoryFactory<
+                        R,
+                        T,
+                        ArtifactStub<T, *>,
+                        ArtifactReference<*, ArtifactStub<T, *>>,
+                        ArtifactRepository<T, ArtifactStub<T, *>, ArtifactReference<*, ArtifactStub<T, *>>>>
+
+            val context: ResolutionContext<T, ArtifactStub<T, *>, ArtifactReference<*, ArtifactStub<T, *>>> =
+                factory.createContext(repository)
+
+            logger.log(LogLevel.INFO, "Building artifact tree for: '${request.descriptor}'...")
+
+            val artifact = context.getAndResolve(request)
+                .asOutput()
+                .mapFailure {
+                    ArchiveException.ArtifactResolutionException(
+                        it,
+                        ArchiveTrace(request.descriptor, null)
+                    )
+                }
+                .attempt()
+
+            logger.log(LogLevel.INFO, "Caching archive tree:")
+
+            val alreadyPrinted = HashSet<ArtifactMetadata.Descriptor>()
+
+            fun logTree(artifact: Artifact, prefix: String, isLast: Boolean) {
+                val hasntSeenBefore = alreadyPrinted.add(artifact.metadata.descriptor)
+                logger.log(
+                    LogLevel.INFO, prefix
+                            + (if (isLast) "\\---" else "+---")
+                            + " "
+                            + artifact.metadata.descriptor.name
+                            + (if (!hasntSeenBefore) "***" else "")
+                )
+
+                if (hasntSeenBefore) artifact.children
+                    .withIndex()
+                    .forEach { (index, it) ->
+                        val childIsLast = artifact.children.lastIndex == index
+                        val newPrefix = prefix + (if (isLast)
+                            "    "
+                        else "|   ") + " "
+
+                        when (it) {
+                            is Either.Left -> logger.log(
+                                LogLevel.WARNING,
+                                newPrefix + (if (childIsLast) "\\---" else "+---") + " <STUB> " + it.value.request.descriptor
+                            )
+
+                            is Either.Right -> logTree(it.value, newPrefix, childIsLast)
+                        }
+                    }
+            }
+            logTree(artifact, "", true)
+
+            withContext(ArchiveTraceFactory) {
+                cacheInternal(
+                    artifact,
+                    resolver
+                ).attempt()
+            }
+        }
+    }
+
+    private val beingResolved: MutableSet<ArtifactMetadata.Descriptor> = CopyOnWriteArraySet()
     private suspend fun <
             D : ArtifactMetadata.Descriptor,
             T : ArtifactRequest<D>,
             R : RepositorySettings,
-            RStub : RepositoryStub> cacheInternal(
-        request: T,
-        repository: R,
-        resolver: ArchiveNodeResolver<D, T, *, R, *, *>
-    ): JobResult<Unit, ArchiveException> = withContext(CurrentArchive(request.descriptor)) {
+//            RStub : RepositoryStub
+            > cacheInternal(
+//        request: T,
+//        repository: R,
+        artifact: Artifact,
+        resolver: ArchiveNodeResolver<D, T, *, R, *>
+    ): JobResult<Unit, ArchiveException> = withContext(CurrentArchive(artifact.metadata.descriptor)) {
         checkRegistration(resolver)
+
         if (coroutineContext[ArchiveTrace]?.isCircular() == true) return@withContext JobResult.Failure(
             ArchiveException.CircularArtifactException(
                 coroutineContext[ArchiveTrace]!!
             )
         )
 
-        val descriptor by request::descriptor
+        if (!resolver.metadataType.isInstance(artifact.metadata)) {
+            return@withContext JobResult.Failure(
+                ArchiveException.IllegalState(
+                    "Invalid metadata type for artifact: '$artifact', expected the entire tree to be of type: '${resolver.metadataType::class.jvmName}'",
+                    jobElement(ArchiveTrace)
+                )
+            )
+        }
+        val metadata = artifact.metadata as ArtifactMetadata<D, *>
+
+        val descriptor by metadata::descriptor
 
         val metadataPath = path resolve resolver.pathForDescriptor(descriptor, "archive-metadata", "json")
-        if (Files.exists(metadataPath))
-            return@withContext JobResult.Success(Unit)
+
+        if (isCached(descriptor, resolver)) return@withContext JobResult.Success(Unit)
+
         if (!beingResolved.add(descriptor))
             return@withContext JobResult.Success(Unit)
 
-        val result = job(JobName("Cache archive: '${request.descriptor}'") + CurrentArchive(request.descriptor)) {
+        val result = job(JobName("Cache archive: '${descriptor}'") + CurrentArchive(descriptor)) {
             val trace = jobElement(ArchiveTrace)
 
-            @Suppress(CAST)
-            val factory =
-                resolver.factory as RepositoryFactory<
-                        R,
-                        T,
-                        ArtifactStub<T, RStub>,
-                        ArtifactReference<*, ArtifactStub<T, RStub>>,
-                        ArtifactRepository<T, ArtifactStub<T, RStub>, ArtifactReference<*, ArtifactStub<T, RStub>>>>
 
-            val context: ResolutionContext<T, ArtifactStub<T, RStub>, ArtifactReference<*, ArtifactStub<T, RStub>>> =
-                factory.createContext(repository)
+//            val parents = artifact.children.map { it.asOutput() }.mapNotFailure()
+//                .mapFailure {
+//                    ArchiveException.ArtifactResolutionException(
+//                        ArtifactException.ArtifactNotFound(
+//                            it.request.descriptor,
+//                            it.candidates.map(RepositoryStub::toString)
+//                        ),
+//                        trace
+//                    )
+//                }.attempt()
 
-            val reference =
-                context.repositoryContext.artifactRepository.get(request)
-                    .asOutput()
-                    .mapFailure { ArchiveException.ArtifactResolutionException(it, trace) }.attempt()
+            val result = (resolver as ArchiveNodeResolver<D, T, *, R, ArtifactMetadata<D, *>>)
+                .cache(
+                    metadata,
+                    object : ArchiveCacheHelper<D> {
+                        private var resources: MutableMap<String, CacheableArchiveResource> = HashMap()
+                        override suspend fun <D : ArtifactMetadata.Descriptor, T : ArtifactRequest<D>, R : RepositorySettings> cache(
+                            request: T,
+                            repository: R,
+                            resolver: ArchiveNodeResolver<D, T, *, R, *>
+                        ): JobResult<ArchiveParent<D>, ArchiveException> {
+                            // Starts a new caching job.
 
-            if (!resolver.metadataType.isInstance(reference.metadata)) fail(
-                ArchiveException.IllegalState(
-                    "Failed to produce appropriate artifact metadata when evaluating archive: '${request.descriptor}' under resolver: '${resolver.name}'",
-                    trace
-                )
-            )
 
-            val result = (resolver as ArchiveNodeResolver<*, T, *, R, RStub, ArtifactMetadata<*, *>>)
-                .cache(reference, object : ArchiveCacheHelper<RStub, R> {
-                    override suspend fun <D : ArtifactMetadata.Descriptor, T : ArtifactRequest<D>, R : RepositorySettings, LocalRStub : RepositoryStub> cache(
-                        request: T,
-                        repository: R,
-                        resolver: ArchiveNodeResolver<D, T, *, R, LocalRStub, *>
-                    ): JobResult<ArchiveChild<D>, ArchiveException> {
-                        return cacheInternal<D, T, R, LocalRStub>(
-                            request,
-                            repository,
-                            /*cacheInternal@*///trace.child(request.descriptor)
-                            resolver
-                        ).map {
-                            ArchiveChild(
-                                resolver.name, request.descriptor
+                            val originalContext = coroutineContext
+                                .minusKey(ArchiveTrace)
+                                .minusKey(ArchiveTraceFactory)
+                                .minusKey(CurrentArchive)
+
+                            val job = CoroutineScope(originalContext).async {
+                                runBlocking(originalContext) {
+                                    this@ArchiveGraph.cache(
+                                        request, repository, resolver
+                                    ).map {
+                                        ArchiveParent(
+                                            request.descriptor
+                                        )
+                                    }
+                                }
+                            }
+
+                            return job.await()
+                        }
+
+                        override suspend fun <T : ArtifactRequest<*>, R : RepositorySettings> getResolver(
+                            name: String,
+                            requestType: Class<T>,
+                            repositoryType: Class<R>
+                        ): JobResult<ArchiveNodeResolver<*, T, *, R, *>, ArchiveException> = jobScope {
+                            val thisResolver =
+                                resolvers.get(name) ?: fail(ArchiveException.ArchiveTypeNotFound(name, trace))
+
+                            thisResolver as ArchiveNodeResolver<*, T, *, R, *>
+                        }
+
+                        override fun withResource(name: String, resource: SafeResource) {
+                            resources[name] = CacheableArchiveResource(resource)
+                        }
+
+                        override fun newData(descriptor: D): ArchiveData<D, CacheableArchiveResource> {
+                            return ArchiveData(
+                                descriptor,
+                                resources,
+                                artifact.children.map { child ->
+                                    val childDescriptor = child.map { it.metadata.descriptor }.getOrHandle { it.request.descriptor } as D
+
+                                    ArchiveParent(
+                                        childDescriptor
+                                    )
+                                }
                             )
                         }
                     }
+                ).attempt()
 
-                    override suspend fun resolve(stub: RStub): JobResult<R, ArchiveException.ArtifactResolutionException> {
-                        return (context.resolverContext.stubResolver.repositoryResolver as RepositoryStubResolver<RStub, R>)
-                            .resolve(stub)
-                            .asOutput()
-                            .mapFailure { ArchiveException.ArtifactResolutionException(it, trace) }
-                    }
-                }).attempt()
+            for (child in artifact.children) {
+                val childDescriptor = child.map { it.metadata.descriptor }.getOrHandle { it.request.descriptor } as D
+
+                if (isCached(childDescriptor, resolver)) continue
+
+                cacheInternal(child.asOutput().mapFailure {
+                    ArchiveException.ArtifactResolutionException(
+                        ArtifactException.ArtifactNotFound(
+                            it.request.descriptor,
+                            it.candidates.map(RepositoryStub::toString)
+                        ),
+                        trace
+                    )
+                }.attempt(), resolver).attempt()
+            }
 
             val metadataResource = CacheableArchiveInfo(
                 result.resources.keys.toList(),
-                result.children.map {
-                    val childResolver =
-                        (resolvers.get(it.resolver) as? ArchiveNodeResolver<ArtifactMetadata.Descriptor, *, *, *, *, *>)
-                            ?: fail(ArchiveException.ArchiveTypeNotFound(it.resolver, trace))
+                result.parents.map {
+//                    val childResolver = resolver
+//                        (resolvers.get(it.resolver) as? ArchiveNodeResolver<ArtifactMetadata.Descriptor, *, *, *, *>)
+//                            ?: fail(ArchiveException.ArchiveTypeNotFound(it.resolver, trace))
 
-                    val childDescriptor = childResolver.serializeDescriptor(it.descriptor)
+                    val parentDescriptor = resolver.serializeDescriptor(it.descriptor)
 
-                    CacheableChildInfo(
-                        it.resolver,
-                        childDescriptor
+                    CacheableParentInfo(
+                        resolver.name,
+                        parentDescriptor
                     )
                 }).let(ObjectMapper().registerModule(KotlinModule.Builder().build())::writeValueAsBytes)
 
@@ -238,7 +449,6 @@ public open class ArchiveGraph(
 
                 resource.resource copyTo (path resolve resolver.pathForDescriptor(descriptor, classifier, extension))
             }
-
         }
         beingResolved.remove(descriptor)
         result
@@ -258,7 +468,6 @@ private object ArchiveTraceFactory : JobElementFactory, JobElementKey<ArchiveTra
             }
         }
     }
-
 }
 
 private data class CurrentArchive(
@@ -295,21 +504,79 @@ public data class ArchiveTrace(
     }
 }
 
-public interface ChildResolver {
+public interface ResolutionHelper {
     public suspend fun <T : ArtifactMetadata.Descriptor, N : ArchiveNode<N>> load(
         descriptor: T,
-        resolver: ArchiveNodeResolver<T, *, N, *, *, *>
+        resolver: ArchiveNodeResolver<T, *, N, *, *>
     ): N
+
+    public suspend fun <T : ArtifactMetadata.Descriptor, N : ArchiveNode<N>> getResolver(
+        name: String,
+        descType: Class<T>,
+        nodeType: Class<N>,
+    ): JobResult<ArchiveNodeResolver<T, *, N, *, *>, ArchiveException>
+
+    public fun newAccessTree(scope: AccessTreeScope.() -> Unit): ArchiveAccessTree
+
+    public interface AccessTreeScope {
+        public fun direct(dependency: ArchiveNode<*>)
+
+        public fun allDirect(dependencies: Collection<ArchiveNode<*>>) {
+            for (d in dependencies) direct(d)
+        }
+
+        public fun rawTarget(
+            target: ArchiveTarget
+        )
+    }
 }
 
-public interface ArchiveCacheHelper<RStub : RepositoryStub, RSettings : RepositorySettings> {
-    public suspend fun <D : ArtifactMetadata.Descriptor, T : ArtifactRequest<D>, R : RepositorySettings, LocalRStub : RepositoryStub> cache(
+public suspend fun <T : ArtifactMetadata.Descriptor, N : ArchiveNode<N>> ResolutionHelper.getResolver(
+    name: String,
+    descType: KClass<T>,
+    nodeType: KClass<N>,
+): JobResult<ArchiveNodeResolver<T, *, N, *, *>, ArchiveException> {
+    return getResolver(name, descType.java, nodeType.java)
+}
+
+context(nodeResolver@ ArchiveNodeResolver<D, *, N, *, *>)
+public suspend fun <D : ArtifactMetadata.Descriptor, N : ArchiveNode<N>> ResolutionHelper.load(parent: ArchiveParent<D>): N {
+    return load(
+        parent.descriptor,
+        this@nodeResolver,
+    )
+}
+
+public interface ArchiveCacheHelper<K : ArtifactMetadata.Descriptor> {
+    public suspend fun <D : ArtifactMetadata.Descriptor, T : ArtifactRequest<D>, R : RepositorySettings> cache(
         request: T,
         repository: R,
-        resolver: ArchiveNodeResolver<D, T, *, R, LocalRStub, *>
-    ): JobResult<ArchiveChild<D>, ArchiveException>
+        resolver: ArchiveNodeResolver<D, T, *, R, *>
+    ): JobResult<ArchiveParent<D>, ArchiveException>
 
-    public suspend fun resolve(stub: RStub): JobResult<RSettings, ArchiveException.ArtifactResolutionException>
+    public suspend fun <T : ArtifactRequest<*>, R : RepositorySettings> getResolver(
+        name: String,
+        requestType: Class<T>,
+        repositoryType: Class<R>,
+    ): JobResult<ArchiveNodeResolver<*, T, *, R, *>, ArchiveException>
+//
+//    public suspend fun resolve(stub: RStub): JobResult<RSettings, ArchiveException.ArtifactResolutionException>
+
+
+    public fun withResource(name: String, resource: SafeResource)
+
+    public fun withResources(resources: Map<String, SafeResource>) {
+        resources.forEach {
+            withResource(it.key, it.value)
+        }
+    }
+
+    public fun newData(descriptor: K): ArchiveData<K, CacheableArchiveResource>
+}
+
+public fun ArchiveCacheHelper<*>.withResource(name: String, resource: SafeResource?) {
+    if (resource == null) return
+    withResource(name, resource)
 }
 
 public interface ArchiveNodeResolver<
@@ -317,15 +584,18 @@ public interface ArchiveNodeResolver<
         R : ArtifactRequest<K>,
         V : ArchiveNode<V>,
         S : RepositorySettings,
-        RStub : RepositoryStub,
-        M : ArtifactMetadata<K, *>,
-        > {
+        M : ArtifactMetadata<K, *>> {
     public val name: String
 
-    public val nodeType: KClass<V>
-    public val metadataType: KClass<M>
+    public val nodeType: Class<in V>
+    public val metadataType: Class<M>
 
     public val factory: RepositoryFactory<S, R, *, ArtifactReference<M, *>, *>
+
+    public val auditor: ArchiveAccessAuditor
+        get() = ArchiveAccessAuditor { tree -> tree }
+//    public val auditors: List<ArchiveAccessAuditor<K>>
+//        get() = listOf()
 
     public fun serializeDescriptor(
         descriptor: K
@@ -335,7 +605,8 @@ public interface ArchiveNodeResolver<
         descriptor: Map<String, String>
     ): JobResult<K, ArchiveException>
 
-    // A relative path, not absolute
+    // Will be resolved against the base directory, this means absolute paths can technically
+    // work but for most cases, just use a relative path (not starting with /)
     public fun pathForDescriptor(
         descriptor: K,
         classifier: String,
@@ -344,19 +615,26 @@ public interface ArchiveNodeResolver<
 
     public suspend fun load(
         data: ArchiveData<K, CachedArchiveResource>,
-        resolver: ChildResolver
+//        accessTree: ArchiveAccessTree<K>,
+        helper: ResolutionHelper
     ): JobResult<V, ArchiveException>
 
     public suspend fun cache(
-        ref: ArtifactReference<M, ArtifactStub<R, RStub>>,
-        helper: ArchiveCacheHelper<RStub, S>
+//        ref: ArtifactReference<M, ArtifactStub<R, RStub>>,
+        metadata: M,
+//        children: List<K>,
+        helper: ArchiveCacheHelper<K>
     ): JobResult<ArchiveData<K, CacheableArchiveResource>, ArchiveException>
 }
 
-public suspend fun ArchiveNodeResolver<*, *, *, *, *, *>.trace(): ArchiveTrace = coroutineScope {
+public suspend fun ArchiveNodeResolver<*, *, *, *, *>.trace(): ArchiveTrace = coroutineScope {
     jobElement(ArchiveTrace)
 }
 
+//public data class ArchiveDataTree<K : ArtifactMetadata.Descriptor, T : ArchiveResource>(
+//    val data: ArchiveData<K, T>,
+//    val children: List<ArchiveDataTree<K, T>>
+//)
 
 public sealed interface ArchiveResource
 
@@ -368,16 +646,15 @@ public data class CachedArchiveResource(
     public val path: Path
 ) : ArchiveResource
 
-public data class ArchiveData<K : ArtifactMetadata.Descriptor, T : ArchiveResource>(
+public data class ArchiveData<K : ArtifactMetadata.Descriptor, T : ArchiveResource> internal constructor(
     val descriptor: K,
     // Keys expected to be in <classifier>.<extension> format, ie 'more-info.json'
     val resources: Map<String, T>,
     //When caching: descriptor, resolver, repository, extra metadata
     //When loading: descriptor, resolver, extra metadata
-    val children: List<ArchiveChild<*>>
+    val parents: List<ArchiveParent<K>>
 )
 
-public data class ArchiveChild<T : ArtifactMetadata.Descriptor> internal constructor(
-    val resolver: String,
+public data class ArchiveParent<T : ArtifactMetadata.Descriptor> internal constructor(
     val descriptor: T
 )

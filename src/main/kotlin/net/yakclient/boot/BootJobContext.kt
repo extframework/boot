@@ -1,10 +1,18 @@
 import arrow.core.Either
+import com.durganmcbroom.jobs.BasicJobElementFactory
 import com.durganmcbroom.jobs.JobResult
-import com.durganmcbroom.jobs.logging.simple.SimpleLoggerFactory
+import com.durganmcbroom.jobs.logging.LogLevel
+import com.durganmcbroom.jobs.logging.Logger
+import com.durganmcbroom.jobs.logging.LoggerFactory
 import com.durganmcbroom.jobs.progress.JobWeight
-import com.durganmcbroom.jobs.progress.WeightedProgressTrackerFactory
-import com.durganmcbroom.jobs.progress.simple.SimpleProgressNotifierFactory
 import kotlinx.coroutines.*
+import java.time.ZoneId
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
+import java.util.logging.Handler
+import java.util.logging.Level
+import java.util.logging.LogManager
+import java.util.logging.LogRecord
 import kotlin.coroutines.CoroutineContext
 
 //package net.yakclient.boot
@@ -100,8 +108,85 @@ public suspend fun <T> withWeight(influence: Int, block: suspend CoroutineScope.
     }
 }
 
+private class BootLogger (
+    val realLogger: java.util.logging.Logger
+) : Logger {
+    companion object {
+        fun createLogger(name: String) : java.util.logging.Logger {
+            LogManager.getLogManager().reset()
+            val rootLogger: java.util.logging.Logger = LogManager.getLogManager().getLogger("")
+
+            val value = object : Handler() {
+                override fun publish(record: LogRecord) {
+                    val out = when (record.level) {
+                        Level.SEVERE,
+                        Level.WARNING -> System.err
+                        else -> System.out
+                    }
+
+                    out.println(record.message)
+                }
+                override fun flush() {  }
+                override fun close() {  }
+            }
+
+            rootLogger.addHandler(value)
+
+            return java.util.logging.Logger.getLogger(name)
+        }
+    }
+
+    override val name: String by realLogger::name
+
+    private infix fun getLevel(logger: java.util.logging.Logger): LogLevel {
+        fun mapLevel(level: Level): LogLevel = when (level) {
+            Level.INFO -> LogLevel.INFO
+            Level.FINE -> LogLevel.DEBUG
+            Level.WARNING -> LogLevel.WARNING
+            Level.FINER -> LogLevel.ERROR
+            Level.SEVERE -> LogLevel.CRITICAL
+            else -> LogLevel.INFO
+        }
+
+        return logger.level?.let(::mapLevel) ?: getLevel(logger.parent)
+    }
+
+    override var level: LogLevel = getLevel(realLogger)
+        set(value) {
+            field = value
+            val dmLevelToJavaLevel = dmLevelToJavaLevel(value)
+            realLogger.level = dmLevelToJavaLevel
+            for (h in realLogger.handlers) {
+                h.level = dmLevelToJavaLevel
+            }
+        }
+
+    override fun log(level: LogLevel, msg: String) {
+        val l = dmLevelToJavaLevel(level)
+
+        realLogger.log(l, msg)
+    }
+
+    private fun dmLevelToJavaLevel(level: LogLevel): Level? = when (level) {
+        LogLevel.INFO -> Level.INFO
+        LogLevel.DEBUG -> Level.FINE
+        LogLevel.WARNING -> Level.WARNING
+        LogLevel.ERROR -> Level.FINER
+        LogLevel.CRITICAL -> Level.SEVERE
+    }
+}
+
+private fun BootLoggerFactory() = object : BasicJobElementFactory<Logger>(listOf(), {
+    coroutineScope {
+        val name = coroutineContext[CoroutineName]?.name
+            ?: throw IllegalArgumentException("Cant find the job name! Make sure you add CoroutineName to the coroutine context.")
+
+        BootLogger(BootLogger.createLogger(name))
+    }
+}), LoggerFactory {}
+
 public fun bootFactories(): CoroutineContext =
-    WeightedProgressTrackerFactory() + SimpleLoggerFactory() + SimpleProgressNotifierFactory()
+    BootLoggerFactory()// + WeightedProgressTrackerFactory() +  SimpleProgressNotifierFactory()
 
 public inline fun <T, E> JobResult<T, E>.fix(block: (E) -> T): T {
     if (wasFailure()) return block(failureOrNull()!!)

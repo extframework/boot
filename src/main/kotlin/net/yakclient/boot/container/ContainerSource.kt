@@ -4,5 +4,5 @@ import java.security.CodeSource
 import java.security.cert.Certificate
 
 public class ContainerSource(
-    public val handle: ContainerHandle<*>
+    public val handle: ContainerHandle
 ) : CodeSource(null, arrayOf<Certificate>())

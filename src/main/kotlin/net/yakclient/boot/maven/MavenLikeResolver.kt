@@ -7,9 +7,7 @@ import com.durganmcbroom.artifact.resolver.RepositoryStub
 import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenDescriptor
 import com.durganmcbroom.jobs.JobResult
 import com.durganmcbroom.jobs.jobScope
-import net.yakclient.boot.archive.ArchiveException
-import net.yakclient.boot.archive.ArchiveNode
-import net.yakclient.boot.archive.ArchiveNodeResolver
+import net.yakclient.boot.archive.*
 import net.yakclient.boot.util.mapOfNonNullValues
 import net.yakclient.boot.util.requireKeyInDescriptor
 import java.io.File
@@ -19,9 +17,11 @@ public interface MavenLikeResolver<
         R : ArtifactRequest<SimpleMavenDescriptor>,
         V : ArchiveNode<V>,
         S : RepositorySettings,
-        RStub : RepositoryStub,
         M : ArtifactMetadata<SimpleMavenDescriptor, *>> :
-    ArchiveNodeResolver<SimpleMavenDescriptor, R, V, S, RStub, M> {
+    ArchiveNodeResolver<SimpleMavenDescriptor, R, V, S, M> {
+
+    override val auditor: ArchiveAccessAuditor
+        get() = super.auditor.chain(MavenCollisionFixingAuditor())
 
     override suspend fun deserializeDescriptor(
         descriptor: Map<String, String>
