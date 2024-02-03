@@ -1,21 +1,24 @@
 package net.yakclient.boot.container
 
+import com.durganmcbroom.jobs.JobResult
+import com.durganmcbroom.jobs.jobScope
+import net.yakclient.boot.archive.ArchiveException
 import net.yakclient.boot.container.volume.ContainerVolume
 import net.yakclient.boot.security.PrivilegeManager
 
 public object ContainerLoader {
-    public fun <P: ContainerProcess> createHandle(): ContainerHandle<P> = ContainerHandle()
+    public fun  createHandle(): ContainerHandle = ContainerHandle()
 
-    public fun <T : ContainerInfo, P: ContainerProcess> load(
+    public suspend fun <T : ArchiveContainerInfo> load(
         info: T,
-        handle: ContainerHandle<P>,
-        loader: ProcessLoader<T, P>,
+        handle: ContainerHandle,
+        loader: ContainerArchiveLoader<T>,
         volume: ContainerVolume,
         privilegeManager: PrivilegeManager,
-    ): Container<P> {
-        val container = Container(loader.load(info), volume, privilegeManager)
+    ): JobResult<ArchiveContainer, ArchiveException> = jobScope {
+        val container = ArchiveContainer(loader.load(info).attempt(), volume, privilegeManager)
         handle.handle = container
 
-        return container
+        container
     }
 }

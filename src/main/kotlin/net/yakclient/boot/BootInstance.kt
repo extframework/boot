@@ -13,6 +13,8 @@ import net.yakclient.boot.component.artifact.SoftwareComponentRepositorySettings
 import net.yakclient.boot.dependency.DependencyTypeContainer
 import java.nio.file.Path
 
+public const val API_VERSION: String = "2.0-SNAPSHOT"
+
 public interface BootInstance {
     public val location: Path
     public val dependencyTypes: DependencyTypeContainer

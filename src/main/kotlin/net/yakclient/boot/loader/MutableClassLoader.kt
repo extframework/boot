@@ -3,6 +3,7 @@ package net.yakclient.boot.loader
 import java.net.URL
 import java.nio.ByteBuffer
 import java.security.ProtectionDomain
+import java.util.concurrent.CopyOnWriteArrayList
 
 public open class MutableSourceProvider(
     protected val delegateSources: MutableList<SourceProvider>,
@@ -16,15 +17,9 @@ public open class MutableSourceProvider(
     protected val packageMap: Map<String, List<SourceProvider>>
         get() = delegateSources.flatGroupBy { it.packages }
 
-    override fun getSource(name: String): ByteBuffer? =
+    override fun findSource(name: String): ByteBuffer? =
         packageMap[name.substring(0, name.lastIndexOf('.')
-            .let { if (it == -1) 0 else it })]?.firstNotNullOfOrNull { it.getSource(name) }
-
-    override fun getResource(name: String): URL? =
-        delegateSources.firstNotNullOfOrNull { it.getResource(name) }
-
-    override fun getResource(name: String, module: String): URL? =
-        delegateSources.firstNotNullOfOrNull { it.getResource(name, module) }
+            .let { if (it == -1) 0 else it })]?.firstNotNullOfOrNull { it.findSource(name) }
 
     public fun add(provider: SourceProvider) {
         delegateSources.add(provider)
@@ -47,28 +42,48 @@ public open class MutableClassProvider(
             .let { if (it == -1) 0 else it })]?.firstNotNullOfOrNull { it.findClass(name) }
     }
 
-    override fun findClass(name: String, module: String): Class<*>? {
-        return findClass(name)
-    }
-
     public fun add(provider: ClassProvider) {
         delegateClasses.add(provider)
     }
 }
 
+public open class MutableResourceProvider(
+    protected val delegateResources: MutableList<ResourceProvider>
+) : ResourceProvider {
+    override fun findResources(name: String): Sequence<URL> {
+        return delegateResources.asSequence().flatMap { it.findResources(name) }
+    }
+
+    public fun add(provider: ResourceProvider) {
+        delegateResources.add(provider)
+    }
+}
+
 public open class MutableClassLoader(
-    private val sources: MutableSourceProvider,
-    private val classes: MutableClassProvider,
+    name: String,
+    private val sources: MutableSourceProvider = MutableSourceProvider(CopyOnWriteArrayList()),
+    private val classes: MutableClassProvider = MutableClassProvider(CopyOnWriteArrayList()),
+    private val resources: MutableResourceProvider = MutableResourceProvider(CopyOnWriteArrayList()),
     sd : SourceDefiner = SourceDefiner { n, b, cl, d ->
         d(n, b, ProtectionDomain(null, null, cl, null))
     },
     parent: ClassLoader
-) : IntegratedLoader(sp = sources, cp = classes, sd = sd, parent = parent) {
-    public fun addSource(provider: SourceProvider) {
+) : IntegratedLoader(name, sourceProvider = sources, classProvider = classes, resourceProvider = resources, sourceDefiner = sd, parent = parent) {
+    public fun addSources(provider: SourceProvider) {
         sources.add(provider)
     }
 
     public fun addClasses(provider: ClassProvider) {
         classes.add(provider)
+    }
+
+    public fun addResources(provider: ResourceProvider) {
+        resources.add(provider)
+    }
+
+    private companion object {
+        init {
+            registerAsParallelCapable()
+        }
     }
 }

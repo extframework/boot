@@ -1,7 +1,9 @@
 package net.yakclient.boot.util
 
 import com.durganmcbroom.jobs.JobResult
+import com.durganmcbroom.jobs.JobScope
 import com.durganmcbroom.jobs.jobElement
+import com.durganmcbroom.jobs.jobScope
 import kotlinx.coroutines.coroutineScope
 import net.yakclient.boot.archive.ArchiveException
 import net.yakclient.boot.archive.ArchiveTrace
@@ -42,6 +44,19 @@ public inline fun <T, S, E : Any> Collection<T>.firstNotFailureOf(
     }
 
     return output!!
+}
+
+public fun <T, E> Collection<JobResult<T, E>>.mapNotFailure() : JobResult<List<T>, E> {
+    return JobResult.Success(map {
+        it.orNull() ?: return@mapNotFailure JobResult.Failure(it.failureOrNull()!!)
+    })
+}
+
+public suspend fun <T, R, E> Collection<T>.mapFailing(mapper: suspend JobScope<E>.(T) -> R) : JobResult<List<R>, E> = jobScope {
+    val scope = this@jobScope
+    map {
+        scope.mapper(it)
+    }
 }
 
 public fun <K, V> mapOfNonNullValues(

@@ -1,15 +1,29 @@
 package net.yakclient.boot.loader
 
-import java.net.URL
+import net.yakclient.archives.ArchiveReference
+import net.yakclient.boot.util.dotClassFormat
+import net.yakclient.boot.util.packageName
+import net.yakclient.common.util.readInputStream
 import java.nio.ByteBuffer
 
-// Name in non-internal jvm format(Eg. java.lang.String)
 public interface SourceProvider {
     public val packages: Set<String>
 
-    public fun getSource(name: String): ByteBuffer?
+    public fun findSource(name: String): ByteBuffer?
+}
 
-    public fun getResource(name: String): URL?
+public val ArchiveReference.packages : Set<String>
+    get() = reader.entries()
+        .map(ArchiveReference.Entry::name)
+        .filter { it.endsWith(".class") }
+        .filterNot { it == "module-info.class" }
+        .mapTo(HashSet()) { it.removeSuffix(".class").replace('/', '.').packageName }
 
-    public fun getResource(name: String, module: String) : URL?
+public open class ArchiveSourceProvider(
+    protected val archive: ArchiveReference
+) : SourceProvider {
+    override val packages: Set<String> = archive.packages
+
+    override fun findSource(name: String): ByteBuffer? =
+        archive.reader[name.dotClassFormat]?.resource?.open()?.readInputStream()?.let(ByteBuffer::wrap)
 }

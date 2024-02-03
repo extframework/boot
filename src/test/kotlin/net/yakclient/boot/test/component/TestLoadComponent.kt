@@ -1,4 +1,4 @@
-package net.yakclient.boot.test.dependency
+package net.yakclient.boot.test.component
 
 import bootFactories
 import com.durganmcbroom.artifact.resolver.ArtifactMetadata
@@ -7,24 +7,39 @@ import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenArtifactReque
 import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenDescriptor
 import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenRepositorySettings
 import com.durganmcbroom.jobs.JobName
+import com.durganmcbroom.jobs.JobResult
 import kotlinx.coroutines.runBlocking
+import net.yakclient.boot.BootInstance
 import net.yakclient.boot.archive.ArchiveAccessTree
+import net.yakclient.boot.archive.ArchiveException
 import net.yakclient.boot.archive.ArchiveGraph
 import net.yakclient.boot.archive.ArchiveTarget
+import net.yakclient.boot.component.ComponentConfiguration
+import net.yakclient.boot.component.ComponentFactory
+import net.yakclient.boot.component.ComponentInstance
+import net.yakclient.boot.component.SoftwareComponentResolver
+import net.yakclient.boot.component.artifact.SoftwareComponentArtifactRequest
+import net.yakclient.boot.component.artifact.SoftwareComponentDescriptor
+import net.yakclient.boot.component.artifact.SoftwareComponentRepositorySettings
 import net.yakclient.boot.dependency.BasicDependencyNode
-import net.yakclient.boot.dependency.DependencyNode
+import net.yakclient.boot.dependency.DependencyTypeContainer
 import net.yakclient.boot.main.createMavenDependencyGraph
+import net.yakclient.boot.main.createMavenProvider
 import net.yakclient.boot.maven.MavenDependencyResolver
+import net.yakclient.boot.security.PrivilegeAccess
+import net.yakclient.boot.security.PrivilegeManager
+import net.yakclient.boot.test.dependency.prettyPrint
+import net.yakclient.boot.test.dependency.separator
 import orThrow
 import java.nio.file.Files
+import java.nio.file.Path
 import kotlin.test.Test
 
-class TestDependencyGraph {
+class TestLoadComponent {
     @Test
-    fun `Test maven basic dependency loading`() {
+    fun `Test cache component`() {
         val basePath = Files.createTempDirectory("m2cache")
 
-        val maven = createMavenDependencyGraph()
         val archiveGraph = ArchiveGraph(basePath,
             listOf(
                 "net.yakclient:archives:1.1-SNAPSHOT",
@@ -64,59 +79,63 @@ class TestDependencyGraph {
             }
         )
 
+        val dependencies = DependencyTypeContainer(archiveGraph)
+        dependencies.register("simple-maven",
+            createMavenProvider())
+        val componentGraph = SoftwareComponentResolver(
+            dependencies, object: BootInstance {
+                override val location: Path
+                    get() = TODO("Not yet implemented")
+                override val dependencyTypes: DependencyTypeContainer
+                    get() = TODO("Not yet implemented")
+                override val archiveGraph: ArchiveGraph
+                    get() = TODO("Not yet implemented")
+                override val componentResolver: SoftwareComponentResolver
+                    get() = TODO("Not yet implemented")
+
+                override fun isCached(descriptor: SoftwareComponentDescriptor): Boolean {
+                    TODO("Not yet implemented")
+                }
+
+                override suspend fun cache(
+                    request: SoftwareComponentArtifactRequest,
+                    location: SoftwareComponentRepositorySettings
+                ): JobResult<Unit, ArchiveException> {
+                    TODO("Not yet implemented")
+                }
+
+                override fun <T : ComponentConfiguration, I : ComponentInstance<T>> new(
+                    descriptor: SoftwareComponentDescriptor,
+                    factoryType: Class<out ComponentFactory<T, I>>,
+                    configuration: T
+                ): I {
+                    TODO("Not yet implemented")
+                }
+
+            }, this::class.java.classLoader, PrivilegeManager(null, PrivilegeAccess.emptyPrivileges())
+        )
+
+
         val request = SimpleMavenArtifactRequest(
-            "net.yakclient.minecraft:minecraft-provider-def:1.0-SNAPSHOT",
+            "net.yakclient.components:ext-loader:1.0-SNAPSHOT",
             includeScopes = setOf("compile", "runtime", "import")
         )
 
-        cacheAndGet(archiveGraph, request, SimpleMavenRepositorySettings.local(
-            preferredHash = HashType.SHA1
-        ), maven)
-    }
 
-    @Test
-    fun `Test maven dual dependency loading`() {
-        val basePath = Files.createTempDirectory("m2cache")
 
-        val maven = createMavenDependencyGraph()
-        val archiveGraph = ArchiveGraph(basePath)
-
-        val request = SimpleMavenArtifactRequest(
-            "net.yakclient.minecraft:minecraft-provider-def:1.0-SNAPSHOT",
-            includeScopes = setOf("compile", "runtime", "import")
-        )
-
-        cacheAndGet(archiveGraph, request, SimpleMavenRepositorySettings.local(
-            preferredHash = HashType.SHA1
-        ), maven)
-
-        separator()
-
-        val secondRequest = SimpleMavenArtifactRequest(
-            "io.arrow-kt:arrow-core:1.2.1",
-            includeScopes = setOf("compile", "runtime", "import")
-        )
-
-        cacheAndGet(archiveGraph, secondRequest,SimpleMavenRepositorySettings.mavenCentral(
-            preferredHash = HashType.SHA1
-        ), maven)
-    }
-
-    private fun cacheAndGet(
-        archiveGraph: ArchiveGraph,
-        request: SimpleMavenArtifactRequest,
-        repository: SimpleMavenRepositorySettings,
-        maven: MavenDependencyResolver
-    ) {
         val node = runBlocking(bootFactories() + JobName("test")) {
             archiveGraph.cache(
                 request,
-                repository,
-                maven
+                SimpleMavenRepositorySettings.local(
+                    preferredHash = HashType.SHA1
+                ),
+                componentGraph
             ).orThrow()
 
-            archiveGraph.get(request.descriptor, maven)
+            archiveGraph.get(request.descriptor, componentGraph)
         }.orThrow()
+
+        node.factory
 
         node.prettyPrint { handle, depth ->
             val str = (0..depth).joinToString(separator = "   ") { "" } + handle.descriptor.name
