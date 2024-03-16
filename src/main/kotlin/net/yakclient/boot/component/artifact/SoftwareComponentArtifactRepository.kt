@@ -1,8 +1,11 @@
 package net.yakclient.boot.component.artifact
 
-import arrow.core.Either
-import arrow.core.continuations.either
-import com.durganmcbroom.artifact.resolver.*
+import com.durganmcbroom.artifact.resolver.ArtifactReference
+import com.durganmcbroom.artifact.resolver.ArtifactRepository
+import com.durganmcbroom.artifact.resolver.ArtifactStubResolver
+import com.durganmcbroom.artifact.resolver.RepositoryFactory
+import com.durganmcbroom.jobs.Job
+import com.durganmcbroom.jobs.job
 
 public class SoftwareComponentArtifactRepository(
     settings: SoftwareComponentRepositorySettings,
@@ -15,8 +18,8 @@ public class SoftwareComponentArtifactRepository(
 
     override fun get(
         request: SoftwareComponentArtifactRequest,
-    ): Either<ArtifactException, SoftwareComponentArtifactReference> = either.eager {
-        val metadata = handler.requestMetadata(request.descriptor).bind()
+    ): Job<SoftwareComponentArtifactReference> = job {
+        val metadata = handler.requestMetadata(request.descriptor)().merge()
 
         val children = metadata.children.map {
             SoftwareComponentArtifactStub(

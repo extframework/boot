@@ -1,5 +1,3 @@
-import com.github.jengelman.gradle.plugins.shadow.tasks.ConfigureShadowRelocation
-import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 
 plugins {
     kotlin("jvm") version "1.9.21"
@@ -12,7 +10,7 @@ plugins {
 }
 
 group = "net.yakclient"
-version = "2.0-SNAPSHOT"
+version = "2.1-SNAPSHOT"
 
 application {
     mainClass.set("net.yakclient.boot.main.BootKt")
@@ -39,39 +37,13 @@ tasks.compileKotlin {
 }
 
 dependencies {
-    implementation(project("object-container"))
-    implementation(kotlin("stdlib"))
-    implementation("io.arrow-kt:arrow-core:1.1.2")
+    implementation(project(":object-container"))
 
     implementation("org.jetbrains.kotlinx:kotlinx-cli:0.3.5")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.4")
-    implementation("net.yakclient:archives:1.1-SNAPSHOT") {
-        isChanging = true
-    }
-    implementation("com.durganmcbroom:artifact-resolver:1.0-SNAPSHOT") {
-        isChanging = true
-    }
-    implementation("com.durganmcbroom:artifact-resolver-simple-maven:1.0-SNAPSHOT") {
-        isChanging = true
-    }
-    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.13.4")
-    implementation("net.yakclient:common-util:1.0-SNAPSHOT") {
-        isChanging = true
-    }
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.7.22")
-
-    implementation("com.durganmcbroom:jobs:1.0-SNAPSHOT") {
-        isChanging = true
-    }
-    implementation("com.durganmcbroom:jobs-logging:1.0-SNAPSHOT") {
-        isChanging = true
-    }
-    implementation("com.durganmcbroom:jobs-progress:1.0-SNAPSHOT") {
-        isChanging = true
-    }
-    implementation("com.durganmcbroom:jobs-progress-simple:1.0-SNAPSHOT") {
-        isChanging = true
-    }
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.13.4")
+    // https://mvnrepository.com/artifact/org.jetbrains.kotlinx/kotlinx-coroutines-core
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0")
 
 }
 
@@ -130,13 +102,10 @@ allprojects {
     apply(plugin = "maven-publish")
     apply(plugin = "org.jetbrains.dokka")
 
-
     group = "net.yakclient"
-    version = "2.0-SNAPSHOT"
 
     repositories {
         mavenCentral()
-        mavenLocal()
         maven {
             isAllowInsecureProtocol = true
             url = uri("http://maven.yakclient.net/snapshots")
@@ -170,10 +139,40 @@ allprojects {
         explicitApi()
     }
 
+    val jobsApiVersion = "1.2-SNAPSHOT"
+
     dependencies {
         implementation(kotlin("stdlib"))
         implementation(kotlin("reflect"))
         testImplementation(kotlin("test"))
+
+
+        api("net.yakclient:common-util:1.1-SNAPSHOT") {
+            isChanging = true
+        }
+
+        api("net.yakclient:archives:1.2-SNAPSHOT") {
+            isChanging = true
+        }
+
+        implementation("com.durganmcbroom:artifact-resolver:1.1-SNAPSHOT") {
+            isChanging = true
+        }
+        implementation("com.durganmcbroom:artifact-resolver-simple-maven:1.1-SNAPSHOT") {
+            isChanging = true
+        }
+        api("com.durganmcbroom:jobs:$jobsApiVersion") {
+            isChanging = true
+        }
+        implementation("com.durganmcbroom:jobs-logging:$jobsApiVersion") {
+            isChanging = true
+        }
+        implementation("com.durganmcbroom:jobs-progress:$jobsApiVersion") {
+            isChanging = true
+        }
+        implementation("com.durganmcbroom:jobs-progress-simple:$jobsApiVersion") {
+            isChanging = true
+        }
     }
 
     tasks.compileKotlin {

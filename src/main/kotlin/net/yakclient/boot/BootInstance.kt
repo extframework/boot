@@ -1,7 +1,7 @@
 package net.yakclient.boot
 
 import com.durganmcbroom.artifact.resolver.simple.maven.*
-import com.durganmcbroom.jobs.JobResult
+import com.durganmcbroom.jobs.Job
 import kotlinx.cli.*
 import net.yakclient.archives.*
 import net.yakclient.boot.archive.ArchiveGraph
@@ -13,7 +13,7 @@ import net.yakclient.boot.component.artifact.SoftwareComponentRepositorySettings
 import net.yakclient.boot.dependency.DependencyTypeContainer
 import java.nio.file.Path
 
-public const val API_VERSION: String = "2.0-SNAPSHOT"
+public const val API_VERSION: String = "2.1-SNAPSHOT"
 
 public interface BootInstance {
     public val location: Path
@@ -23,7 +23,7 @@ public interface BootInstance {
 
     public fun isCached(descriptor: SoftwareComponentDescriptor) : Boolean
 
-    public suspend fun cache(request: SoftwareComponentArtifactRequest, location: SoftwareComponentRepositorySettings) : JobResult<Unit, ArchiveException>
+    public fun cache(request: SoftwareComponentArtifactRequest, location: SoftwareComponentRepositorySettings) : Job<Unit>
 
     @Throws(ArchiveException::class)
     public fun <T : ComponentConfiguration, I : ComponentInstance<T>> new(

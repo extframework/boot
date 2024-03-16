@@ -1,5 +1,7 @@
 package net.yakclient.boot.loader
 
+import com.durganmcbroom.resources.openStream
+import kotlinx.coroutines.runBlocking
 import net.yakclient.archives.ArchiveReference
 import net.yakclient.boot.util.dotClassFormat
 import net.yakclient.boot.util.packageName
@@ -12,7 +14,7 @@ public interface SourceProvider {
     public fun findSource(name: String): ByteBuffer?
 }
 
-public val ArchiveReference.packages : Set<String>
+public val ArchiveReference.packages: Set<String>
     get() = reader.entries()
         .map(ArchiveReference.Entry::name)
         .filter { it.endsWith(".class") }
@@ -25,5 +27,11 @@ public open class ArchiveSourceProvider(
     override val packages: Set<String> = archive.packages
 
     override fun findSource(name: String): ByteBuffer? =
-        archive.reader[name.dotClassFormat]?.resource?.open()?.readInputStream()?.let(ByteBuffer::wrap)
+        runBlocking {
+            archive.reader[name.dotClassFormat]
+                ?.resource
+                ?.openStream()
+                ?.readInputStream()
+                ?.let(ByteBuffer::wrap)
+        }
 }

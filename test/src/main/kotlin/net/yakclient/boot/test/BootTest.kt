@@ -1,13 +1,13 @@
 package net.yakclient.boot.test
 
-import bootFactories
-import com.durganmcbroom.artifact.resolver.*
+import com.durganmcbroom.artifact.resolver.ArtifactMetadata
+import com.durganmcbroom.artifact.resolver.ArtifactRequest
+import com.durganmcbroom.artifact.resolver.RepositorySettings
+import com.durganmcbroom.artifact.resolver.ResolutionContext
+import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenDescriptor
+import com.durganmcbroom.jobs.FailingJob
+import com.durganmcbroom.jobs.Job
 import com.durganmcbroom.jobs.JobName
-import com.durganmcbroom.jobs.JobResult
-import kotlinx.coroutines.runBlocking
-import net.yakclient.archives.ArchiveFinder
-import net.yakclient.archives.ArchiveReference
-import net.yakclient.archives.Archives
 import net.yakclient.boot.BootInstance
 import net.yakclient.boot.archive.*
 import net.yakclient.boot.component.*
@@ -16,26 +16,23 @@ import net.yakclient.boot.component.artifact.SoftwareComponentArtifactRequest
 import net.yakclient.boot.component.artifact.SoftwareComponentDescriptor
 import net.yakclient.boot.component.artifact.SoftwareComponentRepositorySettings
 import net.yakclient.boot.dependency.BasicDependencyNode
-import net.yakclient.boot.dependency.DependencyNode
 import net.yakclient.boot.dependency.DependencyTypeContainer
-import net.yakclient.boot.main.createMavenProvider
-import net.yakclient.boot.security.PrivilegeAccess
-import net.yakclient.boot.security.PrivilegeManager
-import net.yakclient.boot.security.Privileges
-import net.yakclient.common.util.LazyMap
+import net.yakclient.boot.maven.MavenResolverProvider
 import net.yakclient.common.util.resolve
-import orThrow
+import runBootBlocking
 import java.lang.reflect.Constructor
 import java.nio.file.Files
 import java.nio.file.Path
 
-public fun interface ArchiveNodeCreator<T: ArchiveNode<T>> : (ArtifactMetadata.Descriptor, ArchiveNodeResolver<*, *, T, *, *>) -> T
+public fun interface ArchiveNodeCreator<T : ArchiveNode<T>> :
+        (ArtifactMetadata.Descriptor, ArchiveNodeResolver<*, *, T, *, *>) -> T
 
 public fun testBootInstance(
     components: Map<SoftwareComponentDescriptor, Class<out ComponentFactory<*, *>>> = mapOf(),
     location: Path = Files.createTempDirectory("boot-test"),
+    // Versions will be ignored
     dependencies: Set<ArtifactMetadata.Descriptor> = emptySet(),
-)  : BootInstance {
+): BootInstance {
     return testBootInstance(
         BasicDependencyNode::class.java,
         components,
@@ -52,10 +49,11 @@ public fun testBootInstance(
     }
 }
 
-public fun <T: ArchiveNode<T>> testBootInstance(
+public fun <T : ArchiveNode<T>> testBootInstance(
     nodeType: Class<T>,
     components: Map<SoftwareComponentDescriptor, Class<out ComponentFactory<*, *>>> = mapOf(),
     location: Path = Files.createTempDirectory("boot-test"),
+    // Versions will be ignored
     dependencies: Set<ArtifactMetadata.Descriptor> = emptySet(),
     dependencyNodeCreator: ArchiveNodeCreator<T>
 ): BootInstance {
@@ -65,8 +63,9 @@ public fun <T: ArchiveNode<T>> testBootInstance(
         boot.dependencyTypes,
         boot,
         BootInstance::class.java.classLoader,
-        PrivilegeManager(null, PrivilegeAccess.emptyPrivileges())
     )
+
+    val mockDependencyResolver = mockDependencyResolver(nodeType)
 
     return object : BootInstance {
         override val location: Path = location
@@ -74,7 +73,8 @@ public fun <T: ArchiveNode<T>> testBootInstance(
         override val archiveGraph: ArchiveGraph by lazy {
             ArchiveGraph(
                 location resolve "archives",
-                components.mapValuesTo(HashMap<ArtifactMetadata.Descriptor, ArchiveNode<*>>()) {
+                (components.map { it ->
+
                     SoftwareComponentNode(
                         it.key,
                         null,
@@ -100,112 +100,32 @@ public fun <T: ArchiveNode<T>> testBootInstance(
                             loadFactory(it.value)
                         },
                         emptyAccessTree(it.key),
-                        object : ArchiveNodeResolver<SoftwareComponentDescriptor, SoftwareComponentArtifactRequest, SoftwareComponentNode, SoftwareComponentRepositorySettings, SoftwareComponentArtifactMetadata> {
-                            override val name: String = "test-mock-component-resolver"
-                            override val nodeType: Class<SoftwareComponentNode> = SoftwareComponentNode::class.java
-                            override val metadataType: Class<SoftwareComponentArtifactMetadata> = SoftwareComponentArtifactMetadata::class.java
-                            override val factory: RepositoryFactory<SoftwareComponentRepositorySettings, SoftwareComponentArtifactRequest, *, ArtifactReference<SoftwareComponentArtifactMetadata, *>, *>
-                                get() = TODO("Not yet implemented")
-
-                            override suspend fun deserializeDescriptor(descriptor: Map<String, String>): JobResult<SoftwareComponentDescriptor, ArchiveException> {
-                                return JobResult.Failure(ArchiveException.NotSupported("In test context", trace()))
-
-                            }
-
-                            override suspend fun cache(
-                                metadata: SoftwareComponentArtifactMetadata,
-                                helper: ArchiveCacheHelper<SoftwareComponentDescriptor>
-                            ): JobResult<ArchiveData<SoftwareComponentDescriptor, CacheableArchiveResource>, ArchiveException> {
-                                return JobResult.Failure(ArchiveException.NotSupported("In test context", trace()))
-
-                            }
-
-                            override suspend fun load(
-                                data: ArchiveData<SoftwareComponentDescriptor, CachedArchiveResource>,
-                                helper: ResolutionHelper
-                            ): JobResult<SoftwareComponentNode, ArchiveException> {
-                                return JobResult.Failure(ArchiveException.NotSupported("In test context", trace()))
-
-                            }
-
-                            override fun pathForDescriptor(
-                                descriptor: SoftwareComponentDescriptor,
-                                classifier: String,
-                                type: String
-                            ): Path {
-                                return Path.of("")
-                            }
-
-                            override fun serializeDescriptor(descriptor: SoftwareComponentDescriptor): Map<String, String> {
-                                return mapOf()
-                            }
-
-                        }
+                        mockComponentResolver
                     )
-                }.apply {
-                    putAll(dependencies.associateWith {
-                        dependencyNodeCreator(
-                            it,
-                            object :
-                                ArchiveNodeResolver<ArtifactMetadata.Descriptor, ArtifactRequest<ArtifactMetadata.Descriptor>, T, RepositorySettings, ArtifactMetadata<ArtifactMetadata.Descriptor, *>> {
-                                override val name: String = "test-resolver"
-                                override val nodeType: Class<T> = nodeType
-                                override val metadataType: Class<ArtifactMetadata<ArtifactMetadata.Descriptor, *>> =
-                                    ArtifactMetadata::class.java as Class<ArtifactMetadata<ArtifactMetadata.Descriptor, *>>
-                                override val factory: RepositoryFactory<RepositorySettings, ArtifactRequest<ArtifactMetadata.Descriptor>, *, ArtifactReference<ArtifactMetadata<ArtifactMetadata.Descriptor, *>, *>, *>
-                                    get() = TODO("Not yet implemented")
-
-                                override suspend fun deserializeDescriptor(descriptor: Map<String, String>): JobResult<ArtifactMetadata.Descriptor, ArchiveException> {
-                                    return JobResult.Failure(ArchiveException.NotSupported("In test context", trace()))
-                                }
-
-                                override suspend fun cache(
-                                    metadata: ArtifactMetadata<ArtifactMetadata.Descriptor, *>,
-                                    helper: ArchiveCacheHelper<ArtifactMetadata.Descriptor>
-                                ): JobResult<ArchiveData<ArtifactMetadata.Descriptor, CacheableArchiveResource>, ArchiveException> {
-                                    return JobResult.Failure(ArchiveException.NotSupported("In test context", trace()))
-
-                                }
-
-                                override suspend fun load(
-                                    data: ArchiveData<ArtifactMetadata.Descriptor, CachedArchiveResource>,
-                                    helper: ResolutionHelper
-                                ): JobResult<T, ArchiveException> {
-                                    return JobResult.Failure(ArchiveException.NotSupported("In test context", trace()))
-                                }
-
-                                override fun pathForDescriptor(
-                                    descriptor: ArtifactMetadata.Descriptor,
-                                    classifier: String,
-                                    type: String
-                                ): Path {
-                                    return Path.of("")
-                                }
-
-                                override fun serializeDescriptor(descriptor: ArtifactMetadata.Descriptor): Map<String, String> {
-                                    return mapOf()
-                                }
-                            }
-                        )
-                    })
-                })
+                } + dependencies.map {
+                    dependencyNodeCreator(
+                        it,
+                        mockDependencyResolver
+                    )
+                }).let(::createArchiveGraphMap)
+            )
         }
         override val dependencyTypes: DependencyTypeContainer = DependencyTypeContainer(archiveGraph)
         override val componentResolver: SoftwareComponentResolver = TestResolver(this)
 
         init {
             archiveGraph.registerResolver(componentResolver)
-            dependencyTypes.register("simple-maven", createMavenProvider())
+            dependencyTypes.register("simple-maven", MavenResolverProvider())
         }
 
         override fun isCached(descriptor: SoftwareComponentDescriptor): Boolean {
             return archiveGraph.contains(descriptor)
         }
 
-        override suspend fun cache(
+        override fun cache(
             request: SoftwareComponentArtifactRequest,
             location: SoftwareComponentRepositorySettings
-        ): JobResult<Unit, ArchiveException> {
+        ): Job<Unit> {
             return archiveGraph.cache(request, location, componentResolver)
         }
 
@@ -214,8 +134,8 @@ public fun <T: ArchiveNode<T>> testBootInstance(
             factoryType: Class<out ComponentFactory<T, I>>,
             configuration: T
         ): I {
-            return runBlocking(bootFactories() + JobName("New test component: '$descriptor'")) {
-                val it = archiveGraph.get(descriptor, componentResolver).orThrow()
+            return runBootBlocking(JobName("New test component: '$descriptor'")) {
+                val it = archiveGraph.get(descriptor, componentResolver)().merge()
 
                 check(factoryType.isInstance(it.factory))
 
@@ -226,9 +146,113 @@ public fun <T: ArchiveNode<T>> testBootInstance(
     }
 }
 
+public fun createArchiveGraphMap(
+    nodes: List<ArchiveNode<*>>,
+): MutableMap<ArtifactMetadata.Descriptor, ArchiveNode<*>> {
+    val mappedNodes = nodes.associateBy {
+        val descriptor = it.descriptor
+        if (descriptor is SimpleMavenDescriptor) "${descriptor.group}:${descriptor.artifact}"
+        else descriptor.name
+    }
+
+    val delegate = HashMap<ArtifactMetadata.Descriptor, ArchiveNode<*>>()
+
+    return object : MutableMap<ArtifactMetadata.Descriptor, ArchiveNode<*>> by delegate {
+        override fun get(key: ArtifactMetadata.Descriptor): ArchiveNode<*>? {
+            val n = if (key is SimpleMavenDescriptor) "${key.group}:${key.artifact}" else key.name
+            return mappedNodes[n] ?: delegate[key]
+        }
+    }
+}
+
 public fun emptyAccessTree(it: ArtifactMetadata.Descriptor): ArchiveAccessTree =
     object : ArchiveAccessTree {
         override val descriptor: ArtifactMetadata.Descriptor = it
         override val targets: Set<ArchiveTarget> = setOf()
-//        override val parents: Set<ArchiveAccessTree> = setOf()
     }
+
+private fun <T : ArchiveNode<T>> mockDependencyResolver(nodeType: Class<T>) = object :
+    ArchiveNodeResolver<ArtifactMetadata.Descriptor, ArtifactRequest<ArtifactMetadata.Descriptor>, T, RepositorySettings, ArtifactMetadata<ArtifactMetadata.Descriptor, *>> {
+    override val name: String = "test-resolver"
+    override val nodeType: Class<T> = nodeType
+    override val metadataType: Class<ArtifactMetadata<ArtifactMetadata.Descriptor, *>> =
+        ArtifactMetadata::class.java as Class<ArtifactMetadata<ArtifactMetadata.Descriptor, *>>
+
+    override fun createContext(settings: RepositorySettings): ResolutionContext<ArtifactRequest<ArtifactMetadata.Descriptor>, *, ArtifactMetadata<ArtifactMetadata.Descriptor, *>, *> {
+        throw UnsupportedOperationException()
+    }
+
+    override fun deserializeDescriptor(descriptor: Map<String, String>, trace: ArchiveTrace): Result<ArtifactMetadata.Descriptor> {
+        return Result.failure(UnsupportedOperationException("In test context"))
+    }
+
+    override fun cache(
+        metadata: ArtifactMetadata<ArtifactMetadata.Descriptor, *>,
+        helper: ArchiveCacheHelper<ArtifactMetadata.Descriptor>
+    ): Job<ArchiveData<ArtifactMetadata.Descriptor, CacheableArchiveResource>> {
+        return FailingJob { UnsupportedOperationException("In test context") }
+
+    }
+
+    override fun load(
+        data: ArchiveData<ArtifactMetadata.Descriptor, CachedArchiveResource>,
+        helper: ResolutionHelper
+    ): Job<T> {
+        return FailingJob { UnsupportedOperationException("In test context") }
+    }
+
+    override fun pathForDescriptor(
+        descriptor: ArtifactMetadata.Descriptor,
+        classifier: String,
+        type: String
+    ): Path {
+        return Path.of("")
+    }
+
+    override fun serializeDescriptor(descriptor: ArtifactMetadata.Descriptor): Map<String, String> {
+        return mapOf()
+    }
+}
+
+private val mockComponentResolver = object :
+    ArchiveNodeResolver<SoftwareComponentDescriptor, SoftwareComponentArtifactRequest, SoftwareComponentNode, SoftwareComponentRepositorySettings, SoftwareComponentArtifactMetadata> {
+    override val name: String = "test-mock-component-resolver"
+    override val nodeType: Class<SoftwareComponentNode> = SoftwareComponentNode::class.java
+    override val metadataType: Class<SoftwareComponentArtifactMetadata> =
+        SoftwareComponentArtifactMetadata::class.java
+
+    override fun createContext(settings: SoftwareComponentRepositorySettings): ResolutionContext<SoftwareComponentArtifactRequest, *, SoftwareComponentArtifactMetadata, *> {
+        TODO("Not yet implemented")
+    }
+
+    override fun deserializeDescriptor(descriptor: Map<String, String>, trace: ArchiveTrace): Result<SoftwareComponentDescriptor> {
+        return Result.failure(UnsupportedOperationException("In test context"))
+    }
+
+    override fun cache(
+        metadata: SoftwareComponentArtifactMetadata,
+        helper: ArchiveCacheHelper<SoftwareComponentDescriptor>
+    ): Job<ArchiveData<SoftwareComponentDescriptor, CacheableArchiveResource>> {
+        return FailingJob { (UnsupportedOperationException("In test context")) }
+    }
+
+    override fun load(
+        data: ArchiveData<SoftwareComponentDescriptor, CachedArchiveResource>,
+        helper: ResolutionHelper
+    ): Job<SoftwareComponentNode> {
+        return FailingJob { UnsupportedOperationException("In test context") }
+    }
+
+    override fun pathForDescriptor(
+        descriptor: SoftwareComponentDescriptor,
+        classifier: String,
+        type: String
+    ): Path {
+        return Path.of("")
+    }
+
+    override fun serializeDescriptor(descriptor: SoftwareComponentDescriptor): Map<String, String> {
+        return mapOf()
+    }
+
+}

@@ -1,6 +1,10 @@
 package net.yakclient.boot.archive
 
-import net.yakclient.common.util.resource.SafeResource
+import com.durganmcbroom.jobs.JobName
+import com.durganmcbroom.jobs.job
+import com.durganmcbroom.jobs.result
+import com.durganmcbroom.resources.Resource
+import com.durganmcbroom.resources.openStream
 import org.objectweb.asm.ClassReader
 import org.objectweb.asm.tree.ClassNode
 import java.io.InputStream
@@ -22,8 +26,8 @@ public fun readManifestName(manifestIn: InputStream): String? {
     return properties.getProperty("Automatic-Module-Name")
 }
 
-public fun moduleNameFor(artifact: SafeResource, name: String): String {
-    val zip = ZipInputStream(artifact.open())
+public fun moduleNameFor(artifact: Resource, name: String): Result<String> = result {
+    val zip = ZipInputStream(artifact.openStream())
 
     var moduleName: String? = null
     var automaticName: String? = null
@@ -32,11 +36,11 @@ public fun moduleNameFor(artifact: SafeResource, name: String): String {
 
     while (currentEntry != null) {
         if (currentEntry.name.contains("module-info.class")) moduleName = readModuleInfoName(zip)
-        if (currentEntry.name.contains( "MANIFEST.MF")) automaticName = readManifestName(zip)
+        if (currentEntry.name.contains("MANIFEST.MF")) automaticName = readManifestName(zip)
 
         zip.closeEntry()
         currentEntry = zip.nextEntry
     }
 
-    return moduleName ?: automaticName ?: name.replace('-', '.')
+    moduleName ?: automaticName ?: name.replace('-', '.')
 }

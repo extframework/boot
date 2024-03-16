@@ -1,42 +1,39 @@
 package net.yakclient.boot.component.artifact
 
-import arrow.core.Either
-import arrow.core.continuations.either
 import com.durganmcbroom.artifact.resolver.RepositoryStubResolutionException
 import com.durganmcbroom.artifact.resolver.RepositoryStubResolver
-import com.durganmcbroom.artifact.resolver.simple.maven.HashType
 import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenRepositorySettings
 import com.durganmcbroom.artifact.resolver.simple.maven.layout.SimpleMavenDefaultLayout
+import com.durganmcbroom.jobs.Job
+import com.durganmcbroom.jobs.job
+import com.durganmcbroom.jobs.result
+import com.durganmcbroom.resources.ResourceAlgorithm
 import net.yakclient.boot.component.SoftwareComponentModelRepository
 
 public class SoftwareComponentRepositoryStubResolver(
-    private val preferredHash: HashType,
+    private val preferredAlgorithm: ResourceAlgorithm,
 ) : RepositoryStubResolver<SoftwareComponentRepositoryStub, SoftwareComponentRepositorySettings> {
     override fun resolve(
         stub: SoftwareComponentRepositoryStub,
-    ): Either<RepositoryStubResolutionException, SoftwareComponentRepositorySettings> = either.eager {
-//        ensure(stub.unresolvedRepository.layout == PluginRuntimeModelRepository.PLUGIN_REPO_TYPE || stub.unresolvedRepository.layout == PluginRuntimeModelRepository.LOCAL_PLUGIN_REPO_TYPE) {
-//            RepositoryStubResolutionException(
-//                "Unknown layout: '${stub.unresolvedRepository.layout}"
-//            )
-//        }
+    ): Result<SoftwareComponentRepositorySettings> = result {
         val layout =
             if (stub.unresolvedRepository.layout == SoftwareComponentModelRepository.DEFAULT) SimpleMavenDefaultLayout(
                 stub.unresolvedRepository.url,
-                preferredHash,
+                preferredAlgorithm,
                 stub.unresolvedRepository.releases.enabled,
-                stub.unresolvedRepository.snapshots.enabled
+                stub.unresolvedRepository.snapshots.enabled,
+                stub.requireResourceVerification,
             ) else if (stub.unresolvedRepository.layout == SoftwareComponentModelRepository.LOCAL) SimpleMavenRepositorySettings.local(
                 stub.unresolvedRepository.url,
-                preferredHash
-            ).layout else shift(
-                RepositoryStubResolutionException(
-                    "Unknown layout: '${stub.unresolvedRepository.layout}"
-                )
+                preferredAlgorithm
+            ).layout else throw RepositoryStubResolutionException(
+                "Unknown layout: '${stub.unresolvedRepository.layout}"
             )
+
         SimpleMavenRepositorySettings(
             layout,
-            preferredHash
+            preferredAlgorithm,
+            requireResourceVerification = stub.requireResourceVerification,
         )
     }
 }

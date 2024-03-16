@@ -1,10 +1,9 @@
 package net.yakclient.boot.component.artifact
 
-import com.durganmcbroom.artifact.resolver.ArtifactMetadata
 import com.durganmcbroom.artifact.resolver.ArtifactReference
 import com.durganmcbroom.artifact.resolver.ArtifactStub
-import com.durganmcbroom.artifact.resolver.CheckedResource
 import com.durganmcbroom.artifact.resolver.simple.maven.*
+import com.durganmcbroom.resources.Resource
 import net.yakclient.boot.component.SoftwareComponentModel
 
 public typealias SoftwareComponentArtifactReference = ArtifactReference<SoftwareComponentArtifactMetadata, SoftwareComponentArtifactStub>
@@ -37,7 +36,7 @@ public typealias SoftwareComponentArtifactRequest = SimpleMavenArtifactRequest
 
 public class SoftwareComponentArtifactMetadata(
     desc: SimpleMavenDescriptor,
-    resource: CheckedResource?,
+    resource: Resource?,
     children: List<SoftwareComponentChildInfo>,
     public val dependencies: List<SoftwareComponentDependencyInfo>,
     public val runtimeModel: SoftwareComponentModel,

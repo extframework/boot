@@ -1,17 +1,14 @@
 package net.yakclient.boot.test.component
 
-import bootFactories
 import com.durganmcbroom.artifact.resolver.ArtifactMetadata
-import com.durganmcbroom.artifact.resolver.simple.maven.HashType
 import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenArtifactRequest
 import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenDescriptor
 import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenRepositorySettings
+import com.durganmcbroom.jobs.Job
 import com.durganmcbroom.jobs.JobName
-import com.durganmcbroom.jobs.JobResult
-import kotlinx.coroutines.runBlocking
+import com.durganmcbroom.resources.ResourceAlgorithm
 import net.yakclient.boot.BootInstance
 import net.yakclient.boot.archive.ArchiveAccessTree
-import net.yakclient.boot.archive.ArchiveException
 import net.yakclient.boot.archive.ArchiveGraph
 import net.yakclient.boot.archive.ArchiveTarget
 import net.yakclient.boot.component.ComponentConfiguration
@@ -23,14 +20,11 @@ import net.yakclient.boot.component.artifact.SoftwareComponentDescriptor
 import net.yakclient.boot.component.artifact.SoftwareComponentRepositorySettings
 import net.yakclient.boot.dependency.BasicDependencyNode
 import net.yakclient.boot.dependency.DependencyTypeContainer
-import net.yakclient.boot.main.createMavenDependencyGraph
-import net.yakclient.boot.main.createMavenProvider
 import net.yakclient.boot.maven.MavenDependencyResolver
-import net.yakclient.boot.security.PrivilegeAccess
-import net.yakclient.boot.security.PrivilegeManager
+import net.yakclient.boot.maven.MavenResolverProvider
 import net.yakclient.boot.test.dependency.prettyPrint
 import net.yakclient.boot.test.dependency.separator
-import orThrow
+import runBootBlocking
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
@@ -81,7 +75,7 @@ class TestLoadComponent {
 
         val dependencies = DependencyTypeContainer(archiveGraph)
         dependencies.register("simple-maven",
-            createMavenProvider())
+            MavenResolverProvider())
         val componentGraph = SoftwareComponentResolver(
             dependencies, object: BootInstance {
                 override val location: Path
@@ -97,10 +91,10 @@ class TestLoadComponent {
                     TODO("Not yet implemented")
                 }
 
-                override suspend fun cache(
+                override fun cache(
                     request: SoftwareComponentArtifactRequest,
                     location: SoftwareComponentRepositorySettings
-                ): JobResult<Unit, ArchiveException> {
+                ): Job<Unit> {
                     TODO("Not yet implemented")
                 }
 
@@ -112,7 +106,7 @@ class TestLoadComponent {
                     TODO("Not yet implemented")
                 }
 
-            }, this::class.java.classLoader, PrivilegeManager(null, PrivilegeAccess.emptyPrivileges())
+            }, this::class.java.classLoader
         )
 
 
@@ -121,19 +115,17 @@ class TestLoadComponent {
             includeScopes = setOf("compile", "runtime", "import")
         )
 
-
-
-        val node = runBlocking(bootFactories() + JobName("test")) {
+        val node = runBootBlocking(JobName("test"))  {
             archiveGraph.cache(
                 request,
                 SimpleMavenRepositorySettings.local(
-                    preferredHash = HashType.SHA1
+                    preferredHash = ResourceAlgorithm.SHA1
                 ),
                 componentGraph
-            ).orThrow()
+            )().merge()
 
-            archiveGraph.get(request.descriptor, componentGraph)
-        }.orThrow()
+            archiveGraph.get(request.descriptor, componentGraph)().merge()
+        }
 
         node.factory
 
@@ -141,7 +133,7 @@ class TestLoadComponent {
             val str = (0..depth).joinToString(separator = "   ") { "" } + handle.descriptor.name
             println(str)
         }
-        separator()
+        separator("Targets:")
         println(node.access.targets.joinToString(separator = "\n") {
             it.descriptor.name
         })

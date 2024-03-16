@@ -1,15 +1,11 @@
 package net.yakclient.boot.dependency
 
 import com.durganmcbroom.artifact.resolver.*
-import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenDescriptor
-import com.durganmcbroom.jobs.JobResult
-import com.durganmcbroom.jobs.jobScope
+import com.durganmcbroom.jobs.Job
+import com.durganmcbroom.jobs.job
 import net.yakclient.archives.ArchiveHandle
 import net.yakclient.boot.archive.*
 import net.yakclient.boot.loader.*
-import net.yakclient.boot.security.PrivilegeAccess
-import net.yakclient.boot.security.PrivilegeManager
-import net.yakclient.boot.util.toSafeResource
 import java.security.CodeSource
 import java.security.ProtectionDomain
 import java.security.cert.Certificate
@@ -27,10 +23,10 @@ public abstract class DependencyResolver<
 
     override val nodeType: Class<in N> = DependencyNode::class.java
 
-    override suspend fun load(
+    override fun load(
         data: ArchiveData<K, CachedArchiveResource>,
         helper: ResolutionHelper
-    ): JobResult<N, ArchiveException> = jobScope {
+    ): Job<N> = job {
         val parents: Set<N> = data.parents.mapTo(HashSet()) {
             helper.load(it)
         }
@@ -57,7 +53,7 @@ public abstract class DependencyResolver<
                     )
                 },
                 parents.mapNotNullTo(HashSet(), DependencyNode<*>::archive)
-            ).attempt().archive
+            )().merge().archive
 //            ContainerLoader.load(
 //                RawArchiveContainerInfo(
 //                    data.descriptor.name,
@@ -68,7 +64,7 @@ public abstract class DependencyResolver<
 //                RawArchiveContainerLoader(ZipResolutionProvider, parentClassLoader),
 //                RootVolume,
 //                PrivilegeManager(parentPrivilegeManager, PrivilegeAccess.emptyPrivileges())
-//            ).attempt()
+//            ).bind()
         }
 
         constructNode(
@@ -86,11 +82,11 @@ public abstract class DependencyResolver<
         accessTree: ArchiveAccessTree,
     ): N
 
-    override suspend fun cache(
+    override fun cache(
         metadata: M,
         helper: ArchiveCacheHelper<K>
-    ): JobResult<ArchiveData<K, CacheableArchiveResource>, ArchiveException> = jobScope {
-        helper.withResource("jar.jar", metadata.resource?.toSafeResource())
+    ): Job<ArchiveData<K, CacheableArchiveResource>> = job {
+        helper.withResource("jar.jar", metadata.resource)
 
         helper.newData(metadata.descriptor)
     }

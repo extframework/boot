@@ -1,31 +1,17 @@
 package net.yakclient.boot.main
 
-import bootFactories
-import com.durganmcbroom.artifact.resolver.simple.maven.HashType
-import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenArtifactRequest
-import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenDescriptor
-import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenRepositorySettings
+import com.durganmcbroom.jobs.Job
 import com.durganmcbroom.jobs.JobName
-import com.durganmcbroom.jobs.JobResult
-import kotlinx.coroutines.runBlocking
-import net.yakclient.archives.ArchiveFinder
-import net.yakclient.archives.ArchiveReference
-import net.yakclient.archives.Archives
-import net.yakclient.archives.zip.ZipResolutionResult
 import net.yakclient.boot.BootInstance
-import net.yakclient.boot.archive.*
+import net.yakclient.boot.archive.ArchiveGraph
 import net.yakclient.boot.component.*
 import net.yakclient.boot.component.artifact.SoftwareComponentArtifactRequest
 import net.yakclient.boot.component.artifact.SoftwareComponentDescriptor
 import net.yakclient.boot.component.artifact.SoftwareComponentRepositorySettings
-import net.yakclient.boot.dependency.DependencyResolverProvider
 import net.yakclient.boot.dependency.DependencyTypeContainer
-import net.yakclient.boot.maven.MavenDependencyResolver
-import net.yakclient.boot.security.PrivilegeAccess
-import net.yakclient.boot.security.PrivilegeManager
-import net.yakclient.boot.security.Privileges
+import net.yakclient.boot.maven.MavenResolverProvider
 import net.yakclient.common.util.resolve
-import orThrow
+import runBootBlocking
 import java.nio.file.Path
 
 public class ProductionBootInstance(
@@ -37,7 +23,7 @@ public class ProductionBootInstance(
         initSoftwareComponentGraph(dependencyTypes, this)
 
     init {
-        val maven = createMavenProvider()
+        val maven = MavenResolverProvider()
         dependencyTypes.register(
             "simple-maven",
             maven
@@ -50,10 +36,10 @@ public class ProductionBootInstance(
         return archiveGraph[descriptor] is SoftwareComponentNode
     }
 
-    override suspend fun cache(
+    override fun cache(
         request: SoftwareComponentArtifactRequest,
         location: SoftwareComponentRepositorySettings
-    ): JobResult<Unit, ArchiveException> {
+    ): Job<Unit> {
         return archiveGraph.cache(
             request,
             location,
@@ -66,8 +52,8 @@ public class ProductionBootInstance(
         factoryType: Class<out ComponentFactory<T, I>>,
         configuration: T
     ): I {
-        return runBlocking(bootFactories() + JobName("New component: '$descriptor'")) {
-            val it = archiveGraph.get(descriptor, componentResolver).orThrow()
+        return runBootBlocking(JobName("New component: '$descriptor'")) {
+            val it = archiveGraph.get(descriptor, componentResolver)().merge()
 
             check(factoryType.isInstance(it.factory))
 
@@ -79,16 +65,6 @@ public class ProductionBootInstance(
     }
 }
 
-//public fun initMaven(
-//    types: DependencyTypeContainer,
-//) {
-//    types.register(
-//        "simple-maven",
-//        createMavenProvider()
-//    )
-//}
-
-
 private fun initSoftwareComponentGraph(
     types: DependencyTypeContainer,
     boot: BootInstance
@@ -96,70 +72,6 @@ private fun initSoftwareComponentGraph(
     return SoftwareComponentResolver(
         types,
         boot,
-        BootInstance::class.java.classLoader,
-        PrivilegeManager(null, PrivilegeAccess.emptyPrivileges()) {
-            throw SecurityException()
-        }
+        BootInstance::class.java.classLoader
     )
 }
-
-public fun createMavenProvider(): DependencyResolverProvider<*, *, *> {
-    val dependencyGraph = createMavenDependencyGraph()
-
-    return object :
-        DependencyResolverProvider<SimpleMavenDescriptor, SimpleMavenArtifactRequest, SimpleMavenRepositorySettings> {
-        override val name: String = "simple-maven"
-        override val resolver = dependencyGraph
-
-        override fun parseRequest(request: Map<String, String>): SimpleMavenArtifactRequest? {
-            val descriptorName = request["descriptor"] ?: return null
-            val isTransitive = request["isTransitive"] ?: "true"
-            val scopes = request["includeScopes"] ?: "compile,runtime,import"
-            val excludeArtifacts = request["excludeArtifacts"]
-
-            return SimpleMavenArtifactRequest(
-                SimpleMavenDescriptor.parseDescription(descriptorName) ?: return null,
-                isTransitive.toBoolean(),
-                scopes.split(',').toSet(),
-                excludeArtifacts?.split(',')?.toSet() ?: setOf()
-            )
-        }
-
-        override fun parseSettings(settings: Map<String, String>): SimpleMavenRepositorySettings? {
-            val releasesEnabled = settings["releasesEnabled"] ?: "true"
-            val snapshotsEnabled = settings["snapshotsEnabled"] ?: "true"
-            val location = settings["location"] ?: return null
-            val preferredHash = settings["preferredHash"] ?: "SHA1"
-            val type = settings["type"] ?: "default"
-
-            val hashType = HashType.valueOf(preferredHash)
-
-            return when (type) {
-                "default" -> SimpleMavenRepositorySettings.default(
-                    location,
-                    releasesEnabled.toBoolean(),
-                    snapshotsEnabled.toBoolean(),
-                    hashType
-                )
-
-                "local" -> SimpleMavenRepositorySettings.local(location, hashType)
-                else -> return null
-            }
-        }
-    }
-}
-
-public fun createMavenDependencyGraph(): MavenDependencyResolver {
-//    val resolutionProvider = object : BasicArchiveResolutionProvider<ArchiveReference, ZipResolutionResult>(
-//        Archives.Finders.ZIP_FINDER as ArchiveFinder<ArchiveReference>,
-//        Archives.Resolvers.ZIP_RESOLVER,
-//    ) {}
-    val graph = MavenDependencyResolver(
-        parentClassLoader = BootInstance::class.java.classLoader,
-//        parentPrivilegeManager = PrivilegeManager(null, PrivilegeAccess.emptyPrivileges())
-    )
-
-
-    return graph
-}
-

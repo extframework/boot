@@ -1,25 +1,8 @@
-dependencies {
-    implementation(project(":"))
-    implementation(project(":object-container"))
+version = "2.1-SNAPSHOT"
 
-    implementation("net.yakclient:common-util:1.0-SNAPSHOT") {
-        isChanging = true
-    }
-    implementation("net.yakclient:archives:1.1-SNAPSHOT") {
-        isChanging = true
-    }
-    implementation("com.durganmcbroom:artifact-resolver:1.0-SNAPSHOT") {
-        isChanging = true
-    }
-    implementation("com.durganmcbroom:artifact-resolver-simple-maven:1.0-SNAPSHOT") {
-        isChanging = true
-    }
-    implementation("io.arrow-kt:arrow-core:1.1.2")
-    implementation("com.durganmcbroom:jobs:1.0-SNAPSHOT")
-    implementation("com.durganmcbroom:jobs-logging:1.0-SNAPSHOT")
-    implementation("com.durganmcbroom:jobs-coroutines:1.0-SNAPSHOT")
-    implementation("com.durganmcbroom:jobs-progress:1.0-SNAPSHOT")
-    implementation("com.durganmcbroom:jobs-progress-simple:1.0-SNAPSHOT")
+dependencies {
+    implementation(project(":object-container"))
+    implementation(project(":"))
 }
 
 task<Jar>("sourcesJar") {

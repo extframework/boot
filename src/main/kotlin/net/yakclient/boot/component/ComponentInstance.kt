@@ -1,7 +1,9 @@
 package net.yakclient.boot.component
 
-public interface ComponentInstance<T: ComponentConfiguration> {
-    public fun start()
+import com.durganmcbroom.jobs.Job
 
-    public fun end()
+public interface ComponentInstance<T: ComponentConfiguration> {
+    public fun start() : Job<Unit>
+
+    public fun end() : Job<Unit>
 }
