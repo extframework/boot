@@ -1,12 +1,10 @@
 package net.yakclient.boot.maven
 
-import com.durganmcbroom.artifact.resolver.ArtifactMetadata
-import com.durganmcbroom.artifact.resolver.ArtifactRequest
-import com.durganmcbroom.artifact.resolver.RepositorySettings
-import com.durganmcbroom.artifact.resolver.RepositoryStub
+import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenArtifactMetadata
+import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenArtifactRequest
 import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenDescriptor
-import com.durganmcbroom.jobs.JobResult
-import com.durganmcbroom.jobs.jobScope
+import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenRepositorySettings
+import com.durganmcbroom.jobs.result
 import net.yakclient.boot.archive.*
 import net.yakclient.boot.util.mapOfNonNullValues
 import net.yakclient.boot.util.requireKeyInDescriptor
@@ -14,28 +12,23 @@ import java.io.File
 import java.nio.file.Path
 
 public interface MavenLikeResolver<
-        R : ArtifactRequest<SimpleMavenDescriptor>,
         V : ArchiveNode<V>,
-        S : RepositorySettings,
-        M : ArtifactMetadata<SimpleMavenDescriptor, *>> :
-    ArchiveNodeResolver<SimpleMavenDescriptor, R, V, S, M> {
+        M : SimpleMavenArtifactMetadata> :
+    ArchiveNodeResolver<SimpleMavenDescriptor, SimpleMavenArtifactRequest, V, SimpleMavenRepositorySettings, M> {
 
     override val auditor: ArchiveAccessAuditor
         get() = super.auditor.chain(MavenCollisionFixingAuditor())
 
-    override suspend fun deserializeDescriptor(
-        descriptor: Map<String, String>
-    ): JobResult<SimpleMavenDescriptor, ArchiveException> = jobScope {
-        try {
-            SimpleMavenDescriptor(
-                descriptor.requireKeyInDescriptor("group"),
-                descriptor.requireKeyInDescriptor("artifact"),
-                descriptor.requireKeyInDescriptor("version"),
-                descriptor["classifier"]
-            )
-        } catch (e: ArchiveException) {
-            fail(e)
-        }
+    override fun deserializeDescriptor(
+        descriptor: Map<String, String>,
+        trace: ArchiveTrace
+    ): Result<SimpleMavenDescriptor> = result {
+        SimpleMavenDescriptor(
+            descriptor.requireKeyInDescriptor("group") { trace },
+            descriptor.requireKeyInDescriptor("artifact") { trace },
+            descriptor.requireKeyInDescriptor("version") { trace },
+            descriptor["classifier"]
+        )
     }
 
     override fun pathForDescriptor(descriptor: SimpleMavenDescriptor, classifier: String, type: String): Path {

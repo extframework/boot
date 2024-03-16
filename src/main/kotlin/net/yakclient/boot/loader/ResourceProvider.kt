@@ -13,7 +13,7 @@ public open class ArchiveResourceProvider private constructor(
     protected val resourceProvider: (String) -> URL?
 ) : ResourceProvider {
     public constructor(reference: ArchiveReference) : this({
-        reference.reader[it]?.resource?.uri?.toURL()
+        reference.reader[it]?.resource?.location?.let(::URL)
     })
 
     public constructor(handle: ArchiveHandle) : this({

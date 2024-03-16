@@ -1,20 +1,19 @@
 package net.yakclient.boot.main
 
-import bootFactories
-import com.durganmcbroom.artifact.resolver.simple.maven.HashType
+import com.durganmcbroom.resources.ResourceAlgorithm
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import kotlinx.cli.*
-import kotlinx.coroutines.runBlocking
 import net.yakclient.boot.archive.ArchiveException
-import net.yakclient.boot.component.*
+import net.yakclient.boot.component.ComponentConfiguration
+import net.yakclient.boot.component.ComponentFactory
+import net.yakclient.boot.component.ComponentInstance
+import net.yakclient.boot.component.SoftwareComponentModelRepository
 import net.yakclient.boot.component.artifact.SoftwareComponentArtifactRequest
 import net.yakclient.boot.component.artifact.SoftwareComponentDescriptor
 import net.yakclient.boot.component.artifact.SoftwareComponentRepositorySettings
 import net.yakclient.boot.component.context.impl.ContextNodeValueImpl
-import net.yakclient.boot.dependency.DependencyTypeContainer
-import net.yakclient.`object`.ObjectContainerImpl
-import orThrow
+import runBootBlocking
 import java.io.File
 import java.nio.file.Path
 import java.util.logging.Level
@@ -52,12 +51,12 @@ public fun main(args: Array<String>) {
             val settings = when (type.lowercase()) {
                 SoftwareComponentModelRepository.DEFAULT -> SoftwareComponentRepositorySettings.default(
                     location,
-                    preferredHash = HashType.SHA1
+                    preferredHash = ResourceAlgorithm.SHA1
                 )
 
                 SoftwareComponentModelRepository.LOCAL -> SoftwareComponentRepositorySettings.local(
                     location,
-                    preferredHash = HashType.SHA1
+                    preferredHash = ResourceAlgorithm.SHA1
                 )
 
                 else -> throw IllegalArgumentException("Unknown Software Component repository type: '$type'. Only known types are '${SoftwareComponentModelRepository.DEFAULT}' (for remote repositories) and '${SoftwareComponentModelRepository.LOCAL}' (for local repositories)")
@@ -68,8 +67,8 @@ public fun main(args: Array<String>) {
             )
 
             try {
-                runBlocking(bootFactories()) {
-                    boot.cache(request, settings).orThrow()
+                runBootBlocking {
+                    boot.cache(request, settings)().merge()
                 }
                 echo("Successfully cached the component: '$descriptor'!")
             } catch (ex: ArchiveException) {
@@ -83,21 +82,15 @@ public fun main(args: Array<String>) {
         "start",
         "Starts a component and its children."
     ) {
-//        val descriptor by option(ArgType.String, "descriptor").required()
-//        val location by option(ArgType.String, "location").required()
-//        val type by option(ArgType.String, "type").default(SoftwareComponentModelRepository.DEFAULT)
-
         val component by argument(ArgType.String)
         val configPath by option(ArgType.String, "configuration", "c").default("")
         override fun execute() {
-            runBlocking(bootFactories()) {
+            runBootBlocking {
 
                 val node = boot.archiveGraph.get(
-//                    request.toArchiveDescriptor(),
                     checkNotNull(SoftwareComponentDescriptor.parseDescription(component)) { "Invalid component descriptor: '$component'" },
                     boot.componentResolver
-                ).orThrow()
-//                    boot.softwareComponents.withSettings(settings)
+                )().merge()
 
                 echo("Parsing configuration: '$configPath'")
                 val factory =

@@ -1,23 +1,26 @@
 package net.yakclient.boot.component.artifact
 
-import arrow.core.Either
 import com.durganmcbroom.artifact.resolver.*
-import com.durganmcbroom.artifact.resolver.simple.maven.HashType
+import com.durganmcbroom.jobs.Job
+import com.durganmcbroom.jobs.job
+import com.durganmcbroom.resources.ResourceAlgorithm
 
 public class SoftwareComponentArtifactStubResolver(
     override val factory: RepositoryFactory<SoftwareComponentRepositorySettings, *, SoftwareComponentArtifactStub, SoftwareComponentArtifactReference, ArtifactRepository<SoftwareComponentArtifactRequest, SoftwareComponentArtifactStub, SoftwareComponentArtifactReference>>,
-    preferredHash: HashType,
+    preferredHash: ResourceAlgorithm,
 ) : ArtifactStubResolver<SoftwareComponentRepositoryStub, SoftwareComponentArtifactStub, SoftwareComponentArtifactReference> {
-    override val repositoryResolver: SoftwareComponentRepositoryStubResolver = SoftwareComponentRepositoryStubResolver(preferredHash)
+    override val repositoryResolver: SoftwareComponentRepositoryStubResolver =
+        SoftwareComponentRepositoryStubResolver(preferredHash)
 
-    override fun resolve(stub: SoftwareComponentArtifactStub): Either<ArtifactException, SoftwareComponentArtifactReference> {
-        val repos = stub.candidates
-            .map(repositoryResolver::resolve)
-            .mapNotNull { it.orNull() }
-            .map(factory::createNew)
+    override fun resolve(stub: SoftwareComponentArtifactStub): Job<SoftwareComponentArtifactReference> =
+        job {
+            val repos = stub.candidates
+                .map(repositoryResolver::resolve)
+                .map { it.merge() }
+                .map(factory::createNew)
 
-        return Either.fromNullable(repos.firstNotNullOfOrNull {
-            it.get(stub.request).orNull()
-        }).mapLeft { ArtifactException.ArtifactNotFound(stub.request.descriptor, repos.map { it.name }) }
-    }
+            repos.firstNotNullOfOrNull {
+                it.get(stub.request)().merge()
+            } ?: throw  ArtifactException.ArtifactNotFound(stub.request.descriptor, repos.map { it.name })
+        }
 }

@@ -1,14 +1,14 @@
 package net.yakclient.boot.security
 
-public class Privileges internal constructor(
-    private val delegate: MutableList<Privilege> = ArrayList()
-) : List<Privilege> by delegate {
-    public fun add(privilege: Privilege) {
-        if (!PrivilegeAccess.hasPrivilege(privilege)) throw SecurityException("Cannot add: ${privilege.name} to privileges as caller does not have sufficient privileges!")
-
-        delegate.add(privilege)
-    }
-}
+//public class Privileges internal constructor(
+//    private val delegate: MutableList<Privilege> = ArrayList()
+//) : List<Privilege> by delegate {
+//    public fun add(privilege: Privilege) {
+//        if (!PrivilegeAccess.hasPrivilege(privilege)) throw SecurityException("Cannot add: ${privilege.name} to privileges as caller does not have sufficient privileges!")
+//
+//        delegate.add(privilege)
+//    }
+//}
 
 //@JvmName("toPermissionCollectionExtension")
 //@Suppress(UNUSED_INLINE)

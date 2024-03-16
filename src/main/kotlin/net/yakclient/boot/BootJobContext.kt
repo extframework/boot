@@ -1,19 +1,14 @@
-import arrow.core.Either
-import com.durganmcbroom.jobs.BasicJobElementFactory
-import com.durganmcbroom.jobs.JobResult
+import com.durganmcbroom.jobs.*
 import com.durganmcbroom.jobs.logging.LogLevel
 import com.durganmcbroom.jobs.logging.Logger
 import com.durganmcbroom.jobs.logging.LoggerFactory
 import com.durganmcbroom.jobs.progress.JobWeight
-import kotlinx.coroutines.*
-import java.time.ZoneId
-import java.time.ZonedDateTime
-import java.time.format.DateTimeFormatter
 import java.util.logging.Handler
 import java.util.logging.Level
 import java.util.logging.LogManager
 import java.util.logging.LogRecord
 import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.EmptyCoroutineContext
 
 //package net.yakclient.boot
 //
@@ -61,19 +56,16 @@ import kotlin.coroutines.CoroutineContext
 //    return orNull()!!
 //}
 //
-public fun <T> JobResult<T, Throwable>.orThrow(): T {
-    if (wasFailure()) throw failureOrNull()!!
-    return orNull()!!
-}
+//public fun <T> JobResult<T, Throwable>.orThrow(): T {
+//    if (failure) throw leftOrNull()!!
+//    return getOrNull()!!
+//}
 
 //
-public fun <T, E> Either<E, T>.asOutput(): JobResult<T, E> {
-    return if (this.isLeft()) JobResult.Failure((this as Either.Left).value)
-    else JobResult.Success((this as Either.Right).value)
-}
-
-
-
+//public fun <T, E> Either<E, T>.asOutput(): JobResult<T, E> {
+//    return if (this.isLeft()) F((this as Either.Left).value)
+//    else JobResult.Success((this as Either.Right).value)
+//}
 
 
 //
@@ -102,17 +94,17 @@ public fun <T, E> Either<E, T>.asOutput(): JobResult<T, E> {
 //    override val weight: Int
 //) : NamedCompositionStub, ProgressingCompositionStub
 
-public suspend fun <T> withWeight(influence: Int, block: suspend CoroutineScope.() -> T): T {
-    return withContext(JobWeight(influence)) {
-        block()
-    }
-}
+//public suspend fun <T> withWeight(influence: Int, block: suspend CoroutineScope.() -> T): T {
+//    return withContext(JobWeight(influence)) {
+//        block()
+//    }
+//}
 
-private class BootLogger (
+private class BootLogger(
     val realLogger: java.util.logging.Logger
 ) : Logger {
     companion object {
-        fun createLogger(name: String) : java.util.logging.Logger {
+        fun createLogger(name: String): java.util.logging.Logger {
             LogManager.getLogManager().reset()
             val rootLogger: java.util.logging.Logger = LogManager.getLogManager().getLogger("")
 
@@ -121,13 +113,15 @@ private class BootLogger (
                     val out = when (record.level) {
                         Level.SEVERE,
                         Level.WARNING -> System.err
+
                         else -> System.out
                     }
 
                     out.println(record.message)
                 }
-                override fun flush() {  }
-                override fun close() {  }
+
+                override fun flush() {}
+                override fun close() {}
             }
 
             rootLogger.addHandler(value)
@@ -176,22 +170,26 @@ private class BootLogger (
     }
 }
 
-private fun BootLoggerFactory() = object : BasicJobElementFactory<Logger>(listOf(), {
-    coroutineScope {
-        val name = coroutineContext[CoroutineName]?.name
-            ?: throw IllegalArgumentException("Cant find the job name! Make sure you add CoroutineName to the coroutine context.")
+private fun BootLoggerFactory() = object : BasicJobFacetFactory<Logger>(listOf(), {
+    val name = this.context[JobName]?.name
+        ?: "<anonymous job>"
+//        ?: throw IllegalArgumentException("Cant find the job name! Make sure you add CoroutineName to the coroutine context.")
 
-        BootLogger(BootLogger.createLogger(name))
-    }
+    BootLogger(BootLogger.createLogger(name))
 }), LoggerFactory {}
 
-public fun bootFactories(): CoroutineContext =
-    BootLoggerFactory()// + WeightedProgressTrackerFactory() +  SimpleProgressNotifierFactory()
+public fun <T> runBootBlocking(
+    context: JobContext = EmptyJobContext,
+    block: JobScope.() -> T
+): T =
+    launch(context + BootLoggerFactory()) {
+        block()
+    }
 
-public inline fun <T, E> JobResult<T, E>.fix(block: (E) -> T): T {
-    if (wasFailure()) return block(failureOrNull()!!)
-    return orNull()!!
-}
+//public inline fun <T, E> Result<T>.fix(block: (Exception) -> T): T {
+//    if (failure) return block(leftOrNull()!!)
+//    return getOrNull()!!
+//}
 
 //public suspend inline fun <T, E> bootJob(
 //    name: String,

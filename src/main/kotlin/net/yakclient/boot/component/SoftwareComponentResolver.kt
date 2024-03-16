@@ -1,87 +1,94 @@
 package net.yakclient.boot.component
 
-import com.durganmcbroom.artifact.resolver.*
+import com.durganmcbroom.artifact.resolver.ArtifactMetadata
+import com.durganmcbroom.artifact.resolver.ResolutionContext
+import com.durganmcbroom.artifact.resolver.createContext
+import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenArtifactRequest
 import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenDescriptor
-import com.durganmcbroom.jobs.JobResult
-import com.durganmcbroom.jobs.jobScope
+import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenRepositorySettings
+import com.durganmcbroom.jobs.Job
+import com.durganmcbroom.jobs.job
+import com.durganmcbroom.resources.streamToResource
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.KotlinModule
 import com.fasterxml.jackson.module.kotlin.readValue
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.runBlocking
 import net.yakclient.archives.ArchiveHandle
 import net.yakclient.boot.BootInstance
 import net.yakclient.boot.archive.*
-import net.yakclient.boot.component.artifact.*
-import net.yakclient.boot.dependency.*
-import net.yakclient.boot.loader.*
+import net.yakclient.boot.component.artifact.SoftwareComponentArtifactMetadata
+import net.yakclient.boot.component.artifact.SoftwareComponentDescriptor
+import net.yakclient.boot.component.artifact.SoftwareComponentRepositoryFactory
+import net.yakclient.boot.dependency.DependencyResolver
+import net.yakclient.boot.dependency.DependencyTypeContainer
+import net.yakclient.boot.dependency.cacheArtifact
+import net.yakclient.boot.loader.ArchiveResourceProvider
+import net.yakclient.boot.loader.ArchiveSourceProvider
+import net.yakclient.boot.loader.DelegatingClassProvider
+import net.yakclient.boot.loader.IntegratedLoader
 import net.yakclient.boot.maven.MavenLikeResolver
-import net.yakclient.boot.security.PrivilegeManager
-import net.yakclient.boot.util.toSafeResource
-import net.yakclient.common.util.resource.ProvidedResource
+import java.io.ByteArrayInputStream
 import java.lang.reflect.Constructor
-import java.net.URI
 
 public open class SoftwareComponentResolver(
     private val dependencyProviders: DependencyTypeContainer,
     private val bootInstance: BootInstance,
     private val parentClassLoader: ClassLoader,
-    private val parentPrivilegeManager: PrivilegeManager,
 ) : MavenLikeResolver<
-        SoftwareComponentArtifactRequest,
         SoftwareComponentNode,
-        SoftwareComponentRepositorySettings,
         SoftwareComponentArtifactMetadata> {
     override val name: String = "component"
     override val nodeType: Class<SoftwareComponentNode> = SoftwareComponentNode::class.java
     override val metadataType: Class<SoftwareComponentArtifactMetadata> = SoftwareComponentArtifactMetadata::class.java
-    override val factory: RepositoryFactory<SoftwareComponentRepositorySettings, SoftwareComponentArtifactRequest, *, ArtifactReference<SoftwareComponentArtifactMetadata, *>, *> =
-        SoftwareComponentRepositoryFactory
 
     private val mapper = ObjectMapper().registerModule(KotlinModule.Builder().build())
 
-    override suspend fun load(
+    override fun createContext(settings: SimpleMavenRepositorySettings): ResolutionContext<SimpleMavenArtifactRequest, *, SoftwareComponentArtifactMetadata, *> {
+        return SoftwareComponentRepositoryFactory.createContext(settings)
+    }
+
+    override fun load(
         data: ArchiveData<SoftwareComponentDescriptor, CachedArchiveResource>,
         helper: ResolutionHelper
-    ): JobResult<SoftwareComponentNode, ArchiveException> = jobScope {
+    ): Job<SoftwareComponentNode> = job {
         val runtimeModel =
             mapper.readValue<SoftwareComponentModel>(
                 (data.resources["model.json"]
-                    ?: fail(
-                        ArchiveException.IllegalState(
-                            "Failed to find model.json in resources",
-                            trace()
-                        )
+                    ?: throw ArchiveException(
+                        trace(),
+                        "Failed to find model.json in resources"
                     )).path.toFile()
             )
 
-        val asyncParents = data.parents.map {
-            async {
-                helper.load(
-                    it.descriptor, this@SoftwareComponentResolver
-                )
+        val (parents, dependencies) = runBlocking {
+            val asyncParents = data.parents.map {
+                async {
+                    helper.load(
+                        it.descriptor, this@SoftwareComponentResolver
+                    )
+                }
             }
-        }
 
-        val asyncDependencies = runtimeModel.dependencies.map {
-            val provider = dependencyProviders.get(it.repository.type) ?: fail(
-                ArchiveException.ArchiveTypeNotFound(
-                    it.repository.type, trace()
-                )
-            )
-            val descriptor = provider.parseRequest(it.request)?.descriptor
-                ?: fail(ArchiveException.DependencyInfoParseFailed(it.request.toString(), trace()))
+            val asyncDependencies = runtimeModel.dependencies.map {
+                val provider =
+                    dependencyProviders.get(it.repository.type) ?: throw ArchiveException.ArchiveTypeNotFound(
+                        it.repository.type, trace()
+                    )
 
-            async {
-                helper.load(
-                    descriptor, provider.resolver as DependencyResolver<ArtifactMetadata.Descriptor, *, *, *, *>
-                )
+                val descriptor = provider.parseRequest(it.request)?.descriptor
+                    ?: throw ArchiveException.DependencyInfoParseFailed(it.request.toString(), trace())
+
+                async {
+                    helper.load(
+                        descriptor, provider.resolver as DependencyResolver<ArtifactMetadata.Descriptor, *, *, *, *>
+                    )
+                }
             }
+
+            asyncParents.awaitAll() to asyncDependencies.awaitAll()
         }
-
-        val parents = asyncParents.awaitAll()
-
-        val dependencies = asyncDependencies.awaitAll()
 
         val accessTree = helper.newAccessTree {
             for (child in parents) direct(child)
@@ -103,20 +110,7 @@ public open class SoftwareComponentResolver(
                     )
                 },
                 parents.mapNotNullTo(HashSet()) { it.archive }
-            ).attempt().archive
-//            val info = RawArchiveContainerInfo(
-//                data.descriptor.artifact,
-//                path,
-//                accessTree,
-//            )
-//
-//            ContainerLoader.load(
-//                info,
-//                ContainerLoader.createHandle(),
-//                RawArchiveContainerLoader(ZipResolutionProvider, parentClassLoader),
-//                RootVolume,
-//                PrivilegeManager(parentPrivilegeManager, PrivilegeAccess.emptyPrivileges())
-//            ).attempt()
+            )().merge().archive
         }
 
         SoftwareComponentNode(
@@ -140,20 +134,17 @@ public open class SoftwareComponentResolver(
             ?: loadClass.tryGetConstructor()?.newInstance()) as ComponentFactory<*, *>
     }
 
-
-    override suspend fun cache(
+    override fun cache(
         metadata: SoftwareComponentArtifactMetadata,
         helper: ArchiveCacheHelper<SimpleMavenDescriptor>
-    ): JobResult<ArchiveData<SoftwareComponentDescriptor, CacheableArchiveResource>, ArchiveException> = jobScope {
+    ): Job<ArchiveData<SoftwareComponentDescriptor, CacheableArchiveResource>> = job {
         metadata.dependencies.forEach {
             val provider =
                 dependencyProviders.get(
                     it.type,
-                ) ?: fail(
-                    ArchiveException.ArchiveTypeNotFound(
-                        it.type,
-                        trace()
-                    )
+                ) ?: throw ArchiveException.ArchiveTypeNotFound(
+                    it.type,
+                    trace()
                 )
 
             provider.cacheArtifact(
@@ -161,13 +152,13 @@ public open class SoftwareComponentResolver(
                 it.request,
                 trace(),
                 helper,
-            ).attempt()
+            )().merge()
         }
 
-        helper.withResource("model.json", ProvidedResource(URI.create(metadata.resource!!.location)) {
-            mapper.writeValueAsBytes(metadata.runtimeModel)
+        helper.withResource("model.json", streamToResource(metadata.resource!!.location) {
+            ByteArrayInputStream(mapper.writeValueAsBytes(metadata.runtimeModel))
         })
-        helper.withResource("jar.jar", metadata.resource!!.toSafeResource())
+        helper.withResource("jar.jar", metadata.resource!!)
 
         helper.newData(metadata.descriptor)
     }

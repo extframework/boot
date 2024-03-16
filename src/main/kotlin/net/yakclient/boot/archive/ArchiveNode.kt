@@ -2,7 +2,6 @@ package net.yakclient.boot.archive
 
 import com.durganmcbroom.artifact.resolver.ArtifactMetadata
 import net.yakclient.archives.ArchiveHandle
-import net.yakclient.boot.container.ArchiveContainer
 
 public interface ArchiveNode<T: ArchiveNode<T>> {
     public val descriptor: ArtifactMetadata.Descriptor
