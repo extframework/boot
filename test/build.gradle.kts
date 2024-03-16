@@ -23,6 +23,7 @@ publishing {
             artifact(tasks["javadocJar"])
 
             artifactId = "boot-test"
+            version = "2.1-SNAPSHOT"
 
             pom {
                 name.set("Boot Test")

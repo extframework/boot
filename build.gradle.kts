@@ -133,8 +133,6 @@ allprojects {
         }
     }
 
-
-
     kotlin {
         explicitApi()
     }
@@ -145,7 +143,6 @@ allprojects {
         implementation(kotlin("stdlib"))
         implementation(kotlin("reflect"))
         testImplementation(kotlin("test"))
-
 
         api("net.yakclient:common-util:1.1-SNAPSHOT") {
             isChanging = true
