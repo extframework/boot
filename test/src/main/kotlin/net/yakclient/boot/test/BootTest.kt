@@ -168,7 +168,7 @@ public fun createArchiveGraphMap(
 public fun emptyAccessTree(it: ArtifactMetadata.Descriptor): ArchiveAccessTree =
     object : ArchiveAccessTree {
         override val descriptor: ArtifactMetadata.Descriptor = it
-        override val targets: Set<ArchiveTarget> = setOf()
+        override val targets: List<ArchiveTarget> = listOf()
     }
 
 private fun <T : ArchiveNode<T>> mockDependencyResolver(nodeType: Class<T>) = object :
