@@ -7,13 +7,7 @@ import net.yakclient.boot.loader.ResourceProvider
 public interface ArchiveAccessTree {
     public val descriptor: ArtifactMetadata.Descriptor
 
-    public val targets: Set<ArchiveTarget> // Probably not just parents depending on implementation
-
-//    public val parents: Set<ArchiveAccessTree>
-//        get() = targets
-//            .filter { it.relationship == ArchiveRelationship.DIRECT }
-//            .mapTo(HashSet()) { it.target.access }
-
+    public val targets: List<ArchiveTarget>
 }
 
 public data class ArchiveTarget(

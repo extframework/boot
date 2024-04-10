@@ -64,7 +64,7 @@ class TestLoadComponent {
                     setOf(),
                     object : ArchiveAccessTree {
                         override val descriptor: ArtifactMetadata.Descriptor = it
-                        override val targets: Set<ArchiveTarget> = setOf()
+                        override val targets: List<ArchiveTarget> = listOf()
                     },
                     MavenDependencyResolver(
                         parentClassLoader = ClassLoader.getPlatformClassLoader(),

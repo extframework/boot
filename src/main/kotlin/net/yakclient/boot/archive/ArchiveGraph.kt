@@ -124,19 +124,20 @@ public open class ArchiveGraph(
                     }
 
                     override fun newAccessTree(scope: ResolutionHelper.AccessTreeScope.() -> Unit): ArchiveAccessTree {
-                        val allTargets = ArrayList<ArchiveTarget>()
+                        val directTargets = ArrayList<ArchiveTarget>()
+                        val transitiveTargets = ArrayList<ArchiveTarget>()
 
                         val scopeObject = object : ResolutionHelper.AccessTreeScope {
                             override fun direct(dependency: ArchiveNode<*>) {
-                                val directTarget = ArchiveTarget(
+                                directTargets.add(ArchiveTarget(
                                     dependency.descriptor,
                                     ArchiveRelationship.Direct(
                                         ArchiveClassProvider(dependency.archive),
                                         ArchiveResourceProvider(dependency.archive),
                                     )
-                                )
+                                ))
 
-                                val transitiveTargets = dependency.access.targets.map {
+                                transitiveTargets.addAll(dependency.access.targets.map {
                                     ArchiveTarget(
                                         it.descriptor,
                                         ArchiveRelationship.Transitive(
@@ -144,21 +145,18 @@ public open class ArchiveGraph(
                                             it.relationship.resources,
                                         )
                                     )
-                                }
-
-                                allTargets.add(directTarget)
-                                allTargets.addAll(transitiveTargets)
+                                })
                             }
 
                             override fun rawTarget(target: ArchiveTarget) {
-                                allTargets.add(target)
+                                directTargets.add(target)
                             }
                         }
                         scopeObject.scope()
 
                         val preliminaryTree: ArchiveAccessTree = object : ArchiveAccessTree {
                             override val descriptor: ArtifactMetadata.Descriptor = data.descriptor
-                            override val targets: Set<ArchiveTarget> = allTargets.toSet()
+                            override val targets: List<ArchiveTarget> = directTargets + transitiveTargets
                         }
 
                         return resolver.auditor.audit(preliminaryTree)
