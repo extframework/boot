@@ -44,9 +44,7 @@ public open class ArchiveGraph(
         resolver: ArchiveNodeResolver<K, *, T, *, *>
     ): Job<T> = Job {
         withContext(ArchiveTraceFactory) {
-            getInternal(descriptor, resolver)().mapException {
-                ArchiveException(ArchiveTrace(descriptor, null), "An error occurred while loading archive: '$descriptor'", it)
-            }
+            getInternal(descriptor, resolver)()
         }
     }
 
@@ -129,13 +127,15 @@ public open class ArchiveGraph(
 
                         val scopeObject = object : ResolutionHelper.AccessTreeScope {
                             override fun direct(dependency: ArchiveNode<*>) {
-                                directTargets.add(ArchiveTarget(
-                                    dependency.descriptor,
-                                    ArchiveRelationship.Direct(
-                                        ArchiveClassProvider(dependency.archive),
-                                        ArchiveResourceProvider(dependency.archive),
+                                directTargets.add(
+                                    ArchiveTarget(
+                                        dependency.descriptor,
+                                        ArchiveRelationship.Direct(
+                                            ArchiveClassProvider(dependency.archive),
+                                            ArchiveResourceProvider(dependency.archive),
+                                        )
                                     )
-                                ))
+                                )
 
                                 transitiveTargets.addAll(dependency.access.targets.map {
                                     ArchiveTarget(
@@ -213,7 +213,13 @@ public open class ArchiveGraph(
 
             logger.log(LogLevel.INFO, "Building artifact tree for: '$descriptor'...")
 
-            val artifact = context.getAndResolve(request)().merge()
+            val artifact = context.getAndResolve(request)().mapException {
+                if (it is ArtifactException.ArtifactNotFound) ArchiveException.ArchiveNotFound(
+                    ArchiveTrace(request.descriptor, null),
+                    it.desc,
+                    it.searchedIn
+                ) else ArchiveException(ArchiveTrace(request.descriptor, null), null, it)
+            }.merge()
 
             logger.log(LogLevel.INFO, "Caching archive tree:")
 
@@ -225,8 +231,6 @@ public open class ArchiveGraph(
                     resolver
                 )().merge()
             }
-        }.mapException {
-            ArchiveException(ArchiveTrace(descriptor,null), "An error occurred while caching archive: '$descriptor'", it)
         }
     }
 
@@ -359,7 +363,6 @@ public open class ArchiveGraph(
                 .apply { make() }
                 .writeBytes(metadataResource)
             beingResolved.remove(descriptor)
-            result
         }
 }
 

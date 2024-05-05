@@ -40,12 +40,11 @@ public open class IntegratedLoader(
 //        if (mn == null) sourceProvider.getResource(name) else sourceProvider.getResource(name, mn)
 
     override fun loadClass(name: String): Class<*> = synchronized(getClassLoadingLock(name)) {
-        val c = findLoadedClass(name)
+        findLoadedClass(name)
+            ?: runCatching {  parent.loadClass(name) }.getOrNull()
             ?: tryDefine(name)
             ?: classProvider.findClass(name)
-            ?: return parent.loadClass(name)
-
-        c
+            ?: throw ClassNotFoundException(name)
     }
 
     protected open fun tryDefine(name: String): Class<*>? = sourceProvider.findSource(name)?.let {

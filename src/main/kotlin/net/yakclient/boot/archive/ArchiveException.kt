@@ -1,14 +1,17 @@
 package net.yakclient.boot.archive
 
+import com.durganmcbroom.artifact.resolver.ArtifactException
+import com.durganmcbroom.artifact.resolver.ArtifactMetadata
+
 public open class ArchiveException(
     public open val trace: ArchiveTrace,
     public override val message: String? = null,
     public override val cause: Throwable? = null,
 ) : Exception() {
-    public data class ArtifactResolutionException(override val cause: Throwable, override val trace: ArchiveTrace) :
-        ArchiveException(
-            trace
-        )
+//    public data class ArtifactResolutionException(override val cause: Throwable, override val trace: ArchiveTrace) :
+//        ArchiveException(
+//            trace
+//        )
 
     public data class ArchiveLoadFailed(override val cause: Throwable?, override val trace: ArchiveTrace) :
         ArchiveException(trace)
@@ -22,9 +25,21 @@ public open class ArchiveException(
 
     public data class ArchiveNotCached(val artifact: String, override val trace: ArchiveTrace) : ArchiveException(trace)
 
+    // If the archive artifact cannot be located
+    public data class ArchiveNotFound(
+        override val trace: ArchiveTrace,
+        val archive: ArtifactMetadata.Descriptor,
+        val lookedIn: List<String>
+    ) : ArchiveException(
+        trace,
+        """Failed to find the artifact: '$archive'. Looked in places: 
+            |${lookedIn.joinToString(separator = "\n") { " - $it" }}
+        """.trimMargin()
+    )
+
     public data class CircularArtifactException(override val trace: ArchiveTrace) : ArchiveException(trace)
 
     override fun toString(): String {
-        return "${message ?: cause?.message} in trace: '$trace'"
+        return "ArchiveException(message=${message ?: cause?.message} in trace: '$trace')"
     }
 }
