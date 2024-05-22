@@ -144,13 +144,14 @@ allprojects {
     }
 
     val jobsApiVersion = "1.2-SNAPSHOT"
+    val artifactResolverVersion = "1.1.1-SNAPSHOT"
 
     dependencies {
         implementation(kotlin("stdlib"))
         implementation(kotlin("reflect"))
         testImplementation(kotlin("test"))
 
-        api("net.yakclient:common-util:1.1-SNAPSHOT") {
+        api("net.yakclient:common-util:1.1.1-SNAPSHOT") {
             isChanging = true
         }
 
@@ -158,10 +159,10 @@ allprojects {
             isChanging = true
         }
 
-        implementation("com.durganmcbroom:artifact-resolver:1.1-SNAPSHOT") {
+        implementation("com.durganmcbroom:artifact-resolver:$artifactResolverVersion") {
             isChanging = true
         }
-        implementation("com.durganmcbroom:artifact-resolver-simple-maven:1.1-SNAPSHOT") {
+        implementation("com.durganmcbroom:artifact-resolver-simple-maven:$artifactResolverVersion") {
             isChanging = true
         }
         api("com.durganmcbroom:jobs:$jobsApiVersion") {

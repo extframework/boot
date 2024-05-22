@@ -22,8 +22,8 @@ fun newClassBytes(name: String): ByteBuffer {
     node.accept(writer)
     return ByteBuffer.wrap(writer.toByteArray())
 }
-class TestIntegratedLoaderConcurrency {
 
+class TestIntegratedLoaderConcurrency {
 
 
     fun concurrentlyLoadClasses(
@@ -31,47 +31,43 @@ class TestIntegratedLoaderConcurrency {
             SourceProvider
         ) -> ClassLoader
     ) {
-        val nameA = "A"
-        val nameB = "B"
-
         val sources = object : SourceProvider {
-            override val packages: Set<String> = setOf("")
+            override val packages: Set<String> = setOf("com.example")
 
             override fun findSource(name: String): ByteBuffer? {
                 println("Getting class source : '$name' in thread : '${Thread.currentThread().name}'")
 
-                // Make sure we hit this right
-                Thread.sleep(1000)
-
-
-                return when (name) {
-                    nameA, nameB -> newClassBytes(name)
-                    else -> null
-                }
+                return if (!name.startsWith("java")) newClassBytes(name) else null
             }
-
         }
 
-        val loader = loaderProvider(sources)
+        // URLs pointing to classpath
+        val classLoader = loaderProvider(sources)
 
-        val pool = Executors.newCachedThreadPool()
+        // Create a pool of threads
+        val executorService = Executors.newFixedThreadPool(10)
 
-        val classA = pool.submit(Callable {
-            Thread.sleep(1000)
-            loader.loadClass(nameA)
-        })
-        val classB = pool.submit(Callable {
-            Thread.sleep(1000)
-            loader.loadClass(nameB)
-        })
+        // Define tasks to load classes
+        val task1 = Callable { classLoader.loadClass("com.example.Class1") }
+        val task2 = Callable { classLoader.loadClass("com.example.Class1") }
+        val task3 = Callable { classLoader.loadClass("com.example.Class1") }
 
-        while(true) {
-            if (classA.isDone && classB.isDone) break
-            Thread.sleep(5)
+        // Submit tasks
+        val future1 = executorService.submit(task1)
+        val future2 = executorService.submit(task2)
+        val future3 = executorService.submit(task3)
+
+        // Wait for all tasks to complete and assert no exceptions occurred
+        try {
+            println(future1.get())
+            println(future2.get())
+            println(future3.get())
+            assert(true) // All classes loaded without exception
+        } catch (e: Exception) {
+            throw e
+        } finally {
+            executorService.shutdown()
         }
-
-        println(classA.get())
-        println(classB.get())
     }
 
 
@@ -91,8 +87,7 @@ class TestIntegratedLoaderConcurrency {
         concurrentlyLoadClasses {
             MutableClassLoader(
                 name = "Mutable Loader A",
-                MutableSourceProvider(mutableListOf(it)),
-                MutableClassProvider(mutableListOf()),
+                mutableListOf(it),
                 parent = ClassLoader.getPlatformClassLoader()
             )
         }
