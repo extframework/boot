@@ -9,7 +9,7 @@ plugins {
 }
 
 group = "net.yakclient"
-version = "2.1-SNAPSHOT"
+version = "2.1.1-SNAPSHOT"
 
 application {
     mainClass.set("net.yakclient.boot.main.BootKt")
@@ -144,14 +144,14 @@ allprojects {
     }
 
     val jobsApiVersion = "1.2-SNAPSHOT"
-    val artifactResolverVersion = "1.1.1-SNAPSHOT"
+    val artifactResolverVersion = "1.1.3-SNAPSHOT"
 
     dependencies {
         implementation(kotlin("stdlib"))
         implementation(kotlin("reflect"))
         testImplementation(kotlin("test"))
 
-        api("net.yakclient:common-util:1.1.1-SNAPSHOT") {
+        api("net.yakclient:common-util:1.1.3-SNAPSHOT") {
             isChanging = true
         }
 
