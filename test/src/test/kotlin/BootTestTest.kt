@@ -3,15 +3,15 @@ import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenDescriptor
 import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenRepositorySettings
 import com.durganmcbroom.jobs.Job
 import com.durganmcbroom.jobs.SuccessfulJob
-import net.yakclient.boot.BootInstance
-import net.yakclient.boot.component.ComponentConfiguration
-import net.yakclient.boot.component.ComponentFactory
-import net.yakclient.boot.component.ComponentInstance
-import net.yakclient.boot.component.artifact.SoftwareComponentDescriptor
-import net.yakclient.boot.component.context.ContextNodeValue
-import net.yakclient.boot.maven.MavenDependencyResolver
-import net.yakclient.boot.new
-import net.yakclient.boot.test.testBootInstance
+import dev.extframework.boot.BootInstance
+import dev.extframework.boot.component.ComponentConfiguration
+import dev.extframework.boot.component.ComponentFactory
+import dev.extframework.boot.component.ComponentInstance
+import dev.extframework.boot.component.artifact.SoftwareComponentDescriptor
+import dev.extframework.boot.component.context.ContextNodeValue
+import dev.extframework.boot.maven.MavenDependencyResolver
+import dev.extframework.boot.new
+import dev.extframework.boot.test.testBootInstance
 import kotlin.test.Test
 
 class BootTestTest {
@@ -66,7 +66,7 @@ class BootTestTest {
 
     @Test
     fun `Test ignores boot loaded dependencies correctly`() {
-        val descriptor = SimpleMavenDescriptor.parseDescription("net.yakclient:archives:1.1-SNAPSHOT")!!
+        val descriptor = SimpleMavenDescriptor.parseDescription("dev.extframework:archives:1.1-SNAPSHOT")!!
 
         val instance: BootInstance = testBootInstance(
             mapOf(),
@@ -94,13 +94,13 @@ class BootTestTest {
 
     @Test
     fun `Test Archive graph ignores root versions correctly`() {
-        val descriptor = SimpleMavenDescriptor.parseDescription("net.yakclient:archives:1.1-SNAPSHOT")!!
+        val descriptor = SimpleMavenDescriptor.parseDescription("dev.extframework:archives:1.1-SNAPSHOT")!!
 
         val instance: BootInstance = testBootInstance(
             mapOf(),
             dependencies = setOf(descriptor)
         )
 
-        check(instance.archiveGraph[SimpleMavenDescriptor.parseDescription("net.yakclient:archives:asdf-SNAPSHOT")!!] != null) {"Version component wasnt ignored!"}
+        check(instance.archiveGraph[SimpleMavenDescriptor.parseDescription("dev.extframework:archives:asdf-SNAPSHOT")!!] != null) {"Version component wasnt ignored!"}
     }
 }
