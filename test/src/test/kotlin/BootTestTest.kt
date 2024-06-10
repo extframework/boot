@@ -78,7 +78,7 @@ class BootTestTest {
 
             instance.archiveGraph.cache(
                 SimpleMavenArtifactRequest(descriptor),
-                SimpleMavenRepositorySettings.default(url = "http://maven.yakclient.net/snapshots"),
+                SimpleMavenRepositorySettings.default(url = "http://maven.extframework.dev/snapshots"),
                 resolver
             )().merge()
 

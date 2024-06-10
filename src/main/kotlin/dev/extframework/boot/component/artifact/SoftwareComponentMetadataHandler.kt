@@ -22,12 +22,11 @@ public class SoftwareComponentMetadataHandler(
 ) : SimpleMavenMetadataHandler(
     settings
 ) {
-    private val mapper = ObjectMapper().registerModule(KotlinModule())
+    private val mapper = ObjectMapper().registerModule(KotlinModule.Builder().build())
 
     override fun parseDescriptor(desc: String): Result<SimpleMavenDescriptor> = result {
         SimpleMavenDescriptor.parseDescription(desc) ?: throw MetadataRequestException.DescriptorParseFailed
     }
-
 
     override fun requestMetadata(
         desc: SoftwareComponentDescriptor,

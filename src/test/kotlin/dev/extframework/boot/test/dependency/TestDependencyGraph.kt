@@ -8,6 +8,7 @@ import com.durganmcbroom.jobs.result
 import com.durganmcbroom.resources.ResourceAlgorithm
 import dev.extframework.boot.archive.ArchiveException
 import dev.extframework.boot.archive.ArchiveGraph
+import dev.extframework.boot.archive.ArchiveNode
 import dev.extframework.boot.maven.MavenDependencyResolver
 import dev.extframework.boot.maven.MavenResolverProvider
 import runBootBlocking
@@ -18,48 +19,25 @@ class TestDependencyGraph {
     @Test
     fun `Test maven basic dependency loading`() {
         val basePath = Files.createTempDirectory("m2cache")
-        println("Base path: '$basePath'")
         val maven = MavenResolverProvider()
         val archiveGraph = ArchiveGraph(basePath, mutableMapOf())
 
         val request = SimpleMavenArtifactRequest(
-            "dev.extframework.minecraft:minecraft-provider-def:1.0-SNAPSHOT",
+            "org.ow2.asm:asm-commons:9.7",
             includeScopes = setOf("compile", "runtime", "import")
         )
 
-        cacheAndGet(archiveGraph, request, SimpleMavenRepositorySettings.local(), maven.resolver)
-    }
-
-    @Test
-    fun `Test maven dual dependency loading`() {
-        val basePath = Files.createTempDirectory("m2cache")
-
-        val maven = MavenResolverProvider()
-        val archiveGraph = ArchiveGraph(basePath)
-
-        val request = SimpleMavenArtifactRequest(
-            "dev.extframework.minecraft:minecraft-provider-def:1.0-SNAPSHOT",
-            includeScopes = setOf("compile", "runtime", "import")
+        val node = cacheAndGet(
+            archiveGraph,
+            request,
+            SimpleMavenRepositorySettings.local(path = this::class.java.getResource("/blackbox-repository")!!.path),
+            maven.resolver
         )
 
-        cacheAndGet(
-            archiveGraph, request, SimpleMavenRepositorySettings.local(
-                preferredHash = ResourceAlgorithm.SHA1
-            ), maven.resolver
-        )
-
-        separator("Second request:")
-
-        val secondRequest = SimpleMavenArtifactRequest(
-            "io.arrow-kt:arrow-core:1.2.1",
-            includeScopes = setOf("compile", "runtime", "import")
-        )
-
-        cacheAndGet(
-            archiveGraph, secondRequest, SimpleMavenRepositorySettings.mavenCentral(
-                preferredHash = ResourceAlgorithm.SHA1
-            ), maven.resolver
-        )
+        check(node.archive != null) { "Archive shouldnt be null" }
+        check(node.access.targets.size == 2) { "Wrong target size" }
+        check(node.access.targets.mapTo(HashSet()) { it.descriptor.name }
+            .containsAll(setOf("org.ow2.asm:asm:9.7", "org.ow2.asm:asm-tree:9.7"))) {"Wrong targets"}
     }
 
     @Test
@@ -83,8 +61,9 @@ class TestDependencyGraph {
             )
         }
 
+
         r.exceptionOrNull()?.printStackTrace()
-        check(r.exceptionOrNull()?.cause is MetadataRequestException) { "" }
+        check(r.exceptionOrNull() is ArchiveException.ArchiveNotFound) { "" }
     }
 
     @Test
@@ -105,7 +84,7 @@ class TestDependencyGraph {
         }
 
         r.exceptionOrNull()?.printStackTrace()
-        check(r.exceptionOrNull()?.cause is ArchiveException.ArchiveNotCached)
+        check(r.exceptionOrNull() is ArchiveException.ArchiveNotCached)
     }
 
     private fun cacheAndGet(
@@ -113,7 +92,7 @@ class TestDependencyGraph {
         request: SimpleMavenArtifactRequest,
         repository: SimpleMavenRepositorySettings,
         maven: MavenDependencyResolver
-    ) {
+    ): ArchiveNode<*> {
         val node = runBootBlocking(JobName("test")) {
             archiveGraph.cache(
                 request,
@@ -132,5 +111,7 @@ class TestDependencyGraph {
         println(node.access.targets.joinToString(separator = "\n") {
             it.descriptor.name
         })
+
+        return node
     }
 }

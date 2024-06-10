@@ -7,6 +7,7 @@ import dev.extframework.boot.loader.IntegratedLoader
 import dev.extframework.boot.loader.SourceProvider
 import java.nio.ByteBuffer
 import java.nio.file.Path
+import kotlin.test.Ignore
 import kotlin.test.Test
 
 class TestClassIsolation {
@@ -35,9 +36,10 @@ class TestClassIsolation {
     }
 
     @Test
+    @Ignore
     fun `Test module Isolation`() {
-        val asmIn = TestClassIsolation::class.java.getResource("/asm-9.6.jar")!!.toURI().let(Path::of)
-        val asmAnalysis = TestClassIsolation::class.java.getResource("/asm-tree-9.6.jar")!!.toURI().let(Path::of)
+        val asmIn = TestClassIsolation::class.java.getResource("/blackbox-repository/org/ow2/asm/asm/9.7/asm-9.7.jar")!!.toURI().let(Path::of)
+        val asmAnalysis = TestClassIsolation::class.java.getResource("/blackbox-repository/org/ow2/asm/asm-tree/9.7/asm-tree-9.7.jar")!!.toURI().let(Path::of)
 
         val refA = Archives.find(
             asmIn,

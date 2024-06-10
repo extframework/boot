@@ -1,0 +1,7 @@
+{
+  "name": "blackbox-test",
+  "packaging": "jar",
+  "entrypoint": "dev.extframework.boot.test.blackbox.TestComponentFactory",
+  "children": [  ],
+  "dependencies": [  ]
+}

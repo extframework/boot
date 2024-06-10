@@ -12,6 +12,12 @@ plugins {
     id("dev.extframework.common") version "1.0.4"
 }
 
+tasks.compileKotlin {
+    kotlinOptions {
+        freeCompilerArgs = listOf("-Xcontext-receivers")
+    }
+}
+
 application {
     mainClass.set("dev.extframework.boot.main.BootKt")
 
@@ -35,8 +41,10 @@ dependencies {
 
     implementation("org.jetbrains.kotlinx:kotlinx-cli:0.3.5")
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.7.22")
-    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.17.1")
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.12.6")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0")
+
+    testImplementation(project(":blackbox-test"))
 }
 
 common {
@@ -46,7 +54,7 @@ common {
             pom {
                 name.set("Boot")
                 description.set("YakClient's Boot module")
-                url.set("https://github.com/yakclient/boot")
+                url.set("https://github.com/extframework/boot")
             }
         }
     }

@@ -4,9 +4,12 @@ import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenDescriptor
 import com.fasterxml.jackson.databind.JsonNode
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.KotlinModule
+import com.fasterxml.jackson.module.kotlin.addDeserializer
 import com.fasterxml.jackson.module.kotlin.readValue
 import dev.extframework.boot.component.artifact.SoftwareComponentDescriptor
 import dev.extframework.boot.store.DataAccess
+import dev.extframework.boot.util.addDeserializer
+import dev.extframework.boot.util.addSerializer
 import dev.extframework.common.util.make
 import dev.extframework.common.util.resolve
 import java.io.File

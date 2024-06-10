@@ -10,7 +10,7 @@ common {
             commonPom {
                 name.set("Boot Test")
                 description.set("The test module for YakClient's Boot module")
-                url.set("https://github.com/yakclient/boot")
+                url.set("https://github.com/extframework/boot")
             }
         }
     }

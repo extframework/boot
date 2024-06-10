@@ -2,13 +2,10 @@ import com.durganmcbroom.jobs.*
 import com.durganmcbroom.jobs.logging.LogLevel
 import com.durganmcbroom.jobs.logging.Logger
 import com.durganmcbroom.jobs.logging.LoggerFactory
-import com.durganmcbroom.jobs.progress.JobWeight
 import java.util.logging.Handler
 import java.util.logging.Level
 import java.util.logging.LogManager
 import java.util.logging.LogRecord
-import kotlin.coroutines.CoroutineContext
-import kotlin.coroutines.EmptyCoroutineContext
 
 //package dev.extframework.boot
 //
