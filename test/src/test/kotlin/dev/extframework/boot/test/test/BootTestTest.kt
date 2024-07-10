@@ -1,3 +1,5 @@
+package dev.extframework.boot.test.test
+
 import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenArtifactRequest
 import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenDescriptor
 import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenRepositorySettings
@@ -12,6 +14,7 @@ import dev.extframework.boot.component.context.ContextNodeValue
 import dev.extframework.boot.maven.MavenDependencyResolver
 import dev.extframework.boot.new
 import dev.extframework.boot.test.testBootInstance
+import runBootBlocking
 import kotlin.test.Test
 
 class BootTestTest {

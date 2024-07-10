@@ -5,8 +5,16 @@ import dev.extframework.boot.loader.ArchiveClassProvider
 import dev.extframework.boot.loader.ArchiveSourceProvider
 import dev.extframework.boot.loader.IntegratedLoader
 import dev.extframework.boot.loader.SourceProvider
+import dev.extframework.common.util.toBytes
+import java.net.URL
 import java.nio.ByteBuffer
 import java.nio.file.Path
+import java.security.BasicPermission
+import java.security.CodeSource
+import java.security.PermissionCollection
+import java.security.Permissions
+import java.security.ProtectionDomain
+import java.security.cert.Certificate
 import kotlin.test.Ignore
 import kotlin.test.Test
 
@@ -36,22 +44,39 @@ class TestClassIsolation {
     }
 
     @Test
-    @Ignore
+    fun `make this fail`() {
+        val loader = object : ClassLoader(this::class.java.classLoader) {
+            override fun loadClass(name: String): Class<*> {
+                val a = super.loadClass(name)
+
+                if (name == "dev.extframework.boot.test.loader.TestClassIsolation") {
+                    val newClassBytes = newClassBytes(name)
+                    return defineClass(name, newClassBytes, ProtectionDomain(CodeSource(URL("https://google.com"), arrayOf<Certificate>()), Permissions()))
+                }
+
+                return a
+            }
+        }
+
+        loader.loadClass("dev.extframework.boot.test.loader.TestClassIsolation")
+    }
+
+    @Test
     fun `Test module Isolation`() {
         val asmIn = TestClassIsolation::class.java.getResource("/blackbox-repository/org/ow2/asm/asm/9.7/asm-9.7.jar")!!.toURI().let(Path::of)
-        val asmAnalysis = TestClassIsolation::class.java.getResource("/blackbox-repository/org/ow2/asm/asm-tree/9.7/asm-tree-9.7.jar")!!.toURI().let(Path::of)
 
         val refA = Archives.find(
             asmIn,
             Archives.Finders.JPM_FINDER
         )
+        val loaderA = IntegratedLoader(
+            "Loader A",
+            sourceProvider = ArchiveSourceProvider(refA),
+            parent = ClassLoader.getPlatformClassLoader()
+        )
         val archiveA = Archives.resolve(
             refA,
-            IntegratedLoader(
-                "Loader A",
-                sourceProvider = ArchiveSourceProvider(refA),
-                parent = ClassLoader.getPlatformClassLoader()
-            ),
+            loaderA,
             Archives.Resolvers.JPM_RESOLVER,
             setOf(),
         ).archive
@@ -65,38 +90,17 @@ class TestClassIsolation {
             IntegratedLoader(
                 "Loader B",
                 sourceProvider = ArchiveSourceProvider(refB),
-                parent = ClassLoader.getPlatformClassLoader()
+                parent = loaderA
             ),
             Archives.Resolvers.JPM_RESOLVER,
             setOf(archiveA),
         ).archive
 
-        val refC = Archives.find(
-            asmAnalysis,
-            Archives.Finders.JPM_FINDER
-        )
-        val archiveC = Archives.resolve(
-            refC,
-            IntegratedLoader("Loader C", sourceProvider = ArchiveSourceProvider(refC), classProvider = ArchiveClassProvider(archiveB), parent = ClassLoader.getPlatformClassLoader()),
-            Archives.Resolvers.JPM_RESOLVER,
-            setOf(archiveA)
-        ).archive
+        archiveA.classloader.loadClass("org.objectweb.asm.ClassReader")
+            .getConstructor(String::class.java).newInstance("java.lang.Object")
+        archiveB.classloader.loadClass("org.objectweb.asm.ClassReader")
+            .getConstructor(String::class.java).newInstance("java.lang.Object")
 
-//        val configA = ModuleLayer.boot().configuration().resolve(finderA, ModuleFinder.of(), setOf("org.objectweb.asm"))
-//        val layerA = ModuleLayer.boot().defineModulesWithManyLoaders(
-//            configA,
-//            IntegratedLoader("Loader A", parent = ClassLoader.getPlatformClassLoader())
-//        )
-//
-//        val finderB = ModuleFinder.of(pathIn)
-//
-//        val configB = ModuleLayer.boot().configuration().resolve(finderB, ModuleFinder.of(), setOf("org.objectweb.asm"))
-//        val layerB = ModuleLayer.boot().defineModulesWithManyLoaders(
-//            configB,
-//            IntegratedLoader("Loader A", parent = ClassLoader.getPlatformClassLoader())
-//        )
-
-        archiveC.classloader.loadClass("org.objectweb.asm.tree.ClassNode")
         println("asdf")
     }
 }

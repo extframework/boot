@@ -2,31 +2,57 @@ package dev.extframework.boot.archive
 
 import com.durganmcbroom.artifact.resolver.Artifact
 import com.durganmcbroom.artifact.resolver.ArtifactMetadata
+import com.durganmcbroom.jobs.Job
 import com.durganmcbroom.jobs.JobName
 import com.durganmcbroom.jobs.job
 import com.durganmcbroom.jobs.logging.LogLevel
 import com.durganmcbroom.jobs.logging.Logger
 import com.durganmcbroom.jobs.logging.logger
 
-internal fun printTree(artifact: Artifact<*>) =
-    job(JobName("Print artifact tree for: '${artifact.metadata.descriptor}'")) {
-        val alreadyPrinted = HashSet<ArtifactMetadata.Descriptor>()
+public interface Graphable {
+    public val name: String
 
-        fun printTreeInternal(artifact: Artifact<*>, prefix: String, isLast: Boolean, logger: Logger) {
-            val hasntSeenBefore = alreadyPrinted.add(artifact.metadata.descriptor)
+    public val children: List<Graphable>
+}
+
+public fun Artifact<*>.toGraphable() : Graphable  = object: Graphable {
+    override val name: String = metadata.descriptor.name
+    override val children: List<Graphable> = this@toGraphable.children.map { it.toGraphable() }
+}
+
+public fun printTree(artifact: Artifact<*>): Job<Unit> = printTree(artifact.toGraphable())
+
+public fun ArchiveNode<*>.toGraphable(
+    get: (ArtifactMetadata.Descriptor) -> ArchiveNode<*>?
+) : Graphable = object: Graphable {
+    override val name: String = descriptor.name
+    override val children: List<Graphable> = access.targets.map {
+        get(it.descriptor)?.toGraphable(get) ?: object : Graphable {
+            override val name: String = it.descriptor.name + " ** Not loaded"
+            override val children: List<Graphable> = listOf()
+        }
+    }
+}
+
+public fun printTree(graph: Graphable): Job<Unit> =
+    job(JobName("Print artifact tree for: '${graph.name}'")) {
+        val alreadyPrinted = HashSet<String>()
+
+        fun printTreeInternal(graph: Graphable, prefix: String, isLast: Boolean, logger: Logger) {
+            val hasntSeenBefore = alreadyPrinted.add(graph.name)
 
             logger.log(
                 LogLevel.INFO, prefix
                         + (if (isLast) "\\---" else "+---")
                         + " "
-                        + artifact.metadata.descriptor.name
+                        + graph.name
                         + (if (!hasntSeenBefore) "***" else "")
             )
 
-            if (hasntSeenBefore) artifact.children
+            if (hasntSeenBefore) graph.children
                 .withIndex()
-                .forEach { (index, it: Artifact<*>) ->
-                    val childIsLast: Boolean = artifact.children.lastIndex == index
+                .forEach { (index, it) ->
+                    val childIsLast: Boolean = graph.children.lastIndex == index
                     val newPrefix: String = prefix + (if (isLast)
                         "    "
                     else "|   ") + " "
@@ -35,5 +61,5 @@ internal fun printTree(artifact: Artifact<*>) =
                 }
         }
 
-        printTreeInternal(artifact, "", true, logger)
+        printTreeInternal(graph, "", true, logger)
     }

@@ -87,31 +87,35 @@ class TestDependencyGraph {
         check(r.exceptionOrNull() is ArchiveException.ArchiveNotCached)
     }
 
-    private fun cacheAndGet(
-        archiveGraph: ArchiveGraph,
-        request: SimpleMavenArtifactRequest,
-        repository: SimpleMavenRepositorySettings,
-        maven: MavenDependencyResolver
-    ): ArchiveNode<*> {
-        val node = runBootBlocking(JobName("test")) {
-            archiveGraph.cache(
-                request,
-                repository,
-                maven
-            )().merge()
+    companion object {
+        fun cacheAndGet(
+            archiveGraph: ArchiveGraph,
+            request: SimpleMavenArtifactRequest,
+            repository: SimpleMavenRepositorySettings,
+            maven: MavenDependencyResolver
+        ): ArchiveNode<*> {
+            val node = runBootBlocking(JobName("test")) {
+                archiveGraph.cache(
+                    request,
+                    repository,
+                    maven
+                )().merge()
 
-            archiveGraph.get(request.descriptor, maven)().merge()
+                archiveGraph.get(request.descriptor, maven)().merge()
+            }
+
+            node.prettyPrint { handle, depth ->
+                val str = (0..depth).joinToString(separator = "   ") { "" } + handle.descriptor.name
+                println(str)
+            }
+            separator("Targets:")
+            println(node.access.targets.joinToString(separator = "\n") {
+                it.descriptor.name
+            })
+
+            return node
         }
-
-        node.prettyPrint { handle, depth ->
-            val str = (0..depth).joinToString(separator = "   ") { "" } + handle.descriptor.name
-            println(str)
-        }
-        separator("Targets:")
-        println(node.access.targets.joinToString(separator = "\n") {
-            it.descriptor.name
-        })
-
-        return node
     }
+
+
 }

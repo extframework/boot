@@ -10,7 +10,7 @@ import java.util.concurrent.Executors
 import kotlin.test.Test
 
 
-fun newClassBytes(name: String): ByteBuffer {
+fun  newClassBytes(name: String): ByteBuffer {
     val node = ClassNode()
     node.name = name.replace('.', '/')
     node.superName = "java/lang/Object"

@@ -21,6 +21,6 @@ public class SoftwareComponentArtifactStubResolver(
 
             repos.firstNotNullOfOrNull {
                 it.get(stub.request)().merge()
-            } ?: throw  ArtifactException.ArtifactNotFound(stub.request.descriptor, repos.map { it.name })
+            } ?: throw  MetadataRequestException.MetadataNotFound(stub.request.descriptor, "component-model.json")
         }
 }

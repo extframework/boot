@@ -26,6 +26,8 @@ import kotlin.io.path.writeBytes
 import kotlin.reflect.KClass
 import kotlin.reflect.jvm.jvmName
 
+
+// TODO dependency version constraints
 public open class ArchiveGraph(
     path: Path,
     private val mutable: MutableMap<ArtifactMetadata.Descriptor, ArchiveNode<*>> = HashMap()

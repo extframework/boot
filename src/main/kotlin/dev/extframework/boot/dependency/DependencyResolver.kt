@@ -39,32 +39,26 @@ public abstract class DependencyResolver<
             resolutionProvider.resolve(
                 it.path,
                 { ref ->
-                    IntegratedLoader(
-                        name = data.descriptor.name,
-                        sourceProvider = ArchiveSourceProvider(ref),
-                        resourceProvider = ArchiveResourceProvider(ref),
-                        classProvider = DelegatingClassProvider(access.targets.map { target ->
-                            target.relationship.classes
-                        }),
-                        sourceDefiner = {n, b, cl, d ->
-                            d(n, b, ProtectionDomain(CodeSource(ref.location.toURL(), arrayOf<Certificate>()), null, cl, null))
-                        },
-                        parent = parentClassLoader,
+                    ArchiveClassLoader(
+                        ref,
+                        access,
+                        parentClassLoader
                     )
+//                    IntegratedLoader(
+//                        name = data.descriptor.name,
+//                        sourceProvider = ArchiveSourceProvider(ref),
+//                        resourceProvider = ArchiveResourceProvider(ref),
+//                        classProvider = DelegatingClassProvider(access.targets.map { target ->
+//                            target.relationship.classes
+//                        }),
+//                        sourceDefiner = {n, b, cl, d ->
+//                            d(n, b, ProtectionDomain(CodeSource(ref.location.toURL(), arrayOf<Certificate>()), null, cl, null))
+//                        },
+//                        parent = parentClassLoader,
+//                    )
                 },
                 parents.mapNotNullTo(HashSet(), DependencyNode<*>::archive)
             )().merge().archive
-//            ContainerLoader.load(
-//                RawArchiveContainerInfo(
-//                    data.descriptor.name,
-//                    it.path,
-//                    access
-//                ),
-//                ContainerLoader.createHandle(),
-//                RawArchiveContainerLoader(ZipResolutionProvider, parentClassLoader),
-//                RootVolume,
-//                PrivilegeManager(parentPrivilegeManager, PrivilegeAccess.emptyPrivileges())
-//            ).bind()
         }
 
         constructNode(
