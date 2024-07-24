@@ -167,7 +167,7 @@ private class BootLogger(
     }
 }
 
-private fun BootLoggerFactory() = object : BasicJobFacetFactory<Logger>(listOf(), {
+public fun BootLoggerFactory(): BasicJobFacetFactory<Logger> = object : BasicJobFacetFactory<Logger>(listOf(), {
     val name = this.context[JobName]?.name
         ?: "<anonymous job>"
 //        ?: throw IllegalArgumentException("Cant find the job name! Make sure you add CoroutineName to the coroutine context.")
@@ -175,13 +175,13 @@ private fun BootLoggerFactory() = object : BasicJobFacetFactory<Logger>(listOf()
     BootLogger(BootLogger.createLogger(name))
 }), LoggerFactory {}
 
-public fun <T> runBootBlocking(
-    context: JobContext = EmptyJobContext,
-    block: JobScope.() -> T
-): T =
-    launch(context + BootLoggerFactory()) {
-        block()
-    }
+//public fun <T> runBootBlocking(
+//    context: JobContext = EmptyJobContext,
+//    block: JobScope.() -> T
+//): T =
+//    launch(context + BootLoggerFactory()) {
+//        block()
+//    }
 
 //public inline fun <T, E> Result<T>.fix(block: (Exception) -> T): T {
 //    if (failure) return block(leftOrNull()!!)

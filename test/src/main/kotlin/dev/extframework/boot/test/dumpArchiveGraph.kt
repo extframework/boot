@@ -1,6 +1,5 @@
 package dev.extframework.boot.test
 
-import com.durganmcbroom.artifact.resolver.ArtifactMetadata
 import com.durganmcbroom.jobs.Job
 import com.durganmcbroom.jobs.job
 import dev.extframework.boot.archive.ArchiveGraph
@@ -26,6 +25,5 @@ public fun ArchiveGraph.dump(): Job<Unit> = job {
             printTree(it)().merge()
 
             println(" --------------------------------------------------- ")
-
         }
 }

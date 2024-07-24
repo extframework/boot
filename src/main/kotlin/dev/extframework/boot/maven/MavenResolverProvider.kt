@@ -4,14 +4,13 @@ import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenArtifactReque
 import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenDescriptor
 import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenRepositorySettings
 import com.durganmcbroom.resources.ResourceAlgorithm
-import dev.extframework.boot.BootInstance
 import dev.extframework.boot.dependency.DependencyResolverProvider
 
 public class MavenResolverProvider :
     DependencyResolverProvider<SimpleMavenDescriptor, SimpleMavenArtifactRequest, SimpleMavenRepositorySettings> {
     override val name: String = "simple-maven"
     override val resolver: MavenDependencyResolver = MavenDependencyResolver(
-        parentClassLoader = BootInstance::class.java.classLoader,
+        parentClassLoader = MavenResolverProvider::class.java.classLoader,
     )
 
     override fun parseRequest(request: Map<String, String>): SimpleMavenArtifactRequest? {

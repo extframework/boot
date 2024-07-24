@@ -6,36 +6,41 @@ import com.durganmcbroom.jobs.job
 import dev.extframework.archives.ArchiveHandle
 import dev.extframework.boot.archive.*
 import dev.extframework.boot.loader.*
-import java.security.CodeSource
-import java.security.ProtectionDomain
-import java.security.cert.Certificate
+import dev.extframework.boot.monad.AndMany
+import dev.extframework.boot.monad.Tagged
+import dev.extframework.boot.monad.Tree
+import dev.extframework.boot.monad.mapItem
 
 public abstract class DependencyResolver<
         K : ArtifactMetadata.Descriptor,
         R : ArtifactRequest<K>,
-        N : DependencyNode<N>,
+        N : DependencyNode<K>,
         S : RepositorySettings,
         M : ArtifactMetadata<K, *>,
         >(
     private val parentClassLoader: ClassLoader,
     private val resolutionProvider: ArchiveResolutionProvider<*> = ZipResolutionProvider
 ) : ArchiveNodeResolver<K, R, N, S, M> {
-
     override val nodeType: Class<in N> = DependencyNode::class.java
 
     override fun load(
-        data: ArchiveData<K, CachedArchiveResource>,
+        data: AndMany<ArchiveData<K, CachedArchiveResource>, Tree<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>>>,
         helper: ResolutionHelper
     ): Job<N> = job {
-        val parents: Set<N> = data.parents.mapTo(HashSet()) {
-            helper.load(it)
+        val parents: Set<ArchiveNode<ArtifactMetadata.Descriptor>> = data.parents.mapTo(mutableSetOf()) {
+            helper.load(
+                it as AndMany<IArchive<ArtifactMetadata.Descriptor>, Tree<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>>>,
+                it.item.tag as ArchiveNodeResolver<ArtifactMetadata.Descriptor, *, *, *, *>
+            )().merge()
         }
 
         val access = helper.newAccessTree {
-            allDirect(parents)
+            allDirect(
+                parents as Collection<ClassLoadedArchiveNode<*>>
+            )
         }
 
-        val archive = data.resources["jar.jar"]?.let {
+        val archive = data.item.resources["jar.jar"]?.let {
             resolutionProvider.resolve(
                 it.path,
                 { ref ->
@@ -44,20 +49,8 @@ public abstract class DependencyResolver<
                         access,
                         parentClassLoader
                     )
-//                    IntegratedLoader(
-//                        name = data.descriptor.name,
-//                        sourceProvider = ArchiveSourceProvider(ref),
-//                        resourceProvider = ArchiveResourceProvider(ref),
-//                        classProvider = DelegatingClassProvider(access.targets.map { target ->
-//                            target.relationship.classes
-//                        }),
-//                        sourceDefiner = {n, b, cl, d ->
-//                            d(n, b, ProtectionDomain(CodeSource(ref.location.toURL(), arrayOf<Certificate>()), null, cl, null))
-//                        },
-//                        parent = parentClassLoader,
-//                    )
                 },
-                parents.mapNotNullTo(HashSet(), DependencyNode<*>::archive)
+                parents.mapNotNullTo(HashSet(), DependencyNode<*>::handle)
             )().merge().archive
         }
 
@@ -77,8 +70,15 @@ public abstract class DependencyResolver<
     ): N
 
     override fun cache(
+        artifact: Artifact<M>,
+        helper: CacheHelper<K>
+    ): Job<AndMany<ArchiveData<K, CacheableArchiveResource>, Tree<Tagged<ArchiveData<*, CacheableArchiveResource>, ArchiveNodeResolver<*, *, *, *, *>>>>> {
+
+    }
+
+    override fun cache(
         metadata: M,
-        helper: ArchiveCacheHelper<K>
+        helper: CacheHelper<K>
     ): Job<ArchiveData<K, CacheableArchiveResource>> = job {
         helper.withResource("jar.jar", metadata.resource)
 
