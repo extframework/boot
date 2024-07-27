@@ -3,6 +3,7 @@ package dev.extframework.boot.constraint
 import com.durganmcbroom.artifact.resolver.ArtifactMetadata
 import com.durganmcbroom.jobs.Job
 import dev.extframework.boot.archive.ArchiveRelationship
+import dev.extframework.boot.archive.ArchiveTrace
 
 public enum class ConstraintType {
     BOUND,
@@ -11,7 +12,7 @@ public enum class ConstraintType {
 
 public data class Constrained<T: ArtifactMetadata.Descriptor>(
     val descriptor: T,
-    val type: ConstraintType
+    val type: ConstraintType,
 ) {
     override fun toString(): String {
         return "Constraint ($type) $descriptor"
@@ -24,6 +25,7 @@ public interface ConstraintNegotiator<T: ArtifactMetadata.Descriptor> {
     public fun classify(descriptor: T): Any
 
     public fun negotiate(
-        constraints: List<Constrained<T>>,
+        constraints: Set<Constrained<T>>,
+        trace: ArchiveTrace
     ): Job<T>
 }

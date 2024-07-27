@@ -22,12 +22,10 @@ public interface MavenLikeResolver<
 
     override val auditors: ArchiveAuditors
         get() = super.auditors.with(
-//            archiveTreeAuditor = ConstraintArchiveAuditor(
-//
-//            )
+            archiveTreeAuditor = ConstraintArchiveAuditor(
+                listOf(MavenConstraintNegotiator())
+            )
         )
-//    override val auditor: ArchiveAccessAuditor
-//        get() = super.auditor.chain(MavenCollisionFixingAuditor())
 
     override fun deserializeDescriptor(
         descriptor: Map<String, String>,

@@ -8,6 +8,7 @@ import dev.extframework.boot.archive.*
 import dev.extframework.boot.archive.audit.ArchiveTreeAuditor
 import dev.extframework.boot.archive.audit.AuditContext
 import dev.extframework.boot.monad.*
+import dev.extframework.common.util.LazyMap
 import dev.extframework.common.util.filterDuplicates
 
 public class ConstraintArchiveAuditor(
@@ -19,18 +20,19 @@ public class ConstraintArchiveAuditor(
 
         trace: ArchiveTrace
     ): Job<Tree<IArchive<*>>> = job {
-        fun classify(descriptor: ArtifactMetadata.Descriptor): Any {
-            return (negotiators.find {
-                it.descriptorType.isInstance(descriptor)
-            } as? ConstraintNegotiator<ArtifactMetadata.Descriptor>)?.classify(descriptor) ?: Any()
+        val cachedConstraints = LazyMap { d: ArtifactMetadata.Descriptor ->
+            (negotiators.find {
+                it.descriptorType.isInstance(d)
+            } as? ConstraintNegotiator<ArtifactMetadata.Descriptor>)?.classify(d) ?: Any()
         }
+
+        fun classify(descriptor: ArtifactMetadata.Descriptor): Any = cachedConstraints[descriptor]!!
 
         val list = tree.toList()
         val uniqueConstraints = list
             .map { classify(it.descriptor) }
             .filterDuplicates()
             .size
-
 
         fun Tree<IArchive<*>>.findParents(
             any: Any,
@@ -39,8 +41,8 @@ public class ConstraintArchiveAuditor(
             val thisClassifier = classify(item.descriptor)
             return (if (thisClassifier == any) {
                 listOfNotNull(parent)
-            } else emptyList()) + parents.map {
-                findParents(any, thisClassifier)
+            } else emptyList()) + parents.flatMap {
+                it.findParents(any, thisClassifier)
             }
         }
 
@@ -67,11 +69,10 @@ public class ConstraintArchiveAuditor(
                         else ConstraintType.NEGOTIABLE
                     )
                 }
-                .toList()
+                .toSet()
 
             val negotiator = group
-                .takeIf { it.isNotEmpty() }
-                ?.first()
+                .firstOrNull()
                 ?.descriptor
                 ?.let { d ->
                     negotiators.find { it.descriptorType.isInstance(d) }
@@ -80,7 +81,8 @@ public class ConstraintArchiveAuditor(
             val negotiated = negotiator.negotiate(
                 group + constraintPrototypes.filter {
                     negotiator.descriptorType.isInstance(it.descriptor) && negotiator.classify(it.descriptor) == classifier
-                } as List<Constrained<ArtifactMetadata.Descriptor>>
+                } as List<Constrained<ArtifactMetadata.Descriptor>>,
+                trace
             )().merge()
 
             val replaceWith = tree.findBranch {
@@ -98,7 +100,9 @@ public class ConstraintArchiveAuditor(
         list.fold(tree) { acc, it ->
             if (constrained.size == uniqueConstraints) return@fold acc
 
-            acc.constrain(it)
+            acc.constrain(
+                classify(it.descriptor),
+            )
         }
     }
 

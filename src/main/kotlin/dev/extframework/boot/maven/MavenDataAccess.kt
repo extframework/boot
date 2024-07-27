@@ -32,10 +32,6 @@ public open class MavenDataAccess(
         override val name: String = ""
     }
 
-//    private data class SerializableMavenArtifactRequest(
-//        override val descriptor: SerializableMavenDescriptor,
-//    ) : Descr<SerializableMavenDescriptor>
-
     protected open fun initMapper(): ObjectMapper {
         val kotlinModule = KotlinModule.Builder().build()
 

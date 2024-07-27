@@ -78,6 +78,8 @@ public open class DefaultArchiveGraph(
         descriptor: D,
         resolver: ArchiveNodeResolver<D, *, *, *, *>
     ): Boolean {
+        checkRegistration(resolver)
+
         if (loaded(descriptor)) {
             return true
         }
@@ -115,11 +117,13 @@ public open class DefaultArchiveGraph(
         descriptor: K,
         resolver: ArchiveNodeResolver<K, *, T, *, *>
     ): Job<T> = job {
+        checkRegistration(resolver)
+
         getNode(descriptor)?.let { node ->
             check(resolver.nodeType.isInstance(node)) { "Archive node: '$descriptor' was found loaded but it does not match the expected type of: '${resolver.nodeType.name}'. Its type was: '${node::class.java.name}" }
 
             node as T
-        } ?: withContext(ArchiveTraceFactory) {
+        } ?: run {
             check(
                 isCached(
                     descriptor,
@@ -263,6 +267,8 @@ public open class DefaultArchiveGraph(
         repository: R,
         resolver: ArchiveNodeResolver<D, T, *, R, M>
     ): Job<Unit> = job {
+        checkRegistration(resolver)
+
         val descriptor = request.descriptor
         if (isCached(descriptor, resolver)) return@job
 
@@ -466,30 +472,30 @@ public open class DefaultArchiveGraph(
         }
 }
 
-private object ArchiveTraceFactory : JobFacetFactory, JobContext.Key<ArchiveTraceFactory> {
-    override val dependencies: List<JobContext.Key<out JobFacetFactory>> = listOf()
-    override val key: JobContext.Key<ArchiveTraceFactory> = ArchiveTraceFactory
-    override val name: String = "Archive Trace Factory"
+//private object ArchiveTraceFactory : JobFacetFactory, JobContext.Key<ArchiveTraceFactory> {
+//    override val dependencies: List<JobContext.Key<out JobFacetFactory>> = listOf()
+//    override val key: JobContext.Key<ArchiveTraceFactory> = ArchiveTraceFactory
+//    override val name: String = "Archive Trace Factory"
+//
+//    override fun <T> apply(job: Job<T>, oldContext: JobContext): Job<T> =
+//        useContextFor(job) {
+//            val parent = oldContext[ArchiveTrace]
+//
+//            facetOrNull(CurrentArchive)?.let {
+//                ArchiveTrace(it.descriptor, parent)
+//            } ?: parent
+//            ?: throw IllegalArgumentException("Unable to construct Archive trace from given context facets.")
+//        }
+//}
 
-    override fun <T> apply(job: Job<T>, oldContext: JobContext): Job<T> =
-        useContextFor(job) {
-            val parent = oldContext[ArchiveTrace]
 
-            facetOrNull(CurrentArchive)?.let {
-                ArchiveTrace(it.descriptor, parent)
-            } ?: parent
-            ?: throw IllegalArgumentException("Unable to construct Archive trace from given context facets.")
-        }
-}
-
-
-private data class CurrentArchive(
-    val descriptor: ArtifactMetadata.Descriptor
-) : JobContext.Facet {
-    override val key: JobContext.Key<*> = CurrentArchive
-
-    companion object : JobContext.Key<CurrentArchive> {
-        override val name: String = "Current Element"
-    }
-}
+//private data class CurrentArchive(
+//    val descriptor: ArtifactMetadata.Descriptor
+//) : JobContext.Facet {
+//    override val key: JobContext.Key<*> = CurrentArchive
+//
+//    companion object : JobContext.Key<CurrentArchive> {
+//        override val name: String = "Current Element"
+//    }
+//}
 

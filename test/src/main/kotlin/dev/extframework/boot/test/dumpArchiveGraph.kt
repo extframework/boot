@@ -12,12 +12,12 @@ public fun ArchiveGraph.dump(): Job<Unit> = job {
     println(" --------------------------------------------------- ")
 
     val visited = HashSet<String>()
-    values
+    nodes()
         .map { v ->
             v.toGraphable {
                 visited.add(it.name)
 
-                get(it)
+                getNode(it)
             }
         }
         .filterNot { visited.contains(it.name) }

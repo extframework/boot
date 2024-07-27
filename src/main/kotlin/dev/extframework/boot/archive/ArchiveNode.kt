@@ -9,5 +9,5 @@ public interface ArchiveNode<T: ArtifactMetadata.Descriptor> : IArchive<T> {
 }
 
 public interface ClassLoadedArchiveNode<T: ArtifactMetadata.Descriptor> : ArchiveNode<T> {
-    public val handle: ArchiveHandle
+    public val handle: ArchiveHandle?
 }

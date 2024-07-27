@@ -13,11 +13,11 @@ public abstract class DependencyNode<T : ArtifactMetadata.Descriptor>: ClassLoad
     }
 }
 
-public data class BasicDependencyNode(
-    override val descriptor: ArtifactMetadata.Descriptor,
-    override val handle: ArchiveHandle,
+public data class BasicDependencyNode<T: ArtifactMetadata.Descriptor>(
+    override val descriptor: T,
+    override val handle: ArchiveHandle?,
     override val access: ArchiveAccessTree,
-) : DependencyNode<ArtifactMetadata.Descriptor>()
+) : DependencyNode<T>()
 
 //public open class DependencyNode(
 //    override val archive: ArchiveHandle?,

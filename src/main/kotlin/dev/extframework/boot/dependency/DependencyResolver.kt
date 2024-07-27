@@ -45,7 +45,7 @@ public abstract class DependencyResolver<
                 },
                 accessibleNodes
                     .filterIsInstance<ClassLoadedArchiveNode<*>>()
-                    .mapTo(mutableSetOf(), ClassLoadedArchiveNode<*>::handle),
+                    .mapNotNullTo(mutableSetOf(), ClassLoadedArchiveNode<*>::handle),
 
                 helper.trace
             )().merge().archive

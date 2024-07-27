@@ -10,7 +10,11 @@ package dev.extframework.boot.monad
 public class Tree<out T>(
     item: T,
     parents: List<Tree<T>>
-) : AndMany<T, Tree<T>>(item, parents)
+) : AndMany<T, Tree<T>>(item, parents) {
+    override fun toString(): String {
+        return "Tree -> $item"
+    }
+}
 
 /**
  * Applies a transform function to each value in the tree and returns a new tree with the transformed values.
@@ -138,6 +142,12 @@ public fun <T> AndMany<T, Tree<T>>.toTree() : Tree<T> = Tree(
     item, parents
 )
 
+/**
+ * Converts the given tree to a list in a depth-first searched
+ * order.
+ *
+ * @return The list that was created
+ */
 public fun <T> Tree<T>.toList(): List<T> {
     val list = mutableListOf<T>()
     forEach { list.add(it) }
@@ -150,16 +160,18 @@ private data class Current<T>(
     val tree: Tree<T>
 )
 public fun <T> Tree<T>.iterator() : Iterator<T> = object: Iterator<T> {
+    // Used to keep track of where we are in the tree after each
     val stack: MutableList<Current<T>> = mutableListOf(
         Current(-1, this@iterator)
     )
 
-    override fun hasNext(): Boolean = stack.isNotEmpty()
+    override fun hasNext(): Boolean =
+        !stack.all { it.index == it.tree.parents.size }
 
     override fun next(): T {
         val current = stack.last()
 
-        return if (current.index++ == -1) {
+        val item = if (current.index == -1) {
             current.tree.item
         } else if (current.tree.parents.size == current.index) {
             stack.removeLast()
@@ -173,6 +185,10 @@ public fun <T> Tree<T>.iterator() : Iterator<T> = object: Iterator<T> {
             )
             next()
         }
+
+        current.index++
+
+        return item
     }
 }
 

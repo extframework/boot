@@ -1,21 +1,22 @@
 package dev.extframework.boot.test.archive
 
+import BootLoggerFactory
 import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenArtifactRequest
 import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenDescriptor
 import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenRepositorySettings
 import com.durganmcbroom.jobs.JobName
+import com.durganmcbroom.jobs.launch
 import dev.extframework.boot.archive.ArchiveException
 import dev.extframework.boot.archive.ArchiveGraph
 import dev.extframework.boot.dependency.BasicDependencyNode
 import dev.extframework.boot.maven.MavenResolverProvider
-import runBootBlocking
 import java.nio.file.Files
 import kotlin.test.Test
 
 class TestExceptions {
     val basePath = Files.createTempDirectory("m2cache")
     val maven = MavenResolverProvider()
-    val archiveGraph = ArchiveGraph(basePath, mutableMapOf())
+    val archiveGraph = ArchiveGraph.from(basePath)
 
     inline fun <reified T : Throwable> assertThatThrows(
         noinline exp: () -> Unit,
@@ -41,8 +42,8 @@ class TestExceptions {
     fun loadArtifact(
         request: SimpleMavenArtifactRequest,
         repository: SimpleMavenRepositorySettings,
-    ): BasicDependencyNode {
-        val node = runBootBlocking(JobName("test")) {
+    ): BasicDependencyNode<*> {
+        val node = launch(JobName("test") + BootLoggerFactory()) {
             archiveGraph.cache(
                 request,
                 repository,
@@ -68,7 +69,7 @@ class TestExceptions {
     @Test
     fun `Test artifact not cached throws correctly`() {
         assertThatThrows<ArchiveException.ArchiveNotCached> {
-            runBootBlocking {
+            launch(BootLoggerFactory()) {
                 archiveGraph.get(
                     SimpleMavenDescriptor.parseDescription("a:a:a")!!,
                     maven.resolver

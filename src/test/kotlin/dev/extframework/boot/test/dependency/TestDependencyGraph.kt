@@ -14,8 +14,10 @@ import dev.extframework.boot.archive.ArchiveNode
 import dev.extframework.boot.archive.DefaultArchiveGraph
 import dev.extframework.boot.maven.MavenDependencyResolver
 import dev.extframework.boot.maven.MavenResolverProvider
-import runBootBlocking
+import dev.extframework.boot.util.printTree
+import dev.extframework.boot.util.toGraphable
 import java.nio.file.Files
+import java.nio.file.Path
 import kotlin.test.Test
 
 class TestDependencyGraph {
@@ -40,7 +42,7 @@ class TestDependencyGraph {
 //        check(node.archive != null) { "Archive shouldnt be null" }
         check(node.access.targets.size == 2) { "Wrong target size" }
         check(node.access.targets.mapTo(HashSet()) { it.descriptor.name }
-            .containsAll(setOf("org.ow2.asm:asm:9.7", "org.ow2.asm:asm-tree:9.7"))) {"Wrong targets"}
+            .containsAll(setOf("org.ow2.asm:asm:9.7", "org.ow2.asm:asm-tree:9.7"))) { "Wrong targets" }
     }
 
     @Test
@@ -90,6 +92,29 @@ class TestDependencyGraph {
         check(r.exceptionOrNull() is ArchiveException.ArchiveNotCached)
     }
 
+    @Test
+    fun `Test bootstrapper dependency load`() {
+        val maven = MavenResolverProvider()
+        val archiveGraph = ArchiveGraph.from(Path.of("test-run").toAbsolutePath())
+        println(archiveGraph.path)
+
+        val request = SimpleMavenArtifactRequest(
+            "dev.extframework.minecraft:minecraft-provider-def:1.0-SNAPSHOT",
+            includeScopes = setOf("compile", "runtime", "import")
+        )
+
+        val node = launch(BootLoggerFactory()) {
+            archiveGraph.cache(
+                request,
+                SimpleMavenRepositorySettings.default("https://maven.extframework.dev/snapshots"),
+                maven.resolver
+            )().merge()
+            archiveGraph.get(request.descriptor, maven.resolver)().merge()
+        }
+
+        println(node)
+    }
+
     companion object {
         fun cacheAndGet(
             archiveGraph: ArchiveGraph,
@@ -97,7 +122,7 @@ class TestDependencyGraph {
             repository: SimpleMavenRepositorySettings,
             maven: MavenDependencyResolver
         ): ArchiveNode<*> {
-            val node = runBootBlocking(JobName("test")) {
+            val node = launch(JobName("test") + BootLoggerFactory()) {
                 archiveGraph.cache(
                     request,
                     repository,
@@ -107,10 +132,7 @@ class TestDependencyGraph {
                 archiveGraph.get(request.descriptor, maven)().merge()
             }
 
-            node.prettyPrint { handle, depth ->
-                val str = (0..depth).joinToString(separator = "   ") { "" } + handle.descriptor.name
-                println(str)
-            }
+            printTree(node.toGraphable())
             separator("Targets:")
             println(node.access.targets.joinToString(separator = "\n") {
                 it.descriptor.name

@@ -23,15 +23,10 @@ public fun Artifact<*>.toGraphable(): Graphable = object : Graphable {
 
 public fun printTree(artifact: Artifact<*>): Job<Unit> = printTree(artifact.toGraphable())
 
-public fun ArchiveNode<*>.toGraphable(
-    get: (ArtifactMetadata.Descriptor) -> ArchiveNode<*>?
-): Graphable = object : Graphable {
+public fun ArchiveNode<*>.toGraphable(): Graphable = object : Graphable {
     override val name: String = descriptor.name
     override val children: List<Graphable> = access.targets.map {
-        get(it.descriptor)?.toGraphable(get) ?: object : Graphable {
-            override val name: String = it.descriptor.name + " ** Not loaded"
-            override val children: List<Graphable> = listOf()
-        }
+        it.relationship.node.toGraphable()
     }
 }
 

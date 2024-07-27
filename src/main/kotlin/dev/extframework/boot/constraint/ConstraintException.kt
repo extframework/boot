@@ -12,8 +12,8 @@ public open class ConstraintException(
 ) : ArchiveException(trace, message) {
     public class Conflicting(
         trace: ArchiveTrace,
-        group: List<Constrained<*>>,
-        clashing: List<Constrained<*>>
+        group: Set<Constrained<*>>,
+        clashing: Set<Constrained<*>>
     ) : ConstraintException(
         trace,
         conflictMessage(trace, group, clashing)
@@ -21,8 +21,8 @@ public open class ConstraintException(
         public companion object {
             public fun conflictMessage(
                 trace: ArchiveTrace,
-                group: List<Constrained<*>>,
-                clashing: List<Constrained<*>>
+                group: Set<Constrained<*>>,
+                clashing: Set<Constrained<*>>
             ): String = "Trace: '$trace'" +
                     "\nconstrained group: " +
                     "\n   '$group' " +

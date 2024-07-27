@@ -17,9 +17,9 @@ public open class MavenDependencyResolver(
     parentClassLoader: ClassLoader,
     resolutionProvider: ArchiveResolutionProvider<*> = ZipResolutionProvider,
     private val factory: RepositoryFactory<SimpleMavenRepositorySettings, SimpleMavenArtifactRequest, SimpleMavenArtifactStub, SimpleMavenArtifactReference, SimpleMavenArtifactRepository> = SimpleMaven,
-) : DependencyResolver<SimpleMavenDescriptor, SimpleMavenArtifactRequest, BasicDependencyNode, SimpleMavenRepositorySettings, SimpleMavenArtifactMetadata>(
+) : DependencyResolver<SimpleMavenDescriptor, SimpleMavenArtifactRequest, BasicDependencyNode<SimpleMavenDescriptor>, SimpleMavenRepositorySettings, SimpleMavenArtifactMetadata>(
     parentClassLoader, resolutionProvider
-), MavenLikeResolver<BasicDependencyNode, SimpleMavenArtifactMetadata> {
+), MavenLikeResolver<BasicDependencyNode<SimpleMavenDescriptor>, SimpleMavenArtifactMetadata> {
     override fun createContext(settings: SimpleMavenRepositorySettings): ResolutionContext<SimpleMavenArtifactRequest, *, SimpleMavenArtifactMetadata, *> {
         val artifactRepo = factory.createNew(settings)
         return ResolutionContext(
@@ -52,11 +52,11 @@ public open class MavenDependencyResolver(
     override fun constructNode(
         descriptor: SimpleMavenDescriptor,
         handle: ArchiveHandle?,
-        parents: Set<BasicDependencyNode>,
+        parents: Set<BasicDependencyNode<SimpleMavenDescriptor>>,
         accessTree: ArchiveAccessTree
-    ): BasicDependencyNode {
+    ): BasicDependencyNode<SimpleMavenDescriptor> {
         return BasicDependencyNode(
-            descriptor, handle, parents, accessTree, this
+            descriptor, handle, accessTree
         )
     }
 
