@@ -25,7 +25,7 @@ public data class Tagged<out A,  out B>(
  * @param tag the tag of type `B` to attach to the value.
  * @return a new instance of `Tagged` representing the tag attachment.
  */
-public fun <A, B> A.tag(tag: B) : Tagged<A, B> = Tagged(this, tag)
+public infix fun <A, B> A.tag(tag: B) : Tagged<A, B> = Tagged(this, tag)
 
 /**
  * Creates a new tree where each value is tagged with type `B`.

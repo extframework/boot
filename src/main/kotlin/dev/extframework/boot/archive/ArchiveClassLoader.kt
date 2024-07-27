@@ -12,7 +12,11 @@ public class ArchiveClassLoader(
     parent: ClassLoader
 ) : IntegratedLoader(
     name = accessTree.descriptor.name,
-    classProvider = DelegatingClassProvider(accessTree.targets.map { it.relationship.classes }),
+    classProvider = DelegatingClassProvider(accessTree.targets
+        .map { it.relationship.node }
+        .filterIsInstance<ClassLoadedArchiveNode<*>>()
+        .map { ArchiveClassProvider(it.handle) }),
+
     sourceProvider = ArchiveSourceProvider(archive),
     resourceProvider = ArchiveResourceProvider(archive),
     sourceDefiner = {n, b, cl, d ->

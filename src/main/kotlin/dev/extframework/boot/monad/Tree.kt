@@ -137,3 +137,45 @@ public fun <T> Tree<T>.replace(
 public fun <T> AndMany<T, Tree<T>>.toTree() : Tree<T> = Tree(
     item, parents
 )
+
+public fun <T> Tree<T>.toList(): List<T> {
+    val list = mutableListOf<T>()
+    forEach { list.add(it) }
+
+    return list
+}
+
+private data class Current<T>(
+    var index: Int,
+    val tree: Tree<T>
+)
+public fun <T> Tree<T>.iterator() : Iterator<T> = object: Iterator<T> {
+    val stack: MutableList<Current<T>> = mutableListOf(
+        Current(-1, this@iterator)
+    )
+
+    override fun hasNext(): Boolean = stack.isNotEmpty()
+
+    override fun next(): T {
+        val current = stack.last()
+
+        return if (current.index++ == -1) {
+            current.tree.item
+        } else if (current.tree.parents.size == current.index) {
+            stack.removeLast()
+            next()
+        } else {
+            stack.add(
+                Current(
+                    -1,
+                    current.tree.parents[current.index],
+                )
+            )
+            next()
+        }
+    }
+}
+
+public fun <T> Tree<T>.asSequence(): Sequence<T>  = Sequence {
+    iterator()
+}

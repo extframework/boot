@@ -4,19 +4,15 @@ import com.durganmcbroom.artifact.resolver.*
 import com.durganmcbroom.jobs.*
 import com.durganmcbroom.jobs.logging.LogLevel
 import com.durganmcbroom.jobs.logging.logger
-import com.durganmcbroom.jobs.logging.warning
 import com.durganmcbroom.resources.LocalResource
 import com.durganmcbroom.resources.Resource
-import com.durganmcbroom.resources.toResource
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.KotlinModule
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import dev.extframework.boot.API_VERSION
-import dev.extframework.boot.loader.ArchiveClassProvider
-import dev.extframework.boot.loader.ArchiveResourceProvider
+import dev.extframework.boot.archive.audit.AuditContext
 import dev.extframework.boot.monad.*
-import dev.extframework.common.util.LazyMap
 import dev.extframework.common.util.copyTo
 import dev.extframework.common.util.make
 import dev.extframework.common.util.resolve
@@ -29,22 +25,92 @@ import kotlin.reflect.jvm.jvmName
 
 public open class DefaultArchiveGraph(
     path: Path,
-    private val mutable: MutableMap<ArtifactMetadata.Descriptor, ArchiveNode<*>> = HashMap()
+    protected val mutable: MutableMap<ArtifactMetadata.Descriptor, ArchiveNode<*>> = HashMap()
 ) : ArchiveGraph {
-    private val resolvers: MutableObjectContainer<ArchiveNodeResolver<*, *, *, *, *>> = ObjectContainerImpl()
-
-    // Public API
+    protected val resolvers: MutableObjectContainer<ArchiveNodeResolver<*, *, *, *, *>> = ObjectContainerImpl()
 
     override val path: Path = path resolve API_VERSION
 
+    /**
+     * Register a resolver.
+     *
+     * @param resolver the resolver.
+     */
     override fun registerResolver(resolver: ArchiveNodeResolver<*, *, *, *, *>) {
         resolvers.register(resolver.name, resolver)
     }
 
+    /**
+     * Get a registered resolver or null.
+     *
+     * @param name The name to get by.
+     * @return The resolver or null.
+     */
     override fun getResolver(name: String): ArchiveNodeResolver<*, *, *, *, *>? {
         return resolvers.get(name)
     }
 
+    /**
+     * Looks for a node with the specified descriptor that has already been loaded
+     * or null if it was not found.
+     *
+     * @param descriptor The descriptor to search for.
+     * @return The node or null.
+     */
+    override fun getNode(descriptor: ArtifactMetadata.Descriptor): ArchiveNode<*>? = mutable[descriptor]
+
+    /**
+     * Returns a collection of all the nodes in this archive graph.
+     *
+     * @return All the currently loaded nodes.
+     */
+    override fun nodes(): Collection<ArchiveNode<*>> = mutable.values
+
+    /**
+     * Determines if the given descriptor has been previously cached
+     *
+     * @param descriptor The descriptor.
+     * @param resolver The resolver that loaded the descriptor.
+     *
+     * @return Whether that archive is cached.
+     */
+    protected fun <D : ArtifactMetadata.Descriptor> isCached(
+        descriptor: D,
+        resolver: ArchiveNodeResolver<D, *, *, *, *>
+    ): Boolean {
+        if (loaded(descriptor)) {
+            return true
+        }
+
+        val metadataPath = path resolve resolver.pathForDescriptor(descriptor, "archive-metadata", "json")
+
+        return Files.exists(metadataPath)
+    }
+
+    private fun checkRegistration(resolver: ArchiveNodeResolver<*, *, *, *, *>) {
+        if (resolvers.has(resolver.name)) return
+        registerResolver(resolver)
+    }
+
+    /**
+     * Default context ot use when auditing.
+     */
+    private inner class DefaultAuditContext(override val trace: ArchiveTrace) : AuditContext {
+        override fun isLoaded(descriptor: ArtifactMetadata.Descriptor): Boolean {
+            return loaded(descriptor)
+        }
+    }
+
+    /**
+     * Get as defined by the supertype.
+     *
+     * Throws if the [descriptor] cannot be found.
+     *
+     * Reads the given archive tree from the cache, audits it, then
+     * delegates to [getInternal] for loading.
+     *
+     * @see dev.extframework.boot.archive.audit.ArchiveTreeAuditor
+     */
     override fun <K : ArtifactMetadata.Descriptor, T : ArchiveNode<K>> get(
         descriptor: K,
         resolver: ArchiveNodeResolver<K, *, T, *, *>
@@ -61,45 +127,45 @@ public open class DefaultArchiveGraph(
                 )
             ) { "Archive node: '$descriptor' is not cached. It must be cached before use." }
 
-            val archiveTree = readArchiveTree(descriptor, resolver, ArchiveTrace(descriptor, null))().merge()
+            val archiveTree = readArchiveTree(
+                descriptor,
+                resolver,
+                ArchiveTrace(descriptor)
+            )().merge()
+
+            val auditedTree = resolver.auditors.archiveTreeAuditor.audit(
+                archiveTree,
+                DefaultAuditContext(
+                    ArchiveTrace(descriptor)
+                )
+            )().merge()
 
             getInternal(
-                archiveTree
+                auditedTree,
+                ArchiveTrace(descriptor)
             )().merge() as T
         }
     }
 
-    override fun getNode(descriptor: ArtifactMetadata.Descriptor): ArchiveNode<*>? = mutable[descriptor]
-
-    override fun nodes(): Collection<ArchiveNode<*>> = mutable.values
-
-    override fun <
-            D : ArtifactMetadata.Descriptor,
-            T : ArtifactRequest<D>,
-            R : RepositorySettings,
-            M : ArtifactMetadata<D, *>> cache(
-        request: T,
-        repository: R,
-        resolver: ArchiveNodeResolver<D, T, *, R, M>
-    ): Job<Unit> = job {
-        val descriptor = request.descriptor
-        if (isCached(descriptor, resolver)) return@job
-
-        val artifactTree = resolveArtifact(request, repository, resolver)().merge()
-
-        cacheInternal(artifactTree, resolver)().merge()
-    }
-
-    // Internal API
-
-    private fun <T : ArtifactMetadata.Descriptor> readArchiveTree(
+    /**
+     * Recursively reads the given archive tree from the cache. This can throw
+     * if not all required resolvers are registered before this is
+     * called.
+     *
+     * @param descriptor The descriptor to start reading from.
+     * @param resolver The base resolver.
+     * @param trace The base trace as this is a recursive function.
+     */
+    protected fun <T : ArtifactMetadata.Descriptor> readArchiveTree(
         descriptor: T,
         resolver: ArchiveNodeResolver<T, *, *, *, *>,
         trace: ArchiveTrace
-    ): Job<Tree<Tagged<ArchiveData<out ArtifactMetadata.Descriptor, CachedArchiveResource>, ArchiveNodeResolver<*, *, *, *, *>>>> =
+    ): Job<Tree<Tagged<ArchiveData<*, CachedArchiveResource>, ArchiveNodeResolver<*, *, *, *, *>>>> =
         job {
+            trace.checkCircularity()
+
             val metadataPath = path resolve resolver.pathForDescriptor(descriptor, "archive-metadata", "json")
-            val info = jacksonObjectMapper().readValue<CacheableArchiveInfo>(
+            val info = jacksonObjectMapper().readValue<CacheableArchiveData>(
                 metadataPath.toFile()
             )
 
@@ -129,30 +195,125 @@ public open class DefaultArchiveGraph(
             )
         }
 
-    private data class CacheableArchiveInfo(
+    /**
+     * Given an archive tree performs the necessary operations to load it.
+     */
+    @Suppress("UNCHECKED_CAST")
+    private fun getInternal(
+        tree: Tree<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>>,
+        trace: ArchiveTrace
+    ): Job<ArchiveNode<*>> = job {
+        val (data, resolver) = tree.item
+
+        val parents = tree.parents.map {
+            getInternal(it, trace.child(it.item.value.descriptor))().merge()
+        }
+
+        val accessTree = object : ArchiveAccessTree {
+            override val descriptor: ArtifactMetadata.Descriptor = tree.item.value.descriptor
+            override val targets: List<ArchiveTarget> = (parents
+                .asSequence()
+                .filterIsInstance<ClassLoadedArchiveNode<*>>()
+                .map {
+                    ArchiveTarget(
+                        it.descriptor,
+                        ArchiveRelationship.Direct(
+                            it
+                        )
+                    )
+                } +
+                    parents
+                        .asSequence()
+                        .filterIsInstance<ClassLoadedArchiveNode<*>>()
+                        .flatMap { it.access.targets }
+                        .map {
+                            ArchiveTarget(
+                                it.descriptor,
+                                ArchiveRelationship.Transitive(
+                                    it.relationship.node
+                                )
+                            )
+                        }).toList()
+        }
+
+        val auditedTree = tree.item.tag.auditors.accessAuditor.audit(
+            accessTree,
+            DefaultAuditContext(trace)
+        )().merge()
+
+        (resolver as ArchiveNodeResolver<ArtifactMetadata.Descriptor, *, *, *, *>)
+            .load(
+                (data as ArchiveData<ArtifactMetadata.Descriptor, CachedArchiveResource>),
+                auditedTree,
+                object : ResolutionHelper {
+                    override val trace: ArchiveTrace = trace
+                }
+            )().merge()
+    }
+
+    /**
+     * Caches the given request + repository as defined by the supertype.
+     */
+    override fun <
+            D : ArtifactMetadata.Descriptor,
+            T : ArtifactRequest<D>,
+            R : RepositorySettings,
+            M : ArtifactMetadata<D, *>> cache(
+        request: T,
+        repository: R,
+        resolver: ArchiveNodeResolver<D, T, *, R, M>
+    ): Job<Unit> = job {
+        val descriptor = request.descriptor
+        if (isCached(descriptor, resolver)) return@job
+
+        val artifactTree = resolveArtifact(request, repository, resolver)().merge()
+
+        cacheInternal(artifactTree, resolver)().merge()
+    }
+
+    /**
+     * Cacheable Archive info.
+     *
+     * Resources are stored in a map of: 'identifier defined
+     * by the resolver' -> 'absolute path in the file system'.
+     */
+    private data class CacheableArchiveData(
         // Name of resource to the path
         val resources: Map<String, String>,
         val access: List<CacheableParentInfo>,
     )
 
+    /**
+     * Cacheable information pointing to parent archive data.
+     */
     private data class CacheableParentInfo(
         val resolver: String,
         val descriptor: Map<String, String>,
     )
 
+    /**
+     * Internal caching, constructs the archive tree from the artifact tree and
+     * delegates to [cacheInternal]'
+     */
     private fun <D : ArtifactMetadata.Descriptor, M : ArtifactMetadata<D, *>> cacheInternal(
         artifactTree: Artifact<M>,
         resolver: ArchiveNodeResolver<D, *, *, *, M>
     ): Job<Unit> = job {
-        val archiveTree = constructArchiveTree(artifactTree, resolver)().merge().toTree()
+        val archiveTree =
+            constructArchiveTree(artifactTree, resolver, ArchiveTrace(artifactTree.metadata.descriptor))().merge()
+                .toTree()
 
         cacheInternal(archiveTree, ArchiveTrace(artifactTree.metadata.descriptor, null))().merge()
     }
 
+    /**
+     * Recursively caches the given tree of archive data.
+     */
     private fun cacheInternal(
         tree: Tree<Tagged<ArchiveData<*, CacheableArchiveResource>, ArchiveNodeResolver<*, *, *, *, *>>>,
         trace: ArchiveTrace
     ): Job<Unit> = job {
+        trace.checkCircularity()
         val result = tree.item.value
         val resolver = tree.item.tag as ArchiveNodeResolver<ArtifactMetadata.Descriptor, *, *, *, *>
 
@@ -174,7 +335,7 @@ public open class DefaultArchiveGraph(
             Triple(name, wrapper, path)
         }
 
-        val metadataResource = CacheableArchiveInfo(
+        val metadataResource = CacheableArchiveData(
             resourcePaths.associate {
                 it.first to it.third.toString()
             },
@@ -206,204 +367,10 @@ public open class DefaultArchiveGraph(
             }
     }
 
-    private fun checkRegistration(resolver: ArchiveNodeResolver<*, *, *, *, *>) {
-        if (resolvers.has(resolver.name)) return
-        registerResolver(resolver)
-    }
-
-    @Suppress("UNCHECKED_CAST")
-    private fun getInternal(
-        tree: Tree<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>>
-    ): Job<ArchiveNode<*>> = job {
-        val constrainedTree = doConstraints(
-            tree,
-            listOf(
-                (tree.item.tag.negotiator as ConstraintNegotiator<ArtifactMetadata.Descriptor, *>)
-                    .constrain(
-                        tree.item.value as IArchive<ArtifactMetadata.Descriptor>,
-                        ConstraintType.Bound
-                    )().merge()
-            ) // FIXME not correct, should be configurable at the very least
-        )().merge()
-
-        val (data, resolver) = constrainedTree.item
-
-        (resolver as ArchiveNodeResolver<ArtifactMetadata.Descriptor, *, *, *, *>).load(
-            (data as ArchiveData<ArtifactMetadata.Descriptor, CachedArchiveResource>) andMany constrainedTree.parents,
-            object : ResolutionHelper {
-                override fun <T : ArtifactMetadata.Descriptor, N : ArchiveNode<T>> load(
-                    iArchive: AndMany<IArchive<T>, Tree<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>>>,
-                    resolver: ArchiveNodeResolver<T, *, N, *, *>
-                ): Job<N> {
-                    val (item) = iArchive
-
-                    if (item is ArchiveNode<*>) {
-                        check(resolver.nodeType.isInstance(item)) { "Attempted to load archive: '$iArchive' with resolver: '$resolver' but it does not match expected type: '${resolver.nodeType}'" }
-
-                        return SuccessfulJob { item as N }
-                    }
-
-                    return getInternal(iArchive
-                        .mapItem { it.tag(resolver) }
-                        .toTree()
-                    ) as Job<N>
-                }
-
-                override fun newAccessTree(scope: ResolutionHelper.AccessTreeScope.() -> Unit): ArchiveAccessTree {
-                    val directTargets = ArrayList<ArchiveTarget>()
-                    val transitiveTargets = ArrayList<ArchiveTarget>()
-
-                    val scopeObject = object : ResolutionHelper.AccessTreeScope {
-                        override fun direct(dependency: ClassLoadedArchiveNode<*>) {
-                            directTargets.add(
-                                ArchiveTarget(
-                                    dependency.descriptor,
-                                    ArchiveRelationship.Direct(
-                                        ArchiveClassProvider(dependency.handle),
-                                        ArchiveResourceProvider(dependency.handle),
-                                    )
-                                )
-                            )
-
-                            transitiveTargets.addAll(dependency.access.targets.map {
-                                ArchiveTarget(
-                                    it.descriptor,
-                                    ArchiveRelationship.Transitive(
-                                        it.relationship.classes,
-                                        it.relationship.resources,
-                                    )
-                                )
-                            })
-                        }
-
-                        override fun rawTarget(target: ArchiveTarget) {
-                            directTargets.add(target)
-                        }
-                    }
-                    scopeObject.scope()
-
-                    val preliminaryTree: ArchiveAccessTree = object : ArchiveAccessTree {
-                        override val descriptor: ArtifactMetadata.Descriptor = data.descriptor
-                        override val targets: List<ArchiveTarget> = directTargets + transitiveTargets
-                    }
-
-                    return resolver.auditor.audit(preliminaryTree)
-                }
-            })().merge()
-    }
-
-    // FIXME Needs testing
-    private fun doConstraints(
-        tree: Tree<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>>,
-        constraintPrototypes: List<Constraint<*>>
-    ): Job<Tree<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>>> = job {
-        val neutrallyConstrainedTree: Tree<Tagged<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>, Constraint<*>>> =
-            tree.tag {
-                (it.tag.negotiator as ConstraintNegotiator<ArtifactMetadata.Descriptor, *>).constrain(it.value as IArchive<ArtifactMetadata.Descriptor>)().merge()
-            }
-
-        val list = ArrayList<Tagged<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>, Constraint<*>>>()
-        neutrallyConstrainedTree.forEach(list::add)
-
-        val allConstraints = (list.map { it.tag } + constraintPrototypes)
-
-        val groups = allConstraints.groupBy(Constraint<*>::classifier)
-
-        // Sanity checks
-        groups.forEach { (_, v) ->
-            val first = v.first() // guaranteed to be non-null by groupBy
-
-            v.forEach {
-                if (!first::class.isInstance(it)) {
-                    throw IllegalStateException("Constraint type: '${it::class.java.name}' or type '${first::class.java.name}' has wrong type yet mocks constraint classifier: '${first.classifier}'.")
-                }
-            }
-        }
-
-        fun orderConstraintGroup(
-            classifier: Any,
-            group: List<Constraint<*>>,
-
-            stack: List<Any> = listOf(),
-        ): Tree<Any>? {
-            if (stack.distinct().size < stack.size) {
-                warning("While ordering constraints for top level archive : '${tree.item.value.descriptor}' a circular constraint group was encountered. The stack was : '$stack'. This is not a fatal error, simply ignoring this constraint group. (However this means that a dependency tree has gotten too complex and many versions are clashing, this should be simplified.)")
-                return null
-            }
-
-            fun Tree<Tagged<*, Constraint<*>>>.findParent(
-                const: Constraint<*>,
-                parentClassifier: Any? = null,
-            ): Any? {
-                return if (this.item.tag.classifier == const.classifier) parentClassifier
-                else parents.firstNotNullOfOrNull {
-                    it.findParent(const, this.item.tag.classifier)
-                }
-            }
-
-            return Tree(
-                classifier,
-                group.mapNotNull {
-                    neutrallyConstrainedTree.findParent(it)?.let { parent ->
-                        orderConstraintGroup(parent, groups[parent]!!)
-                    }
-                }
-            )
-        }
-
-        val groupTrees = ArrayList<Tree<Any>>()
-
-        groups.forEach { (classifier, group) ->
-            if (groupTrees.any { currGroup ->
-                    currGroup.find { it == classifier } != null
-                }) return@forEach
-
-            groupTrees.add(orderConstraintGroup(classifier, group) ?: return@forEach)
-        }
-
-        var orderedGroups: MutableSet<Any> = LinkedHashSet()
-        groupTrees.forEach {
-            it.forEachBfs { item ->
-                orderedGroups.add(item)
-            }
-        }
-        orderedGroups = orderedGroups.reversed().toMutableSet()
-
-        // TODO allow for recalculation
-        // Lazy map allows recalculation after
-        val constrained = LazyMap<Any, Constraint<*>> {
-            val group = groups[it]!! // Never introducing any new classifiers as the tree never adds a *new* type.
-            // This means that any classifier you find in the tree will produce a non-null here.
-
-            val negotiator = group.first().negotiator as ConstraintNegotiator<*, Constraint<*>>
-
-            negotiator.negotiate(group)().merge()
-        }
-
-        neutrallyConstrainedTree.replace {
-            val constraint = constrained[it.item.tag.classifier] ?: return@replace it
-
-            neutrallyConstrainedTree.findBranch { it2 ->
-                constraint == it2.tag
-            } ?: return@replace it
-        }.map {
-            it.value
-        }
-    }
-
-    private fun <D : ArtifactMetadata.Descriptor> isCached(
-        descriptor: D,
-        resolver: ArchiveNodeResolver<D, *, *, *, *>
-    ): Boolean {
-        if (loaded(descriptor)) {
-            return true
-        }
-
-        val metadataPath = path resolve resolver.pathForDescriptor(descriptor, "archive-metadata", "json")
-
-        return Files.exists(metadataPath)
-    }
-
+    /**
+     * Resolves the requests artifact and maps NotFound exceptions
+     * to [ArchiveException.ArchiveNotFound]
+     */
     private fun <
             D : ArtifactMetadata.Descriptor,
             T : ArtifactRequest<D>,
@@ -432,20 +399,21 @@ public open class DefaultArchiveGraph(
         }
     }
 
-    private fun <
+    /**
+     * Builds an [ArchiveData] tree from an [Artifact].
+     */
+    protected fun <
             D : ArtifactMetadata.Descriptor,
             M : ArtifactMetadata<D, *>,
             > constructArchiveTree(
         artifact: Artifact<M>,
-        resolver: ArchiveNodeResolver<D, *, *, *, M>
-    ): Job<AndMany<Tagged<ArchiveData<D, CacheableArchiveResource>, ArchiveNodeResolver<D, *, *, *, *>>, Tree<Tagged<ArchiveData<*, CacheableArchiveResource>, ArchiveNodeResolver<*, *, *, *, *>>>>> =
+        resolver: ArchiveNodeResolver<D, *, *, *, M>,
+        trace: ArchiveTrace,
+    ): Job<Tree<Tagged<ArchiveData<*, CacheableArchiveResource>, ArchiveNodeResolver<*, *, *, *, *>>>> =
         job(
-            JobName("Cache archive: '${artifact.metadata.descriptor}'") + CurrentArchive(
-                artifact.metadata.descriptor
-            )
+            JobName("Construct archive tree: '${artifact.metadata.descriptor}'")
         ) {
             checkRegistration(resolver)
-            val trace = trace()
 
             if (context[ArchiveTrace]?.isCircular() == true) throw ArchiveException.CircularArtifactException(trace)
 
@@ -454,19 +422,20 @@ public open class DefaultArchiveGraph(
                 "Invalid metadata type for artifact: '$artifact', expected the entire tree to be of type: '${resolver.metadataType::class.jvmName}'",
             )
 
-            val result = (resolver as ArchiveNodeResolver<D, *, *, *, ArtifactMetadata<D, *>>)
+            (resolver as ArchiveNodeResolver<D, *, *, *, ArtifactMetadata<D, *>>)
                 .cache(
                     artifact as Artifact<ArtifactMetadata<D, *>>,
                     object : CacheHelper<D> {
-                        // private var parents = ArrayList<Tree<ArchiveData<*, *>>>()
                         private var resources: MutableMap<String, CacheableArchiveResource> = HashMap()
+
+                        override val trace: ArchiveTrace = trace
 
                         override fun <D : ArtifactMetadata.Descriptor, M : ArtifactMetadata<D, *>> cache(
                             artifact: Artifact<M>,
                             resolver: ArchiveNodeResolver<D, *, *, *, M>
-                        ): Job<AndMany<Tagged<ArchiveData<D, CacheableArchiveResource>, ArchiveNodeResolver<D, *, *, *, *>>, Tree<Tagged<ArchiveData<*, CacheableArchiveResource>, ArchiveNodeResolver<*, *, *, *, *>>>>> =
+                        ): Job<Tree<Tagged<ArchiveData<*, CacheableArchiveResource>, ArchiveNodeResolver<*, *, *, *, *>>>> =
                             constructArchiveTree(
-                                artifact, resolver
+                                artifact, resolver, trace.child(artifact.metadata.descriptor)
                             )
 
                         override fun <D : ArtifactMetadata.Descriptor, T : ArtifactRequest<D>, R : RepositorySettings, M : ArtifactMetadata<D, *>> resolveArtifact(
@@ -483,20 +452,17 @@ public open class DefaultArchiveGraph(
 
                         override fun newData(
                             descriptor: D,
-                            parents: List<Tree<ArchiveData<*, *>>>
-                        ): AndMany<ArchiveData<D, CacheableArchiveResource>, Tree<ArchiveData<*, *>>> = AndMany(
-                            ArchiveData(
-                                descriptor,
-                                resources
-                            ),
-                            parents
-                        )
+                            parents: List<Tree<Tagged<ArchiveData<*, CacheableArchiveResource>, ArchiveNodeResolver<*, *, *, *, *>>>>
+                        ): Tree<Tagged<ArchiveData<*, CacheableArchiveResource>, ArchiveNodeResolver<*, *, *, *, *>>> =
+                            Tree(
+                                ArchiveData(
+                                    descriptor,
+                                    resources
+                                ) tag resolver,
+                                parents
+                            )
                     }
                 )().merge()
-
-            result.mapItem {
-                it.tag(resolver)
-            }
         }
 }
 

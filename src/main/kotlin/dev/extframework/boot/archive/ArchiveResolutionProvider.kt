@@ -13,6 +13,8 @@ public interface ArchiveResolutionProvider<out R : ResolutionResult> {
         resource: Path,
         classLoader: ClassLoaderProvider<ArchiveReference>,
         parents: Set<ArchiveHandle>,
+
+        trace: ArchiveTrace,
     ): Job<R>
 }
 
@@ -24,8 +26,10 @@ public open class BasicArchiveResolutionProvider<T : ArchiveReference, R : Resol
         resource: Path,
         classLoader: ClassLoaderProvider<ArchiveReference>,
         parents: Set<ArchiveHandle>,
+
+        trace: ArchiveTrace,
     ): Job<R> = job(JobName("Load archive: '$resource'")) {
-        if (!resource.exists()) throw ArchiveException.ArchiveLoadFailed(FileNotFoundException(resource.toString()), trace())
+        if (!resource.exists()) throw ArchiveException.ArchiveLoadFailed(FileNotFoundException(resource.toString()), trace)
 
         runCatching {
             resolver.resolve(

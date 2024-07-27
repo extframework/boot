@@ -24,41 +24,40 @@ public abstract class DependencyResolver<
     override val nodeType: Class<in N> = DependencyNode::class.java
 
     override fun load(
-        data: AndMany<ArchiveData<K, CachedArchiveResource>, Tree<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>>>,
+        data: ArchiveData<K, CachedArchiveResource>,
+        accessTree: ArchiveAccessTree,
         helper: ResolutionHelper
     ): Job<N> = job {
-        val parents: Set<ArchiveNode<ArtifactMetadata.Descriptor>> = data.parents.mapTo(mutableSetOf()) {
-            helper.load(
-                it as AndMany<IArchive<ArtifactMetadata.Descriptor>, Tree<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>>>,
-                it.item.tag as ArchiveNodeResolver<ArtifactMetadata.Descriptor, *, *, *, *>
-            )().merge()
-        }
+        val accessibleNodes = accessTree.targets
+            .asSequence()
+            .map(ArchiveTarget::relationship)
+            .map(ArchiveRelationship::node)
 
-        val access = helper.newAccessTree {
-            allDirect(
-                parents as Collection<ClassLoadedArchiveNode<*>>
-            )
-        }
-
-        val archive = data.item.resources["jar.jar"]?.let {
+        val archive = data.resources["jar.jar"]?.let {
             resolutionProvider.resolve(
                 it.path,
                 { ref ->
                     ArchiveClassLoader(
                         ref,
-                        access,
+                        accessTree,
                         parentClassLoader
                     )
                 },
-                parents.mapNotNullTo(HashSet(), DependencyNode<*>::handle)
+                accessibleNodes
+                    .filterIsInstance<ClassLoadedArchiveNode<*>>()
+                    .mapTo(mutableSetOf(), ClassLoadedArchiveNode<*>::handle),
+
+                helper.trace
             )().merge().archive
         }
 
         constructNode(
             data.descriptor,
             archive,
-            parents,
-            access,
+            accessibleNodes
+                .filter { nodeType.isInstance(it) }
+                .mapTo(mutableSetOf()) { it as N },
+            accessTree,
         )
     }
 
@@ -72,16 +71,16 @@ public abstract class DependencyResolver<
     override fun cache(
         artifact: Artifact<M>,
         helper: CacheHelper<K>
-    ): Job<AndMany<ArchiveData<K, CacheableArchiveResource>, Tree<Tagged<ArchiveData<*, CacheableArchiveResource>, ArchiveNodeResolver<*, *, *, *, *>>>>> {
+    ): Job<Tree<Tagged<ArchiveData<*, CacheableArchiveResource>, ArchiveNodeResolver<*, *, *, *, *>>>> = job {
+        helper.withResource("jar.jar", artifact.metadata.resource)
 
-    }
-
-    override fun cache(
-        metadata: M,
-        helper: CacheHelper<K>
-    ): Job<ArchiveData<K, CacheableArchiveResource>> = job {
-        helper.withResource("jar.jar", metadata.resource)
-
-        helper.newData(metadata.descriptor)
+        helper.newData(
+            artifact.metadata.descriptor,
+            artifact.children.map {
+                helper.cache(
+                    it, this@DependencyResolver,
+                )().merge()
+            }
+        )
     }
 }

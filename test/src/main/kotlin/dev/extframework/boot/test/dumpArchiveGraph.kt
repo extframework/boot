@@ -3,8 +3,8 @@ package dev.extframework.boot.test
 import com.durganmcbroom.jobs.Job
 import com.durganmcbroom.jobs.job
 import dev.extframework.boot.archive.ArchiveGraph
-import dev.extframework.boot.archive.printTree
-import dev.extframework.boot.archive.toGraphable
+import dev.extframework.boot.util.printTree
+import dev.extframework.boot.util.toGraphable
 
 public fun ArchiveGraph.dump(): Job<Unit> = job {
     println(" --------------------------------------------------- ")

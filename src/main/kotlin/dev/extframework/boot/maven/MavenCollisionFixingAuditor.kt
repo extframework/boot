@@ -1,9 +1,9 @@
 package dev.extframework.boot.maven
 
 import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenDescriptor
-import dev.extframework.boot.archive.ArchiveAccessAuditor
+import dev.extframework.boot.archive.audit.ArchiveAccessAuditor
 import dev.extframework.boot.archive.ArchiveAccessTree
-import dev.extframework.boot.archive.prune
+import dev.extframework.boot.archive.audit.prune
 
 public class MavenCollisionFixingAuditor : ArchiveAccessAuditor {
     override fun audit(tree: ArchiveAccessTree): ArchiveAccessTree {

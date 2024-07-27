@@ -5,19 +5,29 @@ import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenArtifactReque
 import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenDescriptor
 import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenRepositorySettings
 import com.durganmcbroom.jobs.result
-import dev.extframework.boot.archive.*
+import dev.extframework.boot.archive.ArchiveNode
+import dev.extframework.boot.archive.ArchiveNodeResolver
+import dev.extframework.boot.archive.ArchiveTrace
+import dev.extframework.boot.archive.audit.ArchiveAuditors
+import dev.extframework.boot.constraint.ConstraintArchiveAuditor
 import dev.extframework.boot.util.mapOfNonNullValues
 import dev.extframework.boot.util.requireKeyInDescriptor
 import java.io.File
 import java.nio.file.Path
 
 public interface MavenLikeResolver<
-        V : ArchiveNode<V>,
-        M : SimpleMavenArtifactMetadata> :
-    ArchiveNodeResolver<SimpleMavenDescriptor, SimpleMavenArtifactRequest, V, SimpleMavenRepositorySettings, M> {
+        V : ArchiveNode<SimpleMavenDescriptor>,
+        M : SimpleMavenArtifactMetadata
+        > : ArchiveNodeResolver<SimpleMavenDescriptor, SimpleMavenArtifactRequest, V, SimpleMavenRepositorySettings, M> {
 
-    override val auditor: ArchiveAccessAuditor
-        get() = super.auditor.chain(MavenCollisionFixingAuditor())
+    override val auditors: ArchiveAuditors
+        get() = super.auditors.with(
+//            archiveTreeAuditor = ConstraintArchiveAuditor(
+//
+//            )
+        )
+//    override val auditor: ArchiveAccessAuditor
+//        get() = super.auditor.chain(MavenCollisionFixingAuditor())
 
     override fun deserializeDescriptor(
         descriptor: Map<String, String>,
