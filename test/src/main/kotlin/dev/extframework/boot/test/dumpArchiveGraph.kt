@@ -14,11 +14,7 @@ public fun ArchiveGraph.dump(): Job<Unit> = job {
     val visited = HashSet<String>()
     nodes()
         .map { v ->
-            v.toGraphable {
-                visited.add(it.name)
-
-                getNode(it)
-            }
+            v.toGraphable()
         }
         .filterNot { visited.contains(it.name) }
         .forEach {
