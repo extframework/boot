@@ -1,12 +1,10 @@
 package dev.extframework.boot.maven
 
 import com.durganmcbroom.artifact.resolver.RepositoryFactory
-import com.durganmcbroom.artifact.resolver.RepositoryStubResolver
 import com.durganmcbroom.artifact.resolver.ResolutionContext
+import com.durganmcbroom.artifact.resolver.createContext
 import com.durganmcbroom.artifact.resolver.simple.maven.*
-import com.durganmcbroom.artifact.resolver.simple.maven.pom.PomRepository
-import com.durganmcbroom.jobs.Job
-import com.durganmcbroom.jobs.result
+import com.durganmcbroom.resources.Resource
 import dev.extframework.archives.ArchiveHandle
 import dev.extframework.boot.archive.ArchiveAccessTree
 import dev.extframework.boot.archive.ArchiveResolutionProvider
@@ -14,42 +12,16 @@ import dev.extframework.boot.archive.ZipResolutionProvider
 import dev.extframework.boot.dependency.BasicDependencyNode
 import dev.extframework.boot.dependency.DependencyResolver
 
-@Suppress("CONFLICTING_INHERITED_MEMBERS_WARNING")
 public open class MavenDependencyResolver(
     parentClassLoader: ClassLoader,
     resolutionProvider: ArchiveResolutionProvider<*> = ZipResolutionProvider,
-    private val factory: RepositoryFactory<SimpleMavenRepositorySettings, SimpleMavenArtifactRequest, SimpleMavenArtifactStub, SimpleMavenArtifactReference, SimpleMavenArtifactRepository> = SimpleMaven,
+    private val factory: RepositoryFactory<SimpleMavenRepositorySettings, SimpleMavenArtifactRepository> = SimpleMaven,
 ) : DependencyResolver<SimpleMavenDescriptor, SimpleMavenArtifactRequest, BasicDependencyNode<SimpleMavenDescriptor>, SimpleMavenRepositorySettings, SimpleMavenArtifactMetadata>(
     parentClassLoader, resolutionProvider
 ), MavenLikeResolver<BasicDependencyNode<SimpleMavenDescriptor>, SimpleMavenArtifactMetadata> {
-    override fun createContext(settings: SimpleMavenRepositorySettings): ResolutionContext<SimpleMavenArtifactRequest, *, SimpleMavenArtifactMetadata, *> {
-        val artifactRepo = factory.createNew(settings)
-        return ResolutionContext(
-            artifactRepo,
-            object : SimpleMavenArtifactStubResolver(object :
-                RepositoryStubResolver<SimpleMavenRepositoryStub, SimpleMavenRepositorySettings> by artifactRepo.stubResolver.repositoryResolver {
-                override fun resolve(stub: SimpleMavenRepositoryStub): Result<SimpleMavenRepositorySettings> =  result {
-                    if (stub.unresolvedRepository.url == "local") SimpleMavenRepositorySettings.local()
-                    else artifactRepo.stubResolver.repositoryResolver.resolve(stub).merge()
-                }
-            }, factory) {
-                override fun resolve(stub: SimpleMavenArtifactStub): Job<SimpleMavenArtifactReference> {
-                    return super.resolve(
-                        stub.copy(
-                            candidates = listOf(
-                                SimpleMavenRepositoryStub(
-                                    PomRepository(
-                                        null, null, "local",
-                                    ), false
-                                )
-                            ) + stub.candidates
-                        )
-                    )
-                }
-            },
-            factory.artifactComposer
-        )
-    }
+    override fun createContext(
+        settings: SimpleMavenRepositorySettings
+    ): ResolutionContext<SimpleMavenRepositorySettings, SimpleMavenArtifactRequest, SimpleMavenArtifactMetadata> =factory.createContext(settings)
 
     override fun constructNode(
         descriptor: SimpleMavenDescriptor,
@@ -61,6 +33,8 @@ public open class MavenDependencyResolver(
             descriptor, handle, accessTree
         )
     }
+
+    override fun SimpleMavenArtifactMetadata.resource(): Resource? = resource
 
     override val name: String = "simple-maven"
     override val metadataType: Class<SimpleMavenArtifactMetadata> = SimpleMavenArtifactMetadata::class.java

@@ -1,6 +1,7 @@
 package dev.extframework.boot.archive
 
 import com.durganmcbroom.artifact.resolver.ArtifactMetadata
+import com.durganmcbroom.artifact.resolver.RepositorySettings
 
 public open class ArchiveException(
     public open val trace: ArchiveTrace,
@@ -28,7 +29,7 @@ public open class ArchiveException(
     public data class ArchiveNotFound(
         override val trace: ArchiveTrace,
         val archive: ArtifactMetadata.Descriptor,
-        val lookedIn: List<String>
+        val lookedIn: List<RepositorySettings>
     ) : ArchiveException(
         trace,
         """Failed to find the artifact: '$archive'. Looked in places: 

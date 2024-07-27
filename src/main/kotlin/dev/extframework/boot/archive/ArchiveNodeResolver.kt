@@ -22,7 +22,7 @@ public interface ArchiveNodeResolver<
         R : ArtifactRequest<K>,
         V : ArchiveNode<K>,
         S : RepositorySettings,
-        M : ArtifactMetadata<K, *>> {
+        M : ArtifactMetadata<K, ArtifactMetadata.ChildInfo<R, S>>> {
     public val name: String
 
     public val nodeType: Class<in V>
@@ -37,7 +37,7 @@ public interface ArchiveNodeResolver<
      * @param settings the repository settings
      * @return a resolution context with the specified settings
      */
-    public fun createContext(settings: S): ResolutionContext<R, *, M, *>
+    public fun createContext(settings: S): ResolutionContext<S, R, M>
 
     /**
      * Serializes the given artifact descriptor into a map of key-value pairs.
@@ -136,7 +136,7 @@ public interface CacheHelper<K : ArtifactMetadata.Descriptor> {
             D : ArtifactMetadata.Descriptor,
             T : ArtifactRequest<D>,
             R : RepositorySettings,
-            M : ArtifactMetadata<D, *>
+            M : ArtifactMetadata<D, ArtifactMetadata.ChildInfo<T, R>>
             > resolveArtifact(
         request: T,
         repository: R,

@@ -268,7 +268,7 @@ public open class DefaultArchiveGraph(
             D : ArtifactMetadata.Descriptor,
             T : ArtifactRequest<D>,
             R : RepositorySettings,
-            M : ArtifactMetadata<D, *>> cache(
+            M : ArtifactMetadata<D, ArtifactMetadata.ChildInfo<T, R>>> cache(
         request: T,
         repository: R,
         resolver: ArchiveNodeResolver<D, T, *, R, M>
@@ -387,7 +387,7 @@ public open class DefaultArchiveGraph(
             D : ArtifactMetadata.Descriptor,
             T : ArtifactRequest<D>,
             R : RepositorySettings,
-            M : ArtifactMetadata<D, *>> resolveArtifact(
+            M : ArtifactMetadata<D, ArtifactMetadata.ChildInfo<T, R>>> resolveArtifact(
         request: T,
         repository: R,
         resolver: ArchiveNodeResolver<D, T, *, R, M>,
@@ -450,7 +450,10 @@ public open class DefaultArchiveGraph(
                                 artifact, resolver, trace.child(artifact.metadata.descriptor)
                             )
 
-                        override fun <D : ArtifactMetadata.Descriptor, T : ArtifactRequest<D>, R : RepositorySettings, M : ArtifactMetadata<D, *>> resolveArtifact(
+                        override fun <D : ArtifactMetadata.Descriptor,
+                                T : ArtifactRequest<D>,
+                                R : RepositorySettings,
+                                M : ArtifactMetadata<D, ArtifactMetadata.ChildInfo<T, R>>> resolveArtifact(
                             request: T,
                             repository: R,
                             resolver: ArchiveNodeResolver<D, T, *, R, M>

@@ -62,7 +62,7 @@ public interface ArchiveGraph {
             D : ArtifactMetadata.Descriptor,
             T : ArtifactRequest<D>,
             R : RepositorySettings,
-            M : ArtifactMetadata<D, *>> cache(
+            M : ArtifactMetadata<D, ArtifactMetadata.ChildInfo<T, R>>> cache(
         request: T,
         repository: R,
         resolver: ArchiveNodeResolver<D, T, *, R, M>

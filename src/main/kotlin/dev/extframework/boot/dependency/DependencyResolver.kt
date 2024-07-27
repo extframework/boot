@@ -3,6 +3,7 @@ package dev.extframework.boot.dependency
 import com.durganmcbroom.artifact.resolver.*
 import com.durganmcbroom.jobs.Job
 import com.durganmcbroom.jobs.job
+import com.durganmcbroom.resources.Resource
 import dev.extframework.archives.ArchiveHandle
 import dev.extframework.boot.archive.*
 import dev.extframework.boot.loader.*
@@ -14,7 +15,7 @@ public abstract class DependencyResolver<
         R : ArtifactRequest<K>,
         N : DependencyNode<K>,
         S : RepositorySettings,
-        M : ArtifactMetadata<K, *>,
+        M : ArtifactMetadata<K, ArtifactMetadata.ChildInfo<R, S>>,
         >(
     private val parentClassLoader: ClassLoader,
     private val resolutionProvider: ArchiveResolutionProvider<*> = ZipResolutionProvider
@@ -66,11 +67,13 @@ public abstract class DependencyResolver<
         accessTree: ArchiveAccessTree,
     ): N
 
+    protected abstract fun M.resource() : Resource?
+
     override fun cache(
         artifact: Artifact<M>,
         helper: CacheHelper<K>
     ): Job<Tree<Tagged<ArchiveData<*, CacheableArchiveResource>, ArchiveNodeResolver<*, *, *, *, *>>>> = job {
-        helper.withResource("jar.jar", artifact.metadata.resource)
+        helper.withResource("jar.jar", artifact.metadata.resource())
 
         helper.newData(
             artifact.metadata.descriptor,
