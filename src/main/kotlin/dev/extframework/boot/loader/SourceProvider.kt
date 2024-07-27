@@ -1,11 +1,11 @@
 package dev.extframework.boot.loader
 
 import com.durganmcbroom.resources.openStream
-import kotlinx.coroutines.runBlocking
 import dev.extframework.archives.ArchiveReference
 import dev.extframework.boot.util.dotClassFormat
 import dev.extframework.boot.util.packageName
 import dev.extframework.common.util.readInputStream
+import kotlinx.coroutines.runBlocking
 import java.nio.ByteBuffer
 
 public interface SourceProvider {

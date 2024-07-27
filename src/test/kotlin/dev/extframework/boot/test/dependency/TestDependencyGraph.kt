@@ -1,7 +1,6 @@
 package dev.extframework.boot.test.dependency
 
 import BootLoggerFactory
-import com.durganmcbroom.artifact.resolver.MetadataRequestException
 import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenArtifactRequest
 import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenRepositorySettings
 import com.durganmcbroom.jobs.JobName
@@ -39,7 +38,6 @@ class TestDependencyGraph {
             maven.resolver
         )
 
-//        check(node.archive != null) { "Archive shouldnt be null" }
         check(node.access.targets.size == 2) { "Wrong target size" }
         check(node.access.targets.mapTo(HashSet()) { it.descriptor.name }
             .containsAll(setOf("org.ow2.asm:asm:9.7", "org.ow2.asm:asm-tree:9.7"))) { "Wrong targets" }
@@ -141,6 +139,4 @@ class TestDependencyGraph {
             return node
         }
     }
-
-
 }

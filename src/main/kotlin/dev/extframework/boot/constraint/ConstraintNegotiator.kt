@@ -2,7 +2,6 @@ package dev.extframework.boot.constraint
 
 import com.durganmcbroom.artifact.resolver.ArtifactMetadata
 import com.durganmcbroom.jobs.Job
-import dev.extframework.boot.archive.ArchiveRelationship
 import dev.extframework.boot.archive.ArchiveTrace
 
 public enum class ConstraintType {

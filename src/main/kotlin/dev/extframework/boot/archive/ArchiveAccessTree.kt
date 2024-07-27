@@ -1,9 +1,6 @@
 package dev.extframework.boot.archive
 
 import com.durganmcbroom.artifact.resolver.ArtifactMetadata
-import dev.extframework.archives.ArchiveHandle
-import dev.extframework.boot.loader.ClassProvider
-import dev.extframework.boot.loader.ResourceProvider
 
 public interface ArchiveAccessTree {
     public val descriptor: ArtifactMetadata.Descriptor

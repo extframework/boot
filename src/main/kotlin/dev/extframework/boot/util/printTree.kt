@@ -1,7 +1,6 @@
 package dev.extframework.boot.util
 
 import com.durganmcbroom.artifact.resolver.Artifact
-import com.durganmcbroom.artifact.resolver.ArtifactMetadata
 import com.durganmcbroom.jobs.Job
 import com.durganmcbroom.jobs.job
 import com.durganmcbroom.jobs.logging.LogLevel

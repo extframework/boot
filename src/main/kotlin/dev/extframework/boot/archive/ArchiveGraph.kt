@@ -1,7 +1,9 @@
 package dev.extframework.boot.archive
 
-import com.durganmcbroom.artifact.resolver.*
-import com.durganmcbroom.jobs.*
+import com.durganmcbroom.artifact.resolver.ArtifactMetadata
+import com.durganmcbroom.artifact.resolver.ArtifactRequest
+import com.durganmcbroom.artifact.resolver.RepositorySettings
+import com.durganmcbroom.jobs.Job
 import java.nio.file.Path
 
 /**

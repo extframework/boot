@@ -1,6 +1,9 @@
 package dev.extframework.boot.archive
 
-import com.durganmcbroom.jobs.*
+import com.durganmcbroom.jobs.Job
+import com.durganmcbroom.jobs.JobName
+import com.durganmcbroom.jobs.facet
+import com.durganmcbroom.jobs.job
 import dev.extframework.archives.*
 import dev.extframework.archives.jpm.JpmResolutionResult
 import dev.extframework.archives.zip.ZipResolutionResult

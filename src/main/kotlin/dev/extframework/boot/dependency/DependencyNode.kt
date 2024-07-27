@@ -3,8 +3,6 @@ package dev.extframework.boot.dependency
 import com.durganmcbroom.artifact.resolver.ArtifactMetadata
 import dev.extframework.archives.ArchiveHandle
 import dev.extframework.boot.archive.ArchiveAccessTree
-import dev.extframework.boot.archive.ArchiveNode
-import dev.extframework.boot.archive.ArchiveNodeResolver
 import dev.extframework.boot.archive.ClassLoadedArchiveNode
 
 public abstract class DependencyNode<T : ArtifactMetadata.Descriptor>: ClassLoadedArchiveNode<T> {

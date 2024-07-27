@@ -1,7 +1,9 @@
 package dev.extframework.boot.constraint
 
 import com.durganmcbroom.artifact.resolver.ArtifactMetadata
-import dev.extframework.boot.archive.*
+import dev.extframework.boot.archive.ArchiveException
+import dev.extframework.boot.archive.ArchiveTrace
+import dev.extframework.boot.archive.IArchive
 import dev.extframework.boot.monad.Tree
 import dev.extframework.boot.util.textifyTree
 import dev.extframework.boot.util.toGraphable

@@ -1,6 +1,8 @@
 package dev.extframework.boot.maven
 
-import com.durganmcbroom.artifact.resolver.*
+import com.durganmcbroom.artifact.resolver.RepositoryFactory
+import com.durganmcbroom.artifact.resolver.RepositoryStubResolver
+import com.durganmcbroom.artifact.resolver.ResolutionContext
 import com.durganmcbroom.artifact.resolver.simple.maven.*
 import com.durganmcbroom.artifact.resolver.simple.maven.pom.PomRepository
 import com.durganmcbroom.jobs.Job

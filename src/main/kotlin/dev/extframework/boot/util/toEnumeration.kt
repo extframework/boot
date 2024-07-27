@@ -1,6 +1,6 @@
 package dev.extframework.boot.util
 
-import java.util.Enumeration
+import java.util.*
 
 public fun <T> Sequence<T>.toEnumeration() : Enumeration<T> {
     val iterator = iterator()

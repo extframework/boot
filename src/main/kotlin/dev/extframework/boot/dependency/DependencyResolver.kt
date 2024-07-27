@@ -6,10 +6,8 @@ import com.durganmcbroom.jobs.job
 import dev.extframework.archives.ArchiveHandle
 import dev.extframework.boot.archive.*
 import dev.extframework.boot.loader.*
-import dev.extframework.boot.monad.AndMany
 import dev.extframework.boot.monad.Tagged
 import dev.extframework.boot.monad.Tree
-import dev.extframework.boot.monad.mapItem
 
 public abstract class DependencyResolver<
         K : ArtifactMetadata.Descriptor,
