@@ -127,8 +127,6 @@ public open class DefaultArchiveGraph(
         descriptor: K,
         resolver: ArchiveNodeResolver<K, *, T, *, *>
     ): AsyncJob<T> = asyncJob {
-        println("Start Get")
-
         checkRegistration(resolver)
 
         getNode(descriptor)?.let { node ->
@@ -363,7 +361,7 @@ public open class DefaultArchiveGraph(
                     ) ?: throw IllegalArgumentException("Unknown archive resolver: '$resolver'. Make sure it is registered before you try to cache your archive.")
 
                 CacheableParentInfo(
-                    resolver.name,
+                    it.tag.name,
                     parentDescriptor
                 )
             }
@@ -417,7 +415,7 @@ public open class DefaultArchiveGraph(
     }
 
     /**
-     * Builds an [ArchiveData] tree from an [Artifact].
+     * Builds a [ArchiveData] tree from an [Artifact].
      */
     protected fun <
             D : ArtifactMetadata.Descriptor,
