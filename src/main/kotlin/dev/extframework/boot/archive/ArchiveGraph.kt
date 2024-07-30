@@ -4,6 +4,10 @@ import com.durganmcbroom.artifact.resolver.ArtifactMetadata
 import com.durganmcbroom.artifact.resolver.ArtifactRequest
 import com.durganmcbroom.artifact.resolver.RepositorySettings
 import com.durganmcbroom.jobs.Job
+import com.durganmcbroom.jobs.async.AsyncJob
+import com.durganmcbroom.jobs.job
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import java.nio.file.Path
 
 /**
@@ -62,11 +66,34 @@ public interface ArchiveGraph {
             D : ArtifactMetadata.Descriptor,
             T : ArtifactRequest<D>,
             R : RepositorySettings,
-            M : ArtifactMetadata<D, ArtifactMetadata.ChildInfo<T, R>>> cache(
+            M : ArtifactMetadata<D, ArtifactMetadata.ParentInfo<T, R>>> cacheAsync(
         request: T,
         repository: R,
         resolver: ArchiveNodeResolver<D, T, *, R, M>
-    ): Job<Unit>
+    ): AsyncJob<Unit>
+
+    /**
+     * @see cacheAsync
+     * Runs the job in a blocking coroutine scope.
+     *
+     * @param request The artifact request to be cached.
+     * @param repository The repository in which the artifact request will be cached.
+     * @param resolver The resolver used to cache the artifact request.
+     * @return A Job that represents the caching process.
+     */
+    public fun <
+            D : ArtifactMetadata.Descriptor,
+            T : ArtifactRequest<D>,
+            R : RepositorySettings,
+            M : ArtifactMetadata<D, ArtifactMetadata.ParentInfo<T, R>>> cache(
+        request: T,
+        repository: R,
+        resolver: ArchiveNodeResolver<D, T, *, R, M>
+    ): Job<Unit> = job {
+        runBlocking(Dispatchers.IO) {
+            cacheAsync(request, repository, resolver)().merge()
+        }
+    }
 
     /**
      * Retrieves the specified ArchiveNode based on the given descriptor and resolver.
@@ -77,10 +104,29 @@ public interface ArchiveGraph {
      * @param resolver The resolver used to retrieve the ArchiveNode.
      * @return A Job that will eventually resolve the specified archive.
      */
+    public fun <K : ArtifactMetadata.Descriptor, T : ArchiveNode<K>> getAsync(
+        descriptor: K,
+        resolver: ArchiveNodeResolver<K, *, T, *, *>
+    ): AsyncJob<T>
+
+    /**
+     * @see getAsync
+     * Runs the job in a blocking coroutine scope.
+     *
+     * @param descriptor The descriptor of the ArchiveNode to retrieve.
+     * @param resolver The resolver used to retrieve the ArchiveNode.
+     * @return A Job that will eventually resolve the specified archive.
+     */
     public fun <K : ArtifactMetadata.Descriptor, T : ArchiveNode<K>> get(
         descriptor: K,
         resolver: ArchiveNodeResolver<K, *, T, *, *>
-    ): Job<T>
+    ): Job<T> = job {
+        runBlocking(Dispatchers.IO) {
+            getAsync(descriptor, resolver)().merge()
+        }
+    }
+
+
 
     /**
      * Retrieves an already loaded ArchiveNode with no guarantee of type. The

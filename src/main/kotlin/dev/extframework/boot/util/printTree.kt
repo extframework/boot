@@ -17,7 +17,7 @@ public interface Graphable {
 
 public fun Artifact<*>.toGraphable(): Graphable = object : Graphable {
     override val name: String = metadata.descriptor.name
-    override val children: List<Graphable> = this@toGraphable.children.map { it.toGraphable() }
+    override val children: List<Graphable> = this@toGraphable.parents.map { it.toGraphable() }
 }
 
 public fun printTree(artifact: Artifact<*>): Job<Unit> = printTree(artifact.toGraphable())

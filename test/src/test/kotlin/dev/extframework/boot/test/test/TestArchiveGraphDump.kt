@@ -23,13 +23,13 @@ class TestArchiveGraphDump {
         val archiveGraph = ArchiveGraph.from(Path.of("test-run"))
 
         launch(JobName("test") + BootLoggerFactory()) {
-            archiveGraph.cache(
+            archiveGraph.cacheAsync(
                 request,
                 SimpleMavenRepositorySettings.default(url = "https://maven.extframework.dev/snapshots"),
                 maven.resolver
             )().merge()
 
-            archiveGraph.get(request.descriptor, maven.resolver)().merge()
+            archiveGraph.getAsync(request.descriptor, maven.resolver)().merge()
 
             archiveGraph.dump()().merge()
         }

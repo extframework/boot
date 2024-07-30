@@ -2,6 +2,7 @@ package dev.extframework.boot.archive
 
 import com.durganmcbroom.artifact.resolver.*
 import com.durganmcbroom.jobs.Job
+import com.durganmcbroom.jobs.async.AsyncJob
 import com.durganmcbroom.resources.Resource
 import dev.extframework.boot.archive.audit.ArchiveAuditors
 import dev.extframework.boot.monad.Tagged
@@ -22,7 +23,7 @@ public interface ArchiveNodeResolver<
         R : ArtifactRequest<K>,
         V : ArchiveNode<K>,
         S : RepositorySettings,
-        M : ArtifactMetadata<K, ArtifactMetadata.ChildInfo<R, S>>> {
+        M : ArtifactMetadata<K, ArtifactMetadata.ParentInfo<R, S>>> {
     public val name: String
 
     public val nodeType: Class<in V>
@@ -100,7 +101,7 @@ public interface ArchiveNodeResolver<
     public fun cache(
         artifact: Artifact<M>,
         helper: CacheHelper<K>
-    ): Job<Tree<Tagged<ArchiveData<*, CacheableArchiveResource>, ArchiveNodeResolver<*, *, *, *, *>>>>
+    ): AsyncJob<Tree<Tagged<ArchiveData<*, CacheableArchiveResource>, ArchiveNodeResolver<*, *, *, *, *>>>>
 }
 
 /**
@@ -127,7 +128,7 @@ public interface CacheHelper<K : ArtifactMetadata.Descriptor> {
             > cache(
         artifact: Artifact<M>,
         resolver: ArchiveNodeResolver<D, *, *, *, M>
-    ): Job<Tree<Tagged<ArchiveData<*, CacheableArchiveResource>, ArchiveNodeResolver<*, *, *, *, *>>>>
+    ): AsyncJob<Tree<Tagged<ArchiveData<*, CacheableArchiveResource>, ArchiveNodeResolver<*, *, *, *, *>>>>
 
     /**
      * Load an artifact tree.
@@ -136,12 +137,12 @@ public interface CacheHelper<K : ArtifactMetadata.Descriptor> {
             D : ArtifactMetadata.Descriptor,
             T : ArtifactRequest<D>,
             R : RepositorySettings,
-            M : ArtifactMetadata<D, ArtifactMetadata.ChildInfo<T, R>>
+            M : ArtifactMetadata<D, ArtifactMetadata.ParentInfo<T, R>>
             > resolveArtifact(
         request: T,
         repository: R,
         resolver: ArchiveNodeResolver<D, T, *, R, M>
-    ): Job<Artifact<M>>
+    ): AsyncJob<Artifact<M>>
 
     /**
      * Add a resource to the archive data being built.

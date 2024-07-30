@@ -2,6 +2,9 @@ package dev.extframework.boot.dependency
 
 import com.durganmcbroom.artifact.resolver.*
 import com.durganmcbroom.jobs.Job
+import com.durganmcbroom.jobs.async.AsyncJob
+import com.durganmcbroom.jobs.async.asyncJob
+import com.durganmcbroom.jobs.async.mapAsync
 import com.durganmcbroom.jobs.job
 import com.durganmcbroom.resources.Resource
 import dev.extframework.archives.ArchiveHandle
@@ -9,13 +12,14 @@ import dev.extframework.boot.archive.*
 import dev.extframework.boot.loader.*
 import dev.extframework.boot.monad.Tagged
 import dev.extframework.boot.monad.Tree
+import kotlinx.coroutines.awaitAll
 
 public abstract class DependencyResolver<
         K : ArtifactMetadata.Descriptor,
         R : ArtifactRequest<K>,
         N : DependencyNode<K>,
         S : RepositorySettings,
-        M : ArtifactMetadata<K, ArtifactMetadata.ChildInfo<R, S>>,
+        M : ArtifactMetadata<K, ArtifactMetadata.ParentInfo<R, S>>,
         >(
     private val parentClassLoader: ClassLoader,
     private val resolutionProvider: ArchiveResolutionProvider<*> = ZipResolutionProvider
@@ -72,16 +76,16 @@ public abstract class DependencyResolver<
     override fun cache(
         artifact: Artifact<M>,
         helper: CacheHelper<K>
-    ): Job<Tree<Tagged<ArchiveData<*, CacheableArchiveResource>, ArchiveNodeResolver<*, *, *, *, *>>>> = job {
+    ): AsyncJob<Tree<Tagged<ArchiveData<*, CacheableArchiveResource>, ArchiveNodeResolver<*, *, *, *, *>>>> = asyncJob {
         helper.withResource("jar.jar", artifact.metadata.resource())
 
         helper.newData(
             artifact.metadata.descriptor,
-            artifact.children.map {
+            artifact.parents.mapAsync {
                 helper.cache(
                     it, this@DependencyResolver,
                 )().merge()
-            }
+            }.awaitAll()
         )
     }
 }
