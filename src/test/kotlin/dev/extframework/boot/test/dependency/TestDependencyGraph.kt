@@ -1,18 +1,22 @@
 package dev.extframework.boot.test.dependency
 
-import com.durganmcbroom.artifact.resolver.MetadataRequestException
+import BootLoggerFactory
 import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenArtifactRequest
 import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenRepositorySettings
 import com.durganmcbroom.jobs.JobName
+import com.durganmcbroom.jobs.launch
 import com.durganmcbroom.jobs.result
 import com.durganmcbroom.resources.ResourceAlgorithm
 import dev.extframework.boot.archive.ArchiveException
 import dev.extframework.boot.archive.ArchiveGraph
 import dev.extframework.boot.archive.ArchiveNode
+import dev.extframework.boot.archive.DefaultArchiveGraph
 import dev.extframework.boot.maven.MavenDependencyResolver
 import dev.extframework.boot.maven.MavenResolverProvider
-import runBootBlocking
+import dev.extframework.boot.util.printTree
+import dev.extframework.boot.util.toGraphable
 import java.nio.file.Files
+import java.nio.file.Path
 import kotlin.test.Test
 
 class TestDependencyGraph {
@@ -20,7 +24,7 @@ class TestDependencyGraph {
     fun `Test maven basic dependency loading`() {
         val basePath = Files.createTempDirectory("m2cache")
         val maven = MavenResolverProvider()
-        val archiveGraph = ArchiveGraph(basePath, mutableMapOf())
+        val archiveGraph = DefaultArchiveGraph(basePath, mutableMapOf())
 
         val request = SimpleMavenArtifactRequest(
             "org.ow2.asm:asm-commons:9.7",
@@ -34,10 +38,9 @@ class TestDependencyGraph {
             maven.resolver
         )
 
-        check(node.archive != null) { "Archive shouldnt be null" }
         check(node.access.targets.size == 2) { "Wrong target size" }
         check(node.access.targets.mapTo(HashSet()) { it.descriptor.name }
-            .containsAll(setOf("org.ow2.asm:asm:9.7", "org.ow2.asm:asm-tree:9.7"))) {"Wrong targets"}
+            .containsAll(setOf("org.ow2.asm:asm:9.7", "org.ow2.asm:asm-tree:9.7"))) { "Wrong targets" }
     }
 
     @Test
@@ -45,7 +48,7 @@ class TestDependencyGraph {
         val basePath = Files.createTempDirectory("m2cache")
 
         val maven = MavenResolverProvider()
-        val archiveGraph = ArchiveGraph(basePath)
+        val archiveGraph = DefaultArchiveGraph(basePath)
 
 
         val request = SimpleMavenArtifactRequest(
@@ -71,7 +74,7 @@ class TestDependencyGraph {
         val basePath = Files.createTempDirectory("m2cache")
 
         val maven = MavenResolverProvider()
-        val archiveGraph = ArchiveGraph(basePath)
+        val archiveGraph = DefaultArchiveGraph(basePath)
 
 
         val request = SimpleMavenArtifactRequest(
@@ -79,7 +82,7 @@ class TestDependencyGraph {
             includeScopes = setOf("compile", "runtime", "import")
         )
 
-        val r = runBootBlocking {
+        val r = launch(BootLoggerFactory()) {
             archiveGraph.get(request.descriptor, maven.resolver)()
         }
 
@@ -87,31 +90,53 @@ class TestDependencyGraph {
         check(r.exceptionOrNull() is ArchiveException.ArchiveNotCached)
     }
 
-    private fun cacheAndGet(
-        archiveGraph: ArchiveGraph,
-        request: SimpleMavenArtifactRequest,
-        repository: SimpleMavenRepositorySettings,
-        maven: MavenDependencyResolver
-    ): ArchiveNode<*> {
-        val node = runBootBlocking(JobName("test")) {
+    @Test
+    fun `Test bootstrapper dependency load`() {
+        val maven = MavenResolverProvider()
+        val archiveGraph = ArchiveGraph.from(Path.of("test-run").toAbsolutePath())
+        println(archiveGraph.path)
+
+        val request = SimpleMavenArtifactRequest(
+            "dev.extframework.minecraft:minecraft-provider-def:1.0-SNAPSHOT",
+            includeScopes = setOf("compile", "runtime", "import")
+        )
+
+        val node = launch(BootLoggerFactory()) {
             archiveGraph.cache(
                 request,
-                repository,
-                maven
+                SimpleMavenRepositorySettings.local(),// .default("https://maven.extframework.dev/snapshots"),
+                maven.resolver
             )().merge()
-
-            archiveGraph.get(request.descriptor, maven)().merge()
+            archiveGraph.get(request.descriptor, maven.resolver)().merge()
         }
 
-        node.prettyPrint { handle, depth ->
-            val str = (0..depth).joinToString(separator = "   ") { "" } + handle.descriptor.name
-            println(str)
-        }
-        separator("Targets:")
-        println(node.access.targets.joinToString(separator = "\n") {
-            it.descriptor.name
-        })
+        println(node)
+    }
 
-        return node
+    companion object {
+        fun cacheAndGet(
+            archiveGraph: ArchiveGraph,
+            request: SimpleMavenArtifactRequest,
+            repository: SimpleMavenRepositorySettings,
+            maven: MavenDependencyResolver
+        ): ArchiveNode<*> {
+            val node = launch(JobName("test") + BootLoggerFactory()) {
+                archiveGraph.cache(
+                    request,
+                    repository,
+                    maven
+                )().merge()
+
+                archiveGraph.get(request.descriptor, maven)().merge()
+            }
+
+            printTree(node.toGraphable())
+            separator("Targets:")
+            println(node.access.targets.joinToString(separator = "\n") {
+                it.descriptor.name
+            })
+
+            return node
+        }
     }
 }

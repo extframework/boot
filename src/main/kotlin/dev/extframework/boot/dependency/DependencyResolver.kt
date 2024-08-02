@@ -2,76 +2,65 @@ package dev.extframework.boot.dependency
 
 import com.durganmcbroom.artifact.resolver.*
 import com.durganmcbroom.jobs.Job
+import com.durganmcbroom.jobs.async.AsyncJob
+import com.durganmcbroom.jobs.async.asyncJob
+import com.durganmcbroom.jobs.async.mapAsync
 import com.durganmcbroom.jobs.job
+import com.durganmcbroom.resources.Resource
 import dev.extframework.archives.ArchiveHandle
 import dev.extframework.boot.archive.*
 import dev.extframework.boot.loader.*
-import java.security.CodeSource
-import java.security.ProtectionDomain
-import java.security.cert.Certificate
+import dev.extframework.boot.monad.Tagged
+import dev.extframework.boot.monad.Tree
+import kotlinx.coroutines.awaitAll
 
 public abstract class DependencyResolver<
         K : ArtifactMetadata.Descriptor,
         R : ArtifactRequest<K>,
-        N : DependencyNode<N>,
+        N : DependencyNode<K>,
         S : RepositorySettings,
-        M : ArtifactMetadata<K, *>,
+        M : ArtifactMetadata<K, ArtifactMetadata.ParentInfo<R, S>>,
         >(
     private val parentClassLoader: ClassLoader,
     private val resolutionProvider: ArchiveResolutionProvider<*> = ZipResolutionProvider
 ) : ArchiveNodeResolver<K, R, N, S, M> {
-
     override val nodeType: Class<in N> = DependencyNode::class.java
 
     override fun load(
         data: ArchiveData<K, CachedArchiveResource>,
+        accessTree: ArchiveAccessTree,
         helper: ResolutionHelper
     ): Job<N> = job {
-        val parents: Set<N> = data.parents.mapTo(HashSet()) {
-            helper.load(it)
-        }
-
-        val access = helper.newAccessTree {
-            allDirect(parents)
-        }
+        val accessibleNodes = accessTree.targets
+            .asSequence()
+            .map(ArchiveTarget::relationship)
+            .map(ArchiveRelationship::node)
 
         val archive = data.resources["jar.jar"]?.let {
             resolutionProvider.resolve(
                 it.path,
                 { ref ->
-                    IntegratedLoader(
-                        name = data.descriptor.name,
-                        sourceProvider = ArchiveSourceProvider(ref),
-                        resourceProvider = ArchiveResourceProvider(ref),
-                        classProvider = DelegatingClassProvider(access.targets.map { target ->
-                            target.relationship.classes
-                        }),
-                        sourceDefiner = {n, b, cl, d ->
-                            d(n, b, ProtectionDomain(CodeSource(ref.location.toURL(), arrayOf<Certificate>()), null, cl, null))
-                        },
-                        parent = parentClassLoader,
+                    ArchiveClassLoader(
+                        ref,
+                        accessTree,
+                        parentClassLoader
                     )
                 },
-                parents.mapNotNullTo(HashSet(), DependencyNode<*>::archive)
+                accessibleNodes
+                    .filterIsInstance<ClassLoadedArchiveNode<*>>()
+                    .mapNotNullTo(mutableSetOf(), ClassLoadedArchiveNode<*>::handle),
+
+                helper.trace
             )().merge().archive
-//            ContainerLoader.load(
-//                RawArchiveContainerInfo(
-//                    data.descriptor.name,
-//                    it.path,
-//                    access
-//                ),
-//                ContainerLoader.createHandle(),
-//                RawArchiveContainerLoader(ZipResolutionProvider, parentClassLoader),
-//                RootVolume,
-//                PrivilegeManager(parentPrivilegeManager, PrivilegeAccess.emptyPrivileges())
-//            ).bind()
         }
 
         constructNode(
             data.descriptor,
             archive,
-            parents,
-            access,
+            accessibleNodes
+                .filter { nodeType.isInstance(it) }
+                .mapTo(mutableSetOf()) { it as N },
+            accessTree,
         )
     }
 
@@ -82,12 +71,21 @@ public abstract class DependencyResolver<
         accessTree: ArchiveAccessTree,
     ): N
 
-    override fun cache(
-        metadata: M,
-        helper: ArchiveCacheHelper<K>
-    ): Job<ArchiveData<K, CacheableArchiveResource>> = job {
-        helper.withResource("jar.jar", metadata.resource)
+    protected abstract fun M.resource() : Resource?
 
-        helper.newData(metadata.descriptor)
+    override fun cache(
+        artifact: Artifact<M>,
+        helper: CacheHelper<K>
+    ): AsyncJob<Tree<Tagged<ArchiveData<*, CacheableArchiveResource>, ArchiveNodeResolver<*, *, *, *, *>>>> = asyncJob {
+        helper.withResource("jar.jar", artifact.metadata.resource())
+
+        helper.newData(
+            artifact.metadata.descriptor,
+            artifact.parents.mapAsync {
+                helper.cache(
+                    it, this@DependencyResolver,
+                )().merge()
+            }.awaitAll()
+        )
     }
 }

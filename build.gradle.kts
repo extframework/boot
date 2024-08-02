@@ -12,6 +12,8 @@ plugins {
     id("dev.extframework.common") version "1.0.5"
 }
 
+version = "3.0-SNAPSHOT"
+
 tasks.compileKotlin {
     kotlinOptions {
         freeCompilerArgs = listOf("-Xcontext-receivers")
@@ -65,9 +67,9 @@ allprojects {
     apply(plugin = "dev.extframework.common")
 
     group = "dev.extframework"
-    version = "2.1.1-SNAPSHOT"
 
     repositories {
+        mavenLocal()
         mavenCentral()
         extFramework()
     }
@@ -105,8 +107,8 @@ allprojects {
 
         commonUtil(configurationName = "api")
         archives(configurationName = "api")
-        artifactResolver()
-        jobs(logging = true, progressSimple = true)
+        artifactResolver(version = "1.2.1-SNAPSHOT")
+        jobs(version = "1.3-SNAPSHOT", logging = true, progressSimple = true)
     }
 
     java {

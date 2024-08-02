@@ -1,14 +1,5 @@
 package dev.extframework.boot.test.dependency
 
-import dev.extframework.boot.archive.ArchiveNode
-
-fun ArchiveNode<*>.prettyPrint(printer: (handle: ArchiveNode<*>, depth: Int) -> Unit) = prettyPrint(printer, 0)
-
-private fun ArchiveNode<*>.prettyPrint(printer: (handle: ArchiveNode<*>, depth: Int) -> Unit, depth: Int) {
-    printer(this, depth)
-    parents.forEach { it.prettyPrint(printer, depth + 1) }
-}
-
 private const val SEPARATOR_LENGTH = 50
 
 fun separator(title: String) {

@@ -1,6 +1,7 @@
 package dev.extframework.boot.util
 
-import com.durganmcbroom.jobs.*
+import com.durganmcbroom.jobs.ResultScope
+import com.durganmcbroom.jobs.result
 import dev.extframework.boot.archive.ArchiveException
 import dev.extframework.boot.archive.ArchiveTrace
 
