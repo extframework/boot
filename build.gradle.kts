@@ -108,7 +108,7 @@ allprojects {
         commonUtil(configurationName = "api")
         archives(configurationName = "api")
         artifactResolver(version = "1.2.1-SNAPSHOT")
-        jobs(logging = true, progressSimple = true)
+        jobs(version = "1.3-SNAPSHOT", logging = true, progressSimple = true)
     }
 
     java {
