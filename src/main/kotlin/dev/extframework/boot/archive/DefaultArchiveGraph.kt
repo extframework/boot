@@ -268,7 +268,7 @@ public open class DefaultArchiveGraph(
                 DefaultAuditContext(trace, this@DefaultArchiveGraph)
             )().merge()
 
-            (resolver as ArchiveNodeResolver<ArtifactMetadata.Descriptor, *, *, *, *>)
+            val node = (resolver as ArchiveNodeResolver<ArtifactMetadata.Descriptor, *, *, *, *>)
                 .load(
                     (data as ArchiveData<ArtifactMetadata.Descriptor, CachedArchiveResource>),
                     auditedTree,
@@ -276,6 +276,10 @@ public open class DefaultArchiveGraph(
                         override val trace: ArchiveTrace = trace
                     }
                 )().merge() as ArchiveNode<ArtifactMetadata.Descriptor>
+
+            mutable[node.descriptor] = node
+
+            node
         }
     }
 
