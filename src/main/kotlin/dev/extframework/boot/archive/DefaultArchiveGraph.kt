@@ -6,9 +6,7 @@ import com.durganmcbroom.jobs.JobScope
 import com.durganmcbroom.jobs.async.AsyncJob
 import com.durganmcbroom.jobs.async.asyncJob
 import com.durganmcbroom.jobs.async.mapAsync
-import com.durganmcbroom.jobs.logging.LogLevel
 import com.durganmcbroom.jobs.logging.info
-import com.durganmcbroom.jobs.logging.logger
 import com.durganmcbroom.jobs.mapException
 import com.durganmcbroom.resources.LocalResource
 import com.durganmcbroom.resources.Resource
@@ -29,9 +27,16 @@ import dev.extframework.common.util.make
 import dev.extframework.common.util.resolve
 import dev.extframework.`object`.MutableObjectContainer
 import dev.extframework.`object`.ObjectContainerImpl
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.*
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.ConcurrentSkipListSet
+import kotlin.collections.HashMap
 import kotlin.io.path.writeBytes
 import kotlin.reflect.jvm.jvmName
 
@@ -335,6 +340,12 @@ public open class DefaultArchiveGraph(
         cacheInternal(archiveTree, ArchiveTrace(artifactTree.metadata.descriptor, null))().merge()
     }
 
+    // Represents all the currently running jobs
+    private val beingCached: MutableMap<
+            ArtifactMetadata.Descriptor,
+            Deferred<Tree<Tagged<ArchiveData<*, CachedArchiveResource>, ArchiveNodeResolver<*, *, *, *, *>>>>
+            > = ConcurrentHashMap()
+
     /**
      * Recursively caches the given tree of archive data.
      */
@@ -342,66 +353,93 @@ public open class DefaultArchiveGraph(
         tree: Tree<Tagged<ArchiveData<*, CacheableArchiveResource>, ArchiveNodeResolver<*, *, *, *, *>>>,
         trace: ArchiveTrace
     ): AsyncJob<Tree<Tagged<ArchiveData<*, CachedArchiveResource>, ArchiveNodeResolver<*, *, *, *, *>>>> = asyncJob {
-        trace.checkCircularity()
+        coroutineScope {
+            trace.checkCircularity()
 
-        val result = tree.item.value
-        val resolver = tree.item.tag as ArchiveNodeResolver<ArtifactMetadata.Descriptor, *, *, *, *>
+            val data = tree.item.value
+            val resolver = tree.item.tag as ArchiveNodeResolver<ArtifactMetadata.Descriptor, *, *, *, *>
 
-        val metadataPath = path resolve resolver.pathForDescriptor(result.descriptor, "archive-metadata", "json")
-
-        val resourcePaths = result.resources.map { (name, wrapper) ->
-            val (classifier, extension) = name
-                .split(".")
-                .takeIf { it.size == 2 }
-                ?: throw ArchiveException(
-                    trace,
-                    "Resource name should be in the format : '<CLASSIFIER>.<TYPE>'. Found: '$name'",
+            if (isCached(
+                    data.descriptor,
+                    resolver
                 )
-
-            val path =
-                this@DefaultArchiveGraph.path resolve if (wrapper.resource is LocalResource) Path.of(wrapper.resource.location)
-                else resolver.pathForDescriptor(result.descriptor, classifier, extension)
-
-            Triple(name, wrapper, path)
-        }
-
-        val metadataResource = CacheableArchiveData(
-            resourcePaths.associate {
-                it.first to it.third.toString()
-            },
-            tree.parents.map { (it, _) ->
-                val parentDescriptor =
-                    (it.tag as? ArchiveNodeResolver<ArtifactMetadata.Descriptor, *, *, *, *>)?.serializeDescriptor(
-                        it.value.descriptor
-                    )
-                        ?: throw IllegalArgumentException("Unknown archive resolver: '$resolver'. Make sure it is registered before you try to cache your archive.")
-
-                CacheableParentInfo(
-                    it.tag.name,
-                    parentDescriptor
-                )
+            ) {
+                return@coroutineScope readArchiveTree(data.descriptor, resolver, trace)().merge()
             }
-        ).let(ObjectMapper().registerModule(KotlinModule.Builder().build())::writeValueAsBytes)
 
-        metadataPath
-            .apply { make() }
-            .writeBytes(metadataResource)
+            beingCached[data.descriptor]?.await()?.let {
+                return@coroutineScope it
+            }
 
-        val parents = tree.parents.mapAsync {
-            cacheInternal(it, trace)().merge()
-        }.awaitAll()
+            val asyncBlock = async {
+                val metadataPath = path resolve resolver.pathForDescriptor(data.descriptor, "archive-metadata", "json")
 
-        resourcePaths.mapAsync { (_, wrapper, path) ->
-            if (wrapper.resource !is LocalResource) (wrapper.resource copyTo path)
-        }.awaitAll()
+                val resourcePaths = data.resources.map { (name, wrapper) ->
+                    val (classifier, extension) = name
+                        .split(".")
+                        .takeIf { it.size == 2 }
+                        ?: throw ArchiveException(
+                            trace,
+                            "Resource name should be in the format : '<CLASSIFIER>.<TYPE>'. Found: '$name'",
+                        )
 
-        Tree(
-            ArchiveData(
-                tree.item.value.descriptor,
-                resourcePaths.associate {
-                    it.first to CachedArchiveResource(it.third)
+                    val path =
+                        this@DefaultArchiveGraph.path resolve if (wrapper.resource is LocalResource) Path.of(wrapper.resource.location)
+                        else resolver.pathForDescriptor(data.descriptor, classifier, extension)
+
+                    Triple(name, wrapper, path)
                 }
-            ) tag resolver, parents)
+
+                val metadataResource = CacheableArchiveData(
+                    resourcePaths.associate {
+                        it.first to it.third.toString()
+                    },
+                    tree.parents.map { (it, _) ->
+                        val parentDescriptor =
+                            (it.tag as? ArchiveNodeResolver<ArtifactMetadata.Descriptor, *, *, *, *>)?.serializeDescriptor(
+                                it.value.descriptor
+                            )
+                                ?: throw IllegalArgumentException("Unknown archive resolver: '$resolver'. Make sure it is registered before you try to cache your archive.")
+
+                        CacheableParentInfo(
+                            it.tag.name,
+                            parentDescriptor
+                        )
+                    }
+                ).let(ObjectMapper().registerModule(KotlinModule.Builder().build())::writeValueAsBytes)
+
+                val parents = tree.parents.mapAsync {
+                    cacheInternal(it, trace)().merge()
+                }.awaitAll()
+
+                resourcePaths.mapAsync { (name, wrapper, path) ->
+                    if (wrapper.resource !is LocalResource) {
+                        info("Downloading resource: '${data.descriptor}#$name' from: '${wrapper.resource.location}")
+                        wrapper.resource copyTo path
+                    }
+                }.awaitAll()
+
+                metadataPath
+                    .apply { make() }
+                    .writeBytes(metadataResource)
+
+                Tree(
+                    ArchiveData(
+                        tree.item.value.descriptor,
+                        resourcePaths.associate {
+                            it.first to CachedArchiveResource(it.third)
+                        }
+                    ) tag resolver, parents)
+            }
+
+            beingCached[data.descriptor] = asyncBlock
+
+            val result = asyncBlock.await()
+
+            beingCached.remove(data.descriptor)?.join()
+
+            result
+        }
     }
 
     /**
@@ -509,4 +547,3 @@ public open class DefaultArchiveGraph(
                 )().merge()
         }
 }
-
