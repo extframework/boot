@@ -7,6 +7,7 @@ import com.durganmcbroom.jobs.async.AsyncJob
 import com.durganmcbroom.jobs.async.asyncJob
 import com.durganmcbroom.jobs.async.mapAsync
 import com.durganmcbroom.jobs.logging.LogLevel
+import com.durganmcbroom.jobs.logging.info
 import com.durganmcbroom.jobs.logging.logger
 import com.durganmcbroom.jobs.mapException
 import com.durganmcbroom.resources.LocalResource
@@ -21,6 +22,8 @@ import dev.extframework.boot.monad.Tagged
 import dev.extframework.boot.monad.Tree
 import dev.extframework.boot.monad.tag
 import dev.extframework.boot.monad.toTree
+import dev.extframework.boot.util.printTree
+import dev.extframework.boot.util.toGraphable
 import dev.extframework.common.util.copyTo
 import dev.extframework.common.util.make
 import dev.extframework.common.util.resolve
@@ -106,11 +109,8 @@ public open class DefaultArchiveGraph(
     /**
      * Default context ot use when auditing.
      */
-    private inner class DefaultAuditContext(override val trace: ArchiveTrace) : AuditContext {
-        override fun isLoaded(descriptor: ArtifactMetadata.Descriptor): Boolean {
-            return loaded(descriptor)
-        }
-    }
+    private inner class DefaultAuditContext(override val trace: ArchiveTrace, override val graph: ArchiveGraph) :
+        AuditContext
 
     private suspend fun <K : ArtifactMetadata.Descriptor, N : ArchiveNode<K>> JobScope.checkLoaded(
         descriptor: K,
@@ -152,9 +152,12 @@ public open class DefaultArchiveGraph(
             val auditedTree = resolver.auditors.archiveTreeAuditor.audit(
                 archiveTree,
                 DefaultAuditContext(
-                    ArchiveTrace(descriptor)
+                    ArchiveTrace(descriptor), this@DefaultArchiveGraph
                 )
             )().merge()
+
+            info("Archive tree for '$descriptor' after auditing:")
+            printTree(auditedTree.toGraphable { it.value.descriptor.name })().merge()
 
             getInternal(
                 auditedTree,
@@ -257,7 +260,7 @@ public open class DefaultArchiveGraph(
 
             val auditedTree = tree.item.tag.auditors.accessAuditor.audit(
                 accessTree,
-                DefaultAuditContext(trace)
+                DefaultAuditContext(trace, this@DefaultArchiveGraph)
             )().merge()
 
             (resolver as ArchiveNodeResolver<ArtifactMetadata.Descriptor, *, *, *, *>)
@@ -282,11 +285,15 @@ public open class DefaultArchiveGraph(
         request: T,
         repository: R,
         resolver: ArchiveNodeResolver<D, T, *, R, M>
-    ): AsyncJob<Unit> = asyncJob {
+    ): AsyncJob<Tree<Tagged<ArchiveData<*, CachedArchiveResource>, ArchiveNodeResolver<*, *, *, *, *>>>> = asyncJob {
         checkRegistration(resolver)
 
         val descriptor = request.descriptor
-        if (isCached(descriptor, resolver)) return@asyncJob
+        if (isCached(descriptor, resolver)) return@asyncJob readArchiveTree(
+            descriptor,
+            resolver,
+            ArchiveTrace(descriptor, null)
+        )().merge()
 
         val artifactTree = resolveArtifact(request, repository, resolver)().merge()
 
@@ -320,7 +327,7 @@ public open class DefaultArchiveGraph(
     private fun <D : ArtifactMetadata.Descriptor, M : ArtifactMetadata<D, *>> cacheInternal(
         artifactTree: Artifact<M>,
         resolver: ArchiveNodeResolver<D, *, *, *, M>
-    ): AsyncJob<Unit> = asyncJob {
+    ): AsyncJob<Tree<Tagged<ArchiveData<*, CachedArchiveResource>, ArchiveNodeResolver<*, *, *, *, *>>>> = asyncJob {
         val archiveTree =
             constructArchiveTree(artifactTree, resolver, ArchiveTrace(artifactTree.metadata.descriptor))().merge()
                 .toTree()
@@ -334,7 +341,7 @@ public open class DefaultArchiveGraph(
     private fun cacheInternal(
         tree: Tree<Tagged<ArchiveData<*, CacheableArchiveResource>, ArchiveNodeResolver<*, *, *, *, *>>>,
         trace: ArchiveTrace
-    ): AsyncJob<Unit> = asyncJob {
+    ): AsyncJob<Tree<Tagged<ArchiveData<*, CachedArchiveResource>, ArchiveNodeResolver<*, *, *, *, *>>>> = asyncJob {
         trace.checkCircularity()
 
         val result = tree.item.value
@@ -380,13 +387,21 @@ public open class DefaultArchiveGraph(
             .apply { make() }
             .writeBytes(metadataResource)
 
-        tree.parents.mapAsync {
+        val parents = tree.parents.mapAsync {
             cacheInternal(it, trace)().merge()
         }.awaitAll()
 
         resourcePaths.mapAsync { (_, wrapper, path) ->
             if (wrapper.resource !is LocalResource) (wrapper.resource copyTo path)
         }.awaitAll()
+
+        Tree(
+            ArchiveData(
+                tree.item.value.descriptor,
+                resourcePaths.associate {
+                    it.first to CachedArchiveResource(it.third)
+                }
+            ) tag resolver, parents)
     }
 
     /**
@@ -409,7 +424,7 @@ public open class DefaultArchiveGraph(
         return asyncJob(JobName("Resolve artifact: '${descriptor.name}'")) {
             val context = resolver.createContext(repository)
 
-            logger.log(LogLevel.INFO, "Building artifact tree for: '$descriptor'...")
+            info("Building artifact tree for: '$descriptor'...")
 
             val artifact = context.getAndResolveAsync(request)().mapException {
                 if (it is ArtifactException.ArtifactNotFound) ArchiveException.ArchiveNotFound(
@@ -418,6 +433,8 @@ public open class DefaultArchiveGraph(
                     it.searchedIn
                 ) else ArchiveException(ArchiveTrace(request.descriptor, null), null, it)
             }.merge()
+
+            printTree(artifact.toGraphable())().merge()
 
             artifact
         }

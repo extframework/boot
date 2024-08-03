@@ -41,7 +41,7 @@ public fun textifyTree(graph: Graphable): Job<String> = job {
     fun printTreeInternal(graph: Graphable, prefix: String, isLast: Boolean, logger: Logger) {
         val hasntSeenBefore = alreadyPrinted.add(graph.name)
 
-        builder.append(
+        builder.appendLine(
             prefix
                     + (if (isLast) "\\---" else "+---")
                     + " "

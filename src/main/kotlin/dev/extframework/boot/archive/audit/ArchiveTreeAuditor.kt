@@ -23,5 +23,9 @@ public fun ArchiveTreeAuditor(
     ): Job<Tree<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>>> = job {
         auditor(event, context)
     }
-
 }
+
+public fun ArchiveTreeAuditor.chain(other: ArchiveTreeAuditor): ArchiveTreeAuditor =
+    ArchiveTreeAuditor { it, context ->
+        other.audit(this@chain.audit(it, context)().merge(), context)().merge()
+    }

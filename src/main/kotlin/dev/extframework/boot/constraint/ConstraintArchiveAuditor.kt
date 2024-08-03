@@ -15,7 +15,6 @@ import dev.extframework.common.util.filterDuplicates
 
 public class ConstraintArchiveAuditor(
     private val negotiators: List<ConstraintNegotiator<*>>,
-    private val prototypes: List<Constrained<*>> = listOf()
 ) : ArchiveTreeAuditor {
     private fun doConstraints(
         tree: Tree<IArchive<*>>,
@@ -119,9 +118,9 @@ public class ConstraintArchiveAuditor(
 
         doConstraints(
             event.map { it.value },
-            prototypes + (if (negotiators.any {
+            if (negotiators.any {
                     it.descriptorType.isInstance(event.item.value.descriptor)
-                }) listOf(Constrained(event.item.value.descriptor, ConstraintType.BOUND)) else listOf()),
+                }) listOf(Constrained(event.item.value.descriptor, ConstraintType.BOUND)) else listOf(),
             context.trace
         )().merge().tag {
             resolvers[it.descriptor]!!

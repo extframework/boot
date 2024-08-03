@@ -6,6 +6,8 @@ import com.durganmcbroom.artifact.resolver.RepositorySettings
 import com.durganmcbroom.jobs.Job
 import com.durganmcbroom.jobs.async.AsyncJob
 import com.durganmcbroom.jobs.job
+import dev.extframework.boot.monad.Tagged
+import dev.extframework.boot.monad.Tree
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import java.nio.file.Path
@@ -70,7 +72,7 @@ public interface ArchiveGraph {
         request: T,
         repository: R,
         resolver: ArchiveNodeResolver<D, T, *, R, M>
-    ): AsyncJob<Unit>
+    ): AsyncJob<Tree<Tagged<ArchiveData<*, CachedArchiveResource>, ArchiveNodeResolver<*, *, *, *, *>>>>
 
     /**
      * @see cacheAsync
@@ -89,7 +91,7 @@ public interface ArchiveGraph {
         request: T,
         repository: R,
         resolver: ArchiveNodeResolver<D, T, *, R, M>
-    ): Job<Unit> = job {
+    ): Job<Tree<Tagged<ArchiveData<*, CachedArchiveResource>, ArchiveNodeResolver<*, *, *, *, *>>>> = job {
         runBlocking(Dispatchers.IO) {
             cacheAsync(request, repository, resolver)().merge()
         }

@@ -125,8 +125,21 @@ public fun <T> Tree<T>.replace(
 
     return Tree(
         item = thisTree.item,
-        parents = parents.map { it.replace(doReplace) }
+        parents = thisTree.parents.map { it.replace(doReplace) }
     )
+}
+
+public fun <T> Tree<T>.removeIf(
+    condition: (T) -> Boolean
+): Tree<T>? {
+    val thisTree = this.takeIf { !condition(item) }
+
+    return thisTree?.let {
+        Tree(
+            item = it.item,
+            parents = it.parents.mapNotNull { parent -> parent.removeIf(condition) }
+        )
+    }
 }
 
 /**
@@ -138,7 +151,7 @@ public fun <T> Tree<T>.replace(
  *
  * @return a new [Tree] instance with the same item and parents as the [AndMany] instance.
  */
-public fun <T> AndMany<T, Tree<T>>.toTree() : Tree<T> = Tree(
+public fun <T> AndMany<T, Tree<T>>.toTree(): Tree<T> = Tree(
     item, parents
 )
 
@@ -159,7 +172,8 @@ private data class Current<T>(
     var index: Int,
     val tree: Tree<T>
 )
-public fun <T> Tree<T>.iterator() : Iterator<T> = object: Iterator<T> {
+
+public fun <T> Tree<T>.iterator(): Iterator<T> = object : Iterator<T> {
     // Used to keep track of where we are in the tree after each
     val stack: MutableList<Current<T>> = mutableListOf(
         Current(-1, this@iterator)
@@ -192,6 +206,6 @@ public fun <T> Tree<T>.iterator() : Iterator<T> = object: Iterator<T> {
     }
 }
 
-public fun <T> Tree<T>.asSequence(): Sequence<T>  = Sequence {
+public fun <T> Tree<T>.asSequence(): Sequence<T> = Sequence {
     iterator()
 }
