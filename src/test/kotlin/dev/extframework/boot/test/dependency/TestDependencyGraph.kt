@@ -38,7 +38,7 @@ class TestDependencyGraph {
             maven.resolver
         )
 
-        check(node.access.targets.size == 2) { "Wrong target size" }
+        check(node.access.targets.size == 3) { "Wrong target size" }
         check(node.access.targets.mapTo(HashSet()) { it.descriptor.name }
             .containsAll(setOf("org.ow2.asm:asm:9.7", "org.ow2.asm:asm-tree:9.7"))) { "Wrong targets" }
     }

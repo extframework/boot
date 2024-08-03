@@ -1,12 +1,11 @@
 package dev.extframework.boot.archive
 
 import com.durganmcbroom.artifact.resolver.*
-import com.durganmcbroom.jobs.Job
 import com.durganmcbroom.jobs.JobName
+import com.durganmcbroom.jobs.JobScope
 import com.durganmcbroom.jobs.async.AsyncJob
 import com.durganmcbroom.jobs.async.asyncJob
 import com.durganmcbroom.jobs.async.mapAsync
-import com.durganmcbroom.jobs.job
 import com.durganmcbroom.jobs.logging.LogLevel
 import com.durganmcbroom.jobs.logging.logger
 import com.durganmcbroom.jobs.mapException
@@ -113,6 +112,16 @@ public open class DefaultArchiveGraph(
         }
     }
 
+    private suspend fun <K : ArtifactMetadata.Descriptor, N : ArchiveNode<K>> JobScope.checkLoaded(
+        descriptor: K,
+        resolver: ArchiveNodeResolver<K, *, *, *, *>,
+        or: suspend JobScope.() -> N
+    ): N = getNode(descriptor)?.let { node ->
+        check(resolver.nodeType.isInstance(node)) { "Archive node: '$descriptor' was found loaded but it does not match the expected type of: '${resolver.nodeType.name}'. Its type was: '${node::class.java.name}" }
+
+        node as N
+    } ?: or()
+
     /**
      * Get as defined by the supertype.
      *
@@ -129,17 +138,10 @@ public open class DefaultArchiveGraph(
     ): AsyncJob<T> = asyncJob {
         checkRegistration(resolver)
 
-        getNode(descriptor)?.let { node ->
-            check(resolver.nodeType.isInstance(node)) { "Archive node: '$descriptor' was found loaded but it does not match the expected type of: '${resolver.nodeType.name}'. Its type was: '${node::class.java.name}" }
-
-            node as T
-        } ?: run {
-            check(
-                isCached(
-                    descriptor,
-                    resolver
-                )
-            ) { "Archive node: '$descriptor' is not cached. It must be cached before use." }
+        checkLoaded(descriptor, resolver) {
+            if (!isCached(descriptor, resolver)) throw ArchiveException.ArchiveNotCached(
+                descriptor.name, ArchiveTrace(descriptor)
+            )
 
             val archiveTree = readArchiveTree(
                 descriptor,
@@ -160,6 +162,7 @@ public open class DefaultArchiveGraph(
             )().merge() as T
         }
     }
+
 
     /**
      * Recursively reads the given archive tree from the cache. This can throw
@@ -216,51 +219,56 @@ public open class DefaultArchiveGraph(
         tree: Tree<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>>,
         trace: ArchiveTrace
     ): AsyncJob<ArchiveNode<*>> = asyncJob {
-        val (data, resolver) = tree.item
+        checkLoaded(
+            tree.item.value.descriptor,
+            tree.item.tag as ArchiveNodeResolver<ArtifactMetadata.Descriptor, *, *, *, *>
+        ) {
+            val (data, resolver) = tree.item
 
-        val parents = tree.parents.mapAsync {
-            getInternal(it, trace.child(it.item.value.descriptor))().merge()
-        }.awaitAll()
+            val parents = tree.parents.mapAsync {
+                getInternal(it, trace.child(it.item.value.descriptor))().merge()
+            }.awaitAll()
 
-        val accessTree = object : ArchiveAccessTree {
-            override val descriptor: ArtifactMetadata.Descriptor = tree.item.value.descriptor
-            override val targets: List<ArchiveTarget> = (parents
-                .asSequence()
-                .filterIsInstance<ClassLoadedArchiveNode<*>>()
-                .map {
-                    ArchiveTarget(
-                        it.descriptor,
-                        ArchiveRelationship.Direct(
-                            it
+            val accessTree = object : ArchiveAccessTree {
+                override val descriptor: ArtifactMetadata.Descriptor = tree.item.value.descriptor
+                override val targets: List<ArchiveTarget> = (parents
+                    .asSequence()
+                    .filterIsInstance<ClassLoadedArchiveNode<*>>()
+                    .map {
+                        ArchiveTarget(
+                            it.descriptor,
+                            ArchiveRelationship.Direct(
+                                it
+                            )
                         )
-                    )
-                } + parents
-                .asSequence()
-                .filterIsInstance<ClassLoadedArchiveNode<*>>()
-                .flatMap { it.access.targets }
-                .map {
-                    ArchiveTarget(
-                        it.descriptor,
-                        ArchiveRelationship.Transitive(
-                            it.relationship.node
+                    } + parents
+                    .asSequence()
+                    .filterIsInstance<ClassLoadedArchiveNode<*>>()
+                    .flatMap { it.access.targets }
+                    .map {
+                        ArchiveTarget(
+                            it.descriptor,
+                            ArchiveRelationship.Transitive(
+                                it.relationship.node
+                            )
                         )
-                    )
-                }).toList()
-        }
+                    }).toList()
+            }
 
-        val auditedTree = tree.item.tag.auditors.accessAuditor.audit(
-            accessTree,
-            DefaultAuditContext(trace)
-        )().merge()
-
-        (resolver as ArchiveNodeResolver<ArtifactMetadata.Descriptor, *, *, *, *>)
-            .load(
-                (data as ArchiveData<ArtifactMetadata.Descriptor, CachedArchiveResource>),
-                auditedTree,
-                object : ResolutionHelper {
-                    override val trace: ArchiveTrace = trace
-                }
+            val auditedTree = tree.item.tag.auditors.accessAuditor.audit(
+                accessTree,
+                DefaultAuditContext(trace)
             )().merge()
+
+            (resolver as ArchiveNodeResolver<ArtifactMetadata.Descriptor, *, *, *, *>)
+                .load(
+                    (data as ArchiveData<ArtifactMetadata.Descriptor, CachedArchiveResource>),
+                    auditedTree,
+                    object : ResolutionHelper {
+                        override val trace: ArchiveTrace = trace
+                    }
+                )().merge() as ArchiveNode<ArtifactMetadata.Descriptor>
+        }
     }
 
     /**
@@ -358,7 +366,8 @@ public open class DefaultArchiveGraph(
                 val parentDescriptor =
                     (it.tag as? ArchiveNodeResolver<ArtifactMetadata.Descriptor, *, *, *, *>)?.serializeDescriptor(
                         it.value.descriptor
-                    ) ?: throw IllegalArgumentException("Unknown archive resolver: '$resolver'. Make sure it is registered before you try to cache your archive.")
+                    )
+                        ?: throw IllegalArgumentException("Unknown archive resolver: '$resolver'. Make sure it is registered before you try to cache your archive.")
 
                 CacheableParentInfo(
                     it.tag.name,

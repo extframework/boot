@@ -34,7 +34,7 @@ class TestVersionSort {
     fun `Test base generates correctly`() {
         val base = writeBase(1U, 2U, 3U)
 
-        val flag = 0b0000000100000010000000110000000000000000000000000000000000000000U
+        val flag = 0b0100000100000010000000110000000000000000000000000000000000000000U
         assertTrue(base and flag == flag && base or flag == flag)
     }
 

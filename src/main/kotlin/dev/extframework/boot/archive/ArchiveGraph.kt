@@ -126,8 +126,6 @@ public interface ArchiveGraph {
         }
     }
 
-
-
     /**
      * Retrieves an already loaded ArchiveNode with no guarantee of type. The
      * returned node will always match the given descriptor or will be null.

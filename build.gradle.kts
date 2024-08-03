@@ -9,10 +9,10 @@ plugins {
 
     application
 
-    id("dev.extframework.common") version "1.0.5"
+    id("dev.extframework.common") version "1.0.8"
 }
 
-version = "3.0-SNAPSHOT"
+version = "3.0.1-SNAPSHOT"
 
 tasks.compileKotlin {
     kotlinOptions {
@@ -41,9 +41,8 @@ configurations.all {
 dependencies {
     implementation(project(":object-container"))
 
-    implementation("org.jetbrains.kotlinx:kotlinx-cli:0.3.5")
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.7.22")
-    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.12.6")
+    implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.17.2")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0")
 
     testImplementation(project(":blackbox-test"))
@@ -69,7 +68,6 @@ allprojects {
     group = "dev.extframework"
 
     repositories {
-        mavenLocal()
         mavenCentral()
         extFramework()
     }
@@ -107,8 +105,8 @@ allprojects {
 
         commonUtil(configurationName = "api")
         archives(configurationName = "api")
-        artifactResolver(version = "1.2.1-SNAPSHOT")
-        jobs(version = "1.3-SNAPSHOT", logging = true, progressSimple = true)
+        artifactResolver()
+        jobs(logging = true, progressSimple = true)
     }
 
     java {

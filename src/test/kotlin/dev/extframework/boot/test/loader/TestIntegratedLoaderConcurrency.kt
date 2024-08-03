@@ -23,8 +23,6 @@ fun  newClassBytes(name: String): ByteBuffer {
 }
 
 class TestIntegratedLoaderConcurrency {
-
-
     fun concurrentlyLoadClasses(
         loaderProvider: (
             SourceProvider
@@ -68,7 +66,6 @@ class TestIntegratedLoaderConcurrency {
             executorService.shutdown()
         }
     }
-
 
     @Test
     fun `Test raw integrated loader`() {
