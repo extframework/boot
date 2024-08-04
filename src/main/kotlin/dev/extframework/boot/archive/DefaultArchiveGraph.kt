@@ -21,6 +21,7 @@ import dev.extframework.boot.monad.Tree
 import dev.extframework.boot.monad.tag
 import dev.extframework.boot.monad.toTree
 import dev.extframework.boot.util.printTree
+import dev.extframework.boot.util.textifyTree
 import dev.extframework.boot.util.toGraphable
 import dev.extframework.common.util.copyTo
 import dev.extframework.common.util.make
@@ -161,8 +162,10 @@ public open class DefaultArchiveGraph(
                 )
             )().merge()
 
-            info("Archive tree for '$descriptor' after auditing:")
-            printTree(auditedTree.toGraphable { it.value.descriptor.name })().merge()
+            info(
+                "Archive tree of '$descriptor' after auditing:\n" +
+                        textifyTree(auditedTree.toGraphable { it.value.descriptor.name })().merge()
+            )
 
             getInternal(
                 auditedTree,
@@ -418,7 +421,7 @@ public open class DefaultArchiveGraph(
 
                 resourcePaths.mapAsync { (name, wrapper, path) ->
                     if (wrapper.resource !is LocalResource) {
-                        info("Downloading resource: '${data.descriptor}#$name' from: '${wrapper.resource.location}")
+                        info("Retrieving: '${data.descriptor}#$name' from: '${wrapper.resource.location}")
                         wrapper.resource copyTo path
                     }
                 }.awaitAll()
@@ -466,8 +469,6 @@ public open class DefaultArchiveGraph(
         return asyncJob(JobName("Resolve artifact: '${descriptor.name}'")) {
             val context = resolver.createContext(repository)
 
-            info("Building artifact tree for: '$descriptor'...")
-
             val artifact = context.getAndResolveAsync(request)().mapException {
                 if (it is ArtifactException.ArtifactNotFound) ArchiveException.ArchiveNotFound(
                     ArchiveTrace(request.descriptor, null),
@@ -476,7 +477,8 @@ public open class DefaultArchiveGraph(
                 ) else ArchiveException(ArchiveTrace(request.descriptor, null), null, it)
             }.merge()
 
-            printTree(artifact.toGraphable())().merge()
+
+            info("Artifact tree for: '$descriptor'...\n" + textifyTree(artifact.toGraphable())().merge())
 
             artifact
         }
