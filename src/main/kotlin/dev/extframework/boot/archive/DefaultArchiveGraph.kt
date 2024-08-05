@@ -216,6 +216,7 @@ public open class DefaultArchiveGraph(
         Tree(
             ArchiveData(
                 descriptor,
+                CachedArchiveResource::class,
                 resources
             ).tag(resolver),
             parents.awaitAll()
@@ -353,7 +354,7 @@ public open class DefaultArchiveGraph(
      * Recursively caches the given tree of archive data.
      */
     private fun cacheInternal(
-        tree: Tree<Tagged<ArchiveData<*, CacheableArchiveResource>, ArchiveNodeResolver<*, *, *, *, *>>>,
+        tree: Tree<Tagged<ArchiveData<*, *>, ArchiveNodeResolver<*, *, *, *, *>>>,
         trace: ArchiveTrace
     ): AsyncJob<Tree<Tagged<ArchiveData<*, CachedArchiveResource>, ArchiveNodeResolver<*, *, *, *, *>>>> = asyncJob {
         coroutineScope {
@@ -365,10 +366,12 @@ public open class DefaultArchiveGraph(
             if (isCached(
                     data.descriptor,
                     resolver
-                )
+                ) || data.resourceType != CacheableArchiveResource::class
             ) {
                 return@coroutineScope readArchiveTree(data.descriptor, resolver, trace)().merge()
             }
+
+            data as ArchiveData<*, CacheableArchiveResource>
 
             beingCached[data.descriptor]?.await()?.let {
                 return@coroutineScope it
@@ -429,6 +432,7 @@ public open class DefaultArchiveGraph(
                 Tree(
                     ArchiveData(
                         tree.item.value.descriptor,
+                        CachedArchiveResource::class,
                         resourcePaths.associate {
                             it.first to CachedArchiveResource(it.third)
                         }
@@ -473,7 +477,6 @@ public open class DefaultArchiveGraph(
                 ) else ArchiveException(ArchiveTrace(request.descriptor, null), null, it)
             }.merge()
 
-
             info("Artifact tree for: '$descriptor'...\n" + textifyTree(artifact.toGraphable())().merge())
 
             artifact
@@ -490,7 +493,7 @@ public open class DefaultArchiveGraph(
         artifact: Artifact<M>,
         resolver: ArchiveNodeResolver<D, *, *, *, M>,
         trace: ArchiveTrace,
-    ): AsyncJob<Tree<Tagged<ArchiveData<*, CacheableArchiveResource>, ArchiveNodeResolver<*, *, *, *, *>>>> =
+    ): AsyncJob<Tree<Tagged<ArchiveData<*, *>, ArchiveNodeResolver<*, *, *, *, *>>>> =
         asyncJob(
             JobName("Construct archive tree: '${artifact.metadata.descriptor}'")
         ) {
@@ -514,20 +517,26 @@ public open class DefaultArchiveGraph(
                         override fun <D : ArtifactMetadata.Descriptor, M : ArtifactMetadata<D, *>> cache(
                             artifact: Artifact<M>,
                             resolver: ArchiveNodeResolver<D, *, *, *, M>
-                        ): AsyncJob<Tree<Tagged<ArchiveData<*, CacheableArchiveResource>, ArchiveNodeResolver<*, *, *, *, *>>>> =
+                        ): AsyncJob<Tree<Tagged<ArchiveData<*, *>, ArchiveNodeResolver<*, *, *, *, *>>>> =
                             constructArchiveTree(
                                 artifact, resolver, trace.child(artifact.metadata.descriptor)
                             )
 
-                        override fun <D : ArtifactMetadata.Descriptor,
-                                T : ArtifactRequest<D>,
-                                R : RepositorySettings,
-                                M : ArtifactMetadata<D, ArtifactMetadata.ParentInfo<T, R>>> resolveArtifact(
+                        override fun <D : ArtifactMetadata.Descriptor, T : ArtifactRequest<D>, R : RepositorySettings, M : ArtifactMetadata<D, ArtifactMetadata.ParentInfo<T, R>>> cache(
                             request: T,
                             repository: R,
                             resolver: ArchiveNodeResolver<D, T, *, R, M>
-                        ): AsyncJob<Artifact<M>> {
-                            return this@DefaultArchiveGraph.resolveArtifact(request, repository, resolver)
+                        ): AsyncJob<Tree<Tagged<ArchiveData<*, *>, ArchiveNodeResolver<*, *, *, *, *>>>> = asyncJob cacheAsync@ {
+                            checkRegistration(resolver)
+
+                            val descriptor = request.descriptor
+                            if (isCached(descriptor, resolver)) return@cacheAsync readArchiveTree(
+                                descriptor,
+                                resolver,
+                                ArchiveTrace(descriptor, null)
+                            )().merge()
+
+                            cache(resolveArtifact(request, repository, resolver)().merge(), resolver)().merge()
                         }
 
                         override fun withResource(name: String, resource: Resource) {
@@ -536,11 +545,12 @@ public open class DefaultArchiveGraph(
 
                         override fun newData(
                             descriptor: D,
-                            parents: List<Tree<Tagged<ArchiveData<*, CacheableArchiveResource>, ArchiveNodeResolver<*, *, *, *, *>>>>
-                        ): Tree<Tagged<ArchiveData<*, CacheableArchiveResource>, ArchiveNodeResolver<*, *, *, *, *>>> =
+                            parents: List<Tree<Tagged<ArchiveData<*, *>, ArchiveNodeResolver<*, *, *, *, *>>>>
+                        ): Tree<Tagged<ArchiveData<*, *>, ArchiveNodeResolver<*, *, *, *, *>>> =
                             Tree(
                                 ArchiveData(
                                     descriptor,
+                                    CacheableArchiveResource::class,
                                     resources
                                 ) tag resolver,
                                 parents

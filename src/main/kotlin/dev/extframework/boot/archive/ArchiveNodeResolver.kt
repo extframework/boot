@@ -101,7 +101,7 @@ public interface ArchiveNodeResolver<
     public fun cache(
         artifact: Artifact<M>,
         helper: CacheHelper<K>
-    ): AsyncJob<Tree<Tagged<ArchiveData<*, CacheableArchiveResource>, ArchiveNodeResolver<*, *, *, *, *>>>>
+    ): AsyncJob<Tree<Tagged<ArchiveData<*, *>, ArchiveNodeResolver<*, *, *, *, *>>>>
 }
 
 /**
@@ -128,7 +128,7 @@ public interface CacheHelper<K : ArtifactMetadata.Descriptor> {
             > cache(
         artifact: Artifact<M>,
         resolver: ArchiveNodeResolver<D, *, *, *, M>
-    ): AsyncJob<Tree<Tagged<ArchiveData<*, CacheableArchiveResource>, ArchiveNodeResolver<*, *, *, *, *>>>>
+    ): AsyncJob<Tree<Tagged<ArchiveData<*, *>, ArchiveNodeResolver<*, *, *, *, *>>>>
 
     /**
      * Load an artifact tree.
@@ -138,11 +138,11 @@ public interface CacheHelper<K : ArtifactMetadata.Descriptor> {
             T : ArtifactRequest<D>,
             R : RepositorySettings,
             M : ArtifactMetadata<D, ArtifactMetadata.ParentInfo<T, R>>
-            > resolveArtifact(
+            > cache(
         request: T,
         repository: R,
         resolver: ArchiveNodeResolver<D, T, *, R, M>
-    ): AsyncJob<Artifact<M>>
+    ): AsyncJob<Tree<Tagged<ArchiveData<*, *>, ArchiveNodeResolver<*, *, *, *, *>>>>
 
     /**
      * Add a resource to the archive data being built.
@@ -163,8 +163,8 @@ public interface CacheHelper<K : ArtifactMetadata.Descriptor> {
      */
     public fun newData(
         descriptor: K,
-        parents: List<Tree<Tagged<ArchiveData<*, CacheableArchiveResource>, ArchiveNodeResolver<*, *, *, *, *>>>>
-    ): Tree<Tagged<ArchiveData<*, CacheableArchiveResource>, ArchiveNodeResolver<*, *, *, *, *>>>
+        parents: List<Tree<Tagged<ArchiveData<*, *>, ArchiveNodeResolver<*, *, *, *, *>>>>
+    ): Tree<Tagged<ArchiveData<*, *>, ArchiveNodeResolver<*, *, *, *, *>>>
 }
 
 /**

@@ -76,7 +76,7 @@ public abstract class DependencyResolver<
     override fun cache(
         artifact: Artifact<M>,
         helper: CacheHelper<K>
-    ): AsyncJob<Tree<Tagged<ArchiveData<*, CacheableArchiveResource>, ArchiveNodeResolver<*, *, *, *, *>>>> = asyncJob {
+    ): AsyncJob<Tree<Tagged<ArchiveData<*, *>, ArchiveNodeResolver<*, *, *, *, *>>>> = asyncJob {
         helper.withResource("jar.jar", artifact.metadata.resource())
 
         helper.newData(

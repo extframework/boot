@@ -3,6 +3,7 @@ package dev.extframework.boot.archive
 import com.durganmcbroom.artifact.resolver.ArtifactMetadata
 import com.durganmcbroom.resources.Resource
 import java.nio.file.Path
+import kotlin.reflect.KClass
 
 /**
  * Archive data representing a cached archive. Data about archive access is
@@ -11,6 +12,8 @@ import java.nio.file.Path
  */
 public data class ArchiveData<K : ArtifactMetadata.Descriptor, T : ArchiveResource> internal constructor(
     override val descriptor: K,
+
+    internal val resourceType: KClass<T>,
     val resources: Map<String, T>,
 ) : IArchive<K>
 
