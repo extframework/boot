@@ -12,13 +12,15 @@ import dev.extframework.boot.archive.audit.ArchiveAuditors
 import dev.extframework.boot.constraint.ConstraintArchiveAuditor
 import dev.extframework.boot.util.mapOfNonNullValues
 import dev.extframework.boot.util.requireKeyInDescriptor
+import dev.extframework.common.util.resolve
 import java.io.File
 import java.nio.file.Path
 
 public interface MavenLikeResolver<
         V : ArchiveNode<SimpleMavenDescriptor>,
         M : SimpleMavenArtifactMetadata
-        > : ArchiveNodeResolver<SimpleMavenDescriptor, SimpleMavenArtifactRequest, V, SimpleMavenRepositorySettings, M> {
+        > :
+    ArchiveNodeResolver<SimpleMavenDescriptor, SimpleMavenArtifactRequest, V, SimpleMavenRepositorySettings, M> {
 
     override val auditors: ArchiveAuditors
         get() = super.auditors.with(
@@ -44,6 +46,7 @@ public interface MavenLikeResolver<
             descriptor.group.replace('.', File.separatorChar),
             descriptor.artifact,
             descriptor.version,
+            descriptor.classifier ?: "",
             "${descriptor.artifact}-${descriptor.version}-$classifier.$type"
         )
     }

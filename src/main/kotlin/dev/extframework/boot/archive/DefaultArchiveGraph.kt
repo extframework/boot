@@ -420,7 +420,7 @@ public open class DefaultArchiveGraph(
 
                 resourcePaths.mapAsync { (name, wrapper, path) ->
                     if (wrapper.resource !is LocalResource) {
-                        info("Retrieving: '${data.descriptor}#$name' from: '${wrapper.resource.location}")
+                        info("Retrieving: '${data.descriptor}#$name' from: '${wrapper.resource.location}'")
                         wrapper.resource copyTo path
                     }
                 }.awaitAll()
