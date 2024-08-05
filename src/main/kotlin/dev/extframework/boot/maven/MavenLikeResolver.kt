@@ -12,7 +12,6 @@ import dev.extframework.boot.archive.audit.ArchiveAuditors
 import dev.extframework.boot.constraint.ConstraintArchiveAuditor
 import dev.extframework.boot.util.mapOfNonNullValues
 import dev.extframework.boot.util.requireKeyInDescriptor
-import dev.extframework.common.util.resolve
 import java.io.File
 import java.nio.file.Path
 
@@ -23,8 +22,8 @@ public interface MavenLikeResolver<
     ArchiveNodeResolver<SimpleMavenDescriptor, SimpleMavenArtifactRequest, V, SimpleMavenRepositorySettings, M> {
 
     override val auditors: ArchiveAuditors
-        get() = super.auditors.with(
-            archiveTreeAuditor = ConstraintArchiveAuditor(
+        get() = super.auditors.chain(
+            ConstraintArchiveAuditor(
                 listOf(MavenConstraintNegotiator())
             )
         )

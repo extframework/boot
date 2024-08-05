@@ -1,30 +1,30 @@
 package dev.extframework.boot.archive.audit
 
 import com.durganmcbroom.jobs.Job
-import com.durganmcbroom.jobs.JobScope
-import com.durganmcbroom.jobs.job
 import dev.extframework.boot.archive.ArchiveAccessTree
+import dev.extframework.boot.archive.ArchiveGraph
 import dev.extframework.boot.archive.ArchiveTarget
+import dev.extframework.boot.archive.ArchiveTrace
+import dev.extframework.boot.util.typeOf
 
-public interface ArchiveAccessAuditor : ArchiveAuditor<ArchiveAccessTree> {
-    override val type: Class<ArchiveAccessTree>
-        get() = ArchiveAccessTree::class.java
+public interface ArchiveAccessAuditor : ArchiveAuditor<ArchiveAccessAuditContext> {
+    override val type: Class<ArchiveAccessAuditContext>
+        get() = typeOf()
 
-    override fun audit(event: ArchiveAccessTree, context: AuditContext): Job<ArchiveAccessTree>
+    override fun audit(event: ArchiveAccessAuditContext): Job<ArchiveAccessAuditContext>
 }
 
-public fun ArchiveAccessAuditor(auditor: JobScope.(ArchiveAccessTree, AuditContext) -> ArchiveAccessTree): ArchiveAccessAuditor {
-    return object : ArchiveAccessAuditor {
-        override fun audit(event: ArchiveAccessTree, context: AuditContext): Job<ArchiveAccessTree> = job {
-            auditor(event, context)
-        }
+public class ArchiveAccessAuditContext internal constructor(
+    public val tree: ArchiveAccessTree,
+    public val trace: ArchiveTrace,
+    public val graph: ArchiveGraph
+) {
+    public fun copy(
+        tree: ArchiveAccessTree
+    ): ArchiveAccessAuditContext {
+        return ArchiveAccessAuditContext(tree, trace, graph)
     }
 }
-
-public fun ArchiveAccessAuditor.chain(other: ArchiveAccessAuditor): ArchiveAccessAuditor =
-    ArchiveAccessAuditor { it, context ->
-        other.audit(this@chain.audit(it, context)().merge(), context)().merge()
-    }
 
 public fun ArchiveAccessTree.prune(target: ArchiveTarget): ArchiveAccessTree {
     return object : ArchiveAccessTree by this@prune {

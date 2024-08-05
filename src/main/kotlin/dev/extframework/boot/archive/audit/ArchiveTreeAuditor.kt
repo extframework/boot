@@ -1,31 +1,26 @@
 package dev.extframework.boot.archive.audit
 
-import com.durganmcbroom.jobs.Job
-import com.durganmcbroom.jobs.JobScope
-import com.durganmcbroom.jobs.job
+import dev.extframework.boot.archive.ArchiveGraph
 import dev.extframework.boot.archive.ArchiveNodeResolver
+import dev.extframework.boot.archive.ArchiveTrace
 import dev.extframework.boot.archive.IArchive
 import dev.extframework.boot.monad.Tagged
 import dev.extframework.boot.monad.Tree
 import dev.extframework.boot.util.typeOf
 
-public interface ArchiveTreeAuditor : ArchiveAuditor<Tree<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>>> {
-    override val type: Class<Tree<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>>>
+public interface ArchiveTreeAuditor : ArchiveAuditor<ArchiveTreeAuditContext> {
+    override val type: Class<ArchiveTreeAuditContext>
         get() = typeOf()
 }
 
-public fun ArchiveTreeAuditor(
-    auditor: JobScope.(Tree<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>>, AuditContext) -> Tree<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>>
-): ArchiveTreeAuditor = object : ArchiveTreeAuditor {
-    override fun audit(
-        event: Tree<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>>,
-        context: AuditContext
-    ): Job<Tree<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>>> = job {
-        auditor(event, context)
+public class ArchiveTreeAuditContext internal constructor(
+    public val tree: Tree<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>>,
+    public val trace: ArchiveTrace,
+    public val graph: ArchiveGraph
+) {
+    public fun copy(
+        tree: Tree<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>>
+    ): ArchiveTreeAuditContext {
+        return ArchiveTreeAuditContext(tree, trace, graph)
     }
 }
-
-public fun ArchiveTreeAuditor.chain(other: ArchiveTreeAuditor): ArchiveTreeAuditor =
-    ArchiveTreeAuditor { it, context ->
-        other.audit(this@chain.audit(it, context)().merge(), context)().merge()
-    }

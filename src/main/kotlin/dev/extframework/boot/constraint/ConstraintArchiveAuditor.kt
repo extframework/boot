@@ -4,11 +4,10 @@ import com.durganmcbroom.artifact.resolver.ArtifactMetadata
 import com.durganmcbroom.jobs.Job
 import com.durganmcbroom.jobs.job
 import dev.extframework.boot.archive.ArchiveData
-import dev.extframework.boot.archive.ArchiveNodeResolver
 import dev.extframework.boot.archive.ArchiveTrace
 import dev.extframework.boot.archive.IArchive
+import dev.extframework.boot.archive.audit.ArchiveTreeAuditContext
 import dev.extframework.boot.archive.audit.ArchiveTreeAuditor
-import dev.extframework.boot.archive.audit.AuditContext
 import dev.extframework.boot.monad.*
 import dev.extframework.common.util.LazyMap
 import dev.extframework.common.util.filterDuplicates
@@ -108,22 +107,23 @@ public class ConstraintArchiveAuditor(
         }
     }
 
-    override fun audit(
-        event: Tree<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>>,
-        context: AuditContext
-    ): Job<Tree<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>>> = job {
-        val resolvers = event
+    override fun audit(event: ArchiveTreeAuditContext): Job<ArchiveTreeAuditContext> = job {
+        val tree = event.tree
+
+        val resolvers = tree
             .asSequence()
             .associate { it.value.descriptor to it.tag }
 
-        doConstraints(
-            event.map { it.value },
-            if (negotiators.any {
-                    it.descriptorType.isInstance(event.item.value.descriptor)
-                }) listOf(Constrained(event.item.value.descriptor, ConstraintType.BOUND)) else listOf(),
-            context.trace
-        )().merge().tag {
-            resolvers[it.descriptor]!!
-        }
+        event.copy(
+            doConstraints(
+                tree.map { it.value },
+                if (negotiators.any {
+                        it.descriptorType.isInstance(tree.item.value.descriptor)
+                    }) listOf(Constrained(tree.item.value.descriptor, ConstraintType.BOUND)) else listOf(),
+                event.trace
+            )().merge().tag {
+                resolvers[it.descriptor]!!
+            }
+        )
     }
 }

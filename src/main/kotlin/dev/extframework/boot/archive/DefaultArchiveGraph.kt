@@ -15,12 +15,11 @@ import com.fasterxml.jackson.module.kotlin.KotlinModule
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import dev.extframework.boot.API_VERSION
-import dev.extframework.boot.archive.audit.AuditContext
+import dev.extframework.boot.archive.audit.*
 import dev.extframework.boot.monad.Tagged
 import dev.extframework.boot.monad.Tree
 import dev.extframework.boot.monad.tag
 import dev.extframework.boot.monad.toTree
-import dev.extframework.boot.util.printTree
 import dev.extframework.boot.util.textifyTree
 import dev.extframework.boot.util.toGraphable
 import dev.extframework.common.util.copyTo
@@ -34,9 +33,7 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import java.nio.file.Files
 import java.nio.file.Path
-import java.util.*
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.ConcurrentSkipListSet
 import kotlin.collections.HashMap
 import kotlin.io.path.writeBytes
 import kotlin.reflect.jvm.jvmName
@@ -149,18 +146,19 @@ public open class DefaultArchiveGraph(
                 descriptor.name, ArchiveTrace(descriptor)
             )
 
-            val archiveTree = readArchiveTree(
-                descriptor,
-                resolver,
-                ArchiveTrace(descriptor)
-            )().merge()
+            val archiveTree: Tree<Tagged<ArchiveData<*, CachedArchiveResource>, ArchiveNodeResolver<*, *, *, *, *>>> =
+                readArchiveTree(
+                    descriptor,
+                    resolver,
+                    ArchiveTrace(descriptor)
+                )().merge()
 
-            val auditedTree = resolver.auditors.archiveTreeAuditor.audit(
-                archiveTree,
-                DefaultAuditContext(
+            val auditedTree = resolver.auditors[ArchiveTreeAuditContext::class].audit(
+                ArchiveTreeAuditContext(
+                    archiveTree,
                     ArchiveTrace(descriptor), this@DefaultArchiveGraph
                 )
-            )().merge()
+            )().merge().tree
 
             info(
                 "Archive tree of '$descriptor' after auditing:\n" +
@@ -263,10 +261,13 @@ public open class DefaultArchiveGraph(
                     })
             }
 
-            val auditedTree = tree.item.tag.auditors.accessAuditor.audit(
-                accessTree,
-                DefaultAuditContext(trace, this@DefaultArchiveGraph)
-            )().merge()
+            val auditedTree = tree.item.tag.auditors[ArchiveAccessAuditContext::class].audit(
+                ArchiveAccessAuditContext(
+                    accessTree,
+                    trace,
+                    this@DefaultArchiveGraph
+                )
+            )().merge().tree
 
             val node = (resolver as ArchiveNodeResolver<ArtifactMetadata.Descriptor, *, *, *, *>)
                 .load(
@@ -526,18 +527,19 @@ public open class DefaultArchiveGraph(
                             request: T,
                             repository: R,
                             resolver: ArchiveNodeResolver<D, T, *, R, M>
-                        ): AsyncJob<Tree<Tagged<ArchiveData<*, *>, ArchiveNodeResolver<*, *, *, *, *>>>> = asyncJob cacheAsync@ {
-                            checkRegistration(resolver)
+                        ): AsyncJob<Tree<Tagged<ArchiveData<*, *>, ArchiveNodeResolver<*, *, *, *, *>>>> =
+                            asyncJob cacheAsync@{
+                                checkRegistration(resolver)
 
-                            val descriptor = request.descriptor
-                            if (isCached(descriptor, resolver)) return@cacheAsync readArchiveTree(
-                                descriptor,
-                                resolver,
-                                ArchiveTrace(descriptor, null)
-                            )().merge()
+                                val descriptor = request.descriptor
+                                if (isCached(descriptor, resolver)) return@cacheAsync readArchiveTree(
+                                    descriptor,
+                                    resolver,
+                                    ArchiveTrace(descriptor, null)
+                                )().merge()
 
-                            cache(resolveArtifact(request, repository, resolver)().merge(), resolver)().merge()
-                        }
+                                cache(resolveArtifact(request, repository, resolver)().merge(), resolver)().merge()
+                            }
 
                         override fun withResource(name: String, resource: Resource) {
                             resources[name] = CacheableArchiveResource(resource)

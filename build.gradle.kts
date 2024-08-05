@@ -65,7 +65,7 @@ allprojects {
     apply(plugin = "dev.extframework.common")
 
     group = "dev.extframework"
-    version = "3.1-SNAPSHOT"
+    version = "3.2-SNAPSHOT"
 
     repositories {
         mavenCentral()
