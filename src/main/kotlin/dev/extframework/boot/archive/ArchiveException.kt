@@ -8,11 +8,6 @@ public open class ArchiveException(
     public override val message: String? = null,
     public override val cause: Throwable? = null,
 ) : Exception() {
-//    public data class ArtifactResolutionException(override val cause: Throwable, override val trace: ArchiveTrace) :
-//        ArchiveException(
-//            trace
-//        )
-
     public data class ArchiveLoadFailed(override val cause: Throwable?, override val trace: ArchiveTrace) :
         ArchiveException(trace)
 

@@ -1,14 +1,11 @@
-package dev.extframework.boot.archive.audit
+package dev.extframework.boot.archive
 
-import dev.extframework.boot.archive.ArchiveGraph
-import dev.extframework.boot.archive.ArchiveNodeResolver
-import dev.extframework.boot.archive.ArchiveTrace
-import dev.extframework.boot.archive.IArchive
+import dev.extframework.boot.audit.Auditor
 import dev.extframework.boot.monad.Tagged
 import dev.extframework.boot.monad.Tree
 import dev.extframework.boot.util.typeOf
 
-public interface ArchiveTreeAuditor : ArchiveAuditor<ArchiveTreeAuditContext> {
+public interface ArchiveTreeAuditor : Auditor<ArchiveTreeAuditContext> {
     override val type: Class<ArchiveTreeAuditContext>
         get() = typeOf()
 }

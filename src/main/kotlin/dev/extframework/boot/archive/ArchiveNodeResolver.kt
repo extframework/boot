@@ -4,7 +4,7 @@ import com.durganmcbroom.artifact.resolver.*
 import com.durganmcbroom.jobs.Job
 import com.durganmcbroom.jobs.async.AsyncJob
 import com.durganmcbroom.resources.Resource
-import dev.extframework.boot.archive.audit.ArchiveAuditors
+import dev.extframework.boot.audit.Auditors
 import dev.extframework.boot.monad.Tagged
 import dev.extframework.boot.monad.Tree
 import java.nio.file.Path
@@ -29,8 +29,8 @@ public interface ArchiveNodeResolver<
     public val nodeType: Class<in V>
     public val metadataType: Class<M>
 
-    public val auditors: ArchiveAuditors
-        get() = ArchiveAuditors()
+    public val auditors: Auditors
+        get() = Auditors()
 
     /**
      * Creates a resolution context for the given repository settings.

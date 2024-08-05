@@ -1,13 +1,10 @@
-package dev.extframework.boot.archive.audit
+package dev.extframework.boot.archive
 
 import com.durganmcbroom.jobs.Job
-import dev.extframework.boot.archive.ArchiveAccessTree
-import dev.extframework.boot.archive.ArchiveGraph
-import dev.extframework.boot.archive.ArchiveTarget
-import dev.extframework.boot.archive.ArchiveTrace
+import dev.extframework.boot.audit.Auditor
 import dev.extframework.boot.util.typeOf
 
-public interface ArchiveAccessAuditor : ArchiveAuditor<ArchiveAccessAuditContext> {
+public interface ArchiveAccessAuditor : Auditor<ArchiveAccessAuditContext> {
     override val type: Class<ArchiveAccessAuditContext>
         get() = typeOf()
 

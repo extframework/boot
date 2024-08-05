@@ -15,7 +15,7 @@ import com.fasterxml.jackson.module.kotlin.KotlinModule
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import dev.extframework.boot.API_VERSION
-import dev.extframework.boot.archive.audit.*
+import dev.extframework.boot.audit.*
 import dev.extframework.boot.monad.Tagged
 import dev.extframework.boot.monad.Tree
 import dev.extframework.boot.monad.tag
@@ -108,12 +108,6 @@ public open class DefaultArchiveGraph(
         if (resolvers.has(resolver.name)) return
         registerResolver(resolver)
     }
-
-    /**
-     * Default context ot use when auditing.
-     */
-    private inner class DefaultAuditContext(override val trace: ArchiveTrace, override val graph: ArchiveGraph) :
-        AuditContext
 
     private suspend fun <K : ArtifactMetadata.Descriptor, N : ArchiveNode<K>> JobScope.checkLoaded(
         descriptor: K,
