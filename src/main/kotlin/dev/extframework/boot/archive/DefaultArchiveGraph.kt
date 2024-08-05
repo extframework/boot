@@ -243,8 +243,6 @@ public open class DefaultArchiveGraph(
             val accessTree = object : ArchiveAccessTree {
                 override val descriptor: ArtifactMetadata.Descriptor = tree.item.value.descriptor
                 override val targets: List<ArchiveTarget> = (parents
-                    .asSequence()
-                    .filterIsInstance<ClassLoadedArchiveNode<*>>()
                     .map {
                         ArchiveTarget(
                             it.descriptor,
@@ -253,8 +251,6 @@ public open class DefaultArchiveGraph(
                             )
                         )
                     } + parents
-                    .asSequence()
-                    .filterIsInstance<ClassLoadedArchiveNode<*>>()
                     .flatMap { it.access.targets }
                     .map {
                         ArchiveTarget(
@@ -263,7 +259,7 @@ public open class DefaultArchiveGraph(
                                 it.relationship.node
                             )
                         )
-                    }).toList()
+                    })
             }
 
             val auditedTree = tree.item.tag.auditors.accessAuditor.audit(
