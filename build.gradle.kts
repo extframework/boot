@@ -2,6 +2,7 @@ import dev.extframework.gradle.common.archives
 import dev.extframework.gradle.common.commonUtil
 import dev.extframework.gradle.common.dm.artifactResolver
 import dev.extframework.gradle.common.dm.jobs
+import dev.extframework.gradle.common.dm.resourceApi
 import dev.extframework.gradle.common.extFramework
 
 plugins {
@@ -69,6 +70,7 @@ allprojects {
 
     repositories {
         mavenCentral()
+        mavenLocal()
         extFramework()
     }
 
@@ -103,10 +105,11 @@ allprojects {
         implementation(kotlin("reflect"))
         testImplementation(kotlin("test"))
 
+        resourceApi(version = "1.1.5-SNAPSHOT")
         commonUtil(configurationName = "api")
         archives(configurationName = "api")
         artifactResolver()
-        jobs(logging = true, progressSimple = true)
+        jobs(version = "1.3.1-SNAPSHOT", logging = true, progressSimple = true)
     }
 
     java {

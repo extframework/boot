@@ -9,7 +9,8 @@ import java.util.logging.LogManager
 import java.util.logging.LogRecord
 
 private class BootLogger(
-    val realLogger: java.util.logging.Logger
+    val realLogger: java.util.logging.Logger,
+    override val name: String = realLogger.name,
 ) : Logger {
     companion object {
         fun createLogger(name: String): java.util.logging.Logger {
@@ -38,7 +39,6 @@ private class BootLogger(
         }
     }
 
-    override val name: String by realLogger::name
 
     private infix fun getLevel(logger: java.util.logging.Logger): LogLevel {
         fun mapLevel(level: Level): LogLevel = when (level) {
@@ -78,9 +78,13 @@ private class BootLogger(
     }
 }
 
-public fun BootLoggerFactory(): BasicJobFacetFactory<Logger> = object : BasicJobFacetFactory<Logger>(listOf(), {
-    val name = this.context[JobName]?.name
-        ?: "<anonymous job>"
+public fun BootLoggerFactory(): BasicJobFacetFactory<Logger> {
+    val logger = BootLogger.createLogger("boot-logger")
 
-    BootLogger(BootLogger.createLogger(name))
-}), LoggerFactory {}
+    return object : BasicJobFacetFactory<Logger>(listOf(), {
+        val name = this.context[JobName]?.name
+            ?: "<anonymous job>"
+
+        BootLogger(logger, name)
+    }), LoggerFactory {}
+}

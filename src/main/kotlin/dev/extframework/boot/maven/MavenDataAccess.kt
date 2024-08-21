@@ -48,7 +48,9 @@ public open class MavenDataAccess(
             metadataPath.writeBytes(mapper.writeValueAsBytes(ArrayList<DependencyData<SerializableMavenDescriptor>>()))
         }
 
-        val content = mapper.readValue<List<DependencyData<SerializableMavenDescriptor>>>(metadataPath.toFile())
+        val content = mapper.readValue<List<DependencyData<SerializableMavenDescriptor>>>(
+            Files.newInputStream(metadataPath)
+        )
 
         val mappedContent: List<DependencyData<SimpleMavenDescriptor>> = content.map {
             fun toRealDescriptor(

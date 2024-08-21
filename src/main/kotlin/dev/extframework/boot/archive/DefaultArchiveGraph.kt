@@ -20,6 +20,7 @@ import dev.extframework.boot.monad.Tagged
 import dev.extframework.boot.monad.Tree
 import dev.extframework.boot.monad.tag
 import dev.extframework.boot.monad.toTree
+import dev.extframework.boot.util.basicObjectMapper
 import dev.extframework.boot.util.textifyTree
 import dev.extframework.boot.util.toGraphable
 import dev.extframework.common.util.copyTo
@@ -34,7 +35,6 @@ import kotlinx.coroutines.coroutineScope
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
-import kotlin.collections.HashMap
 import kotlin.io.path.writeBytes
 import kotlin.reflect.jvm.jvmName
 
@@ -184,8 +184,8 @@ public open class DefaultArchiveGraph(
         trace.checkCircularity()
 
         val metadataPath = path resolve resolver.pathForDescriptor(descriptor, "archive-metadata", "json")
-        val info = jacksonObjectMapper().readValue<CacheableArchiveData>(
-            metadataPath.toFile()
+        val info = basicObjectMapper.readValue<CacheableArchiveData>(
+            Files.newInputStream(metadataPath)
         )
 
         val parents = info.access.mapAsync {
