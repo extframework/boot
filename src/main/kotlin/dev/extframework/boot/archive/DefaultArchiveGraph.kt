@@ -215,6 +215,12 @@ public open class DefaultArchiveGraph(
         )
     }
 
+    // Represents all the currently running get jobs
+    private val beingGotten: MutableMap<
+            ArtifactMetadata.Descriptor,
+            Deferred<ArchiveNode<*>>
+            > = ConcurrentHashMap()
+
     /**
      * Given an archive tree performs the necessary operations to load it.
      */
@@ -223,56 +229,70 @@ public open class DefaultArchiveGraph(
         tree: Tree<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>>,
         trace: ArchiveTrace
     ): AsyncJob<ArchiveNode<*>> = asyncJob {
-        checkLoaded(
-            tree.item.value.descriptor,
-            tree.item.tag as ArchiveNodeResolver<ArtifactMetadata.Descriptor, *, *, *, *>
-        ) {
-            val (data, resolver) = tree.item
+        val currDescriptor = tree.item.value.descriptor
 
-            val parents = tree.parents.mapAsync {
-                getInternal(it, trace.child(it.item.value.descriptor))().merge()
-            }.awaitAll()
+        beingGotten[currDescriptor]?.await() ?: coroutineScope {
+            val job = async {
+                checkLoaded(
+                    currDescriptor,
+                    tree.item.tag as ArchiveNodeResolver<ArtifactMetadata.Descriptor, *, *, *, *>
+                ) {
+                    val (data, resolver) = tree.item
 
-            val accessTree = object : ArchiveAccessTree {
-                override val descriptor: ArtifactMetadata.Descriptor = tree.item.value.descriptor
-                override val targets: List<ArchiveTarget> = (parents
-                    .map {
-                        ArchiveTarget(
-                            it.descriptor,
-                            ArchiveRelationship.Direct(
-                                it
-                            )
+                    val parents = tree.parents.mapAsync {
+                        getInternal(it, trace.child(it.item.value.descriptor))().merge()
+                    }.awaitAll()
+
+                    val accessTree = object : ArchiveAccessTree {
+                        override val descriptor: ArtifactMetadata.Descriptor = currDescriptor
+                        override val targets: List<ArchiveTarget> = (parents
+                            .map {
+                                ArchiveTarget(
+                                    it.descriptor,
+                                    ArchiveRelationship.Direct(
+                                        it
+                                    )
+                                )
+                            } + parents
+                            .flatMap { it.access.targets }
+                            .map {
+                                ArchiveTarget(
+                                    it.descriptor,
+                                    ArchiveRelationship.Transitive(
+                                        it.relationship.node
+                                    )
+                                )
+                            })
+                    }
+
+                    val auditedTree = tree.item.tag.auditors[ArchiveAccessAuditContext::class].audit(
+                        ArchiveAccessAuditContext(
+                            accessTree,
+                            trace,
+                            this@DefaultArchiveGraph
                         )
-                    } + parents
-                    .flatMap { it.access.targets }
-                    .map {
-                        ArchiveTarget(
-                            it.descriptor,
-                            ArchiveRelationship.Transitive(
-                                it.relationship.node
-                            )
-                        )
-                    })
+                    )().merge().tree
+
+                    val node = (resolver as ArchiveNodeResolver<ArtifactMetadata.Descriptor, *, *, *, *>)
+                        .load(
+                            (data as ArchiveData<ArtifactMetadata.Descriptor, CachedArchiveResource>),
+                            auditedTree,
+                            object : ResolutionHelper {
+                                override val trace: ArchiveTrace = trace
+                            }
+                        )().merge() as ArchiveNode<ArtifactMetadata.Descriptor>
+
+                    mutable[node.descriptor] = node
+
+                    node
+                }
             }
 
-            val auditedTree = tree.item.tag.auditors[ArchiveAccessAuditContext::class].audit(
-                ArchiveAccessAuditContext(
-                    accessTree,
-                    trace,
-                    this@DefaultArchiveGraph
-                )
-            )().merge().tree
+            beingGotten[currDescriptor] = job
 
-            val node = (resolver as ArchiveNodeResolver<ArtifactMetadata.Descriptor, *, *, *, *>)
-                .load(
-                    (data as ArchiveData<ArtifactMetadata.Descriptor, CachedArchiveResource>),
-                    auditedTree,
-                    object : ResolutionHelper {
-                        override val trace: ArchiveTrace = trace
-                    }
-                )().merge() as ArchiveNode<ArtifactMetadata.Descriptor>
+            val node = job.await()
 
-            mutable[node.descriptor] = node
+            beingGotten.remove(currDescriptor)?.join()
 
             node
         }
@@ -339,7 +359,7 @@ public open class DefaultArchiveGraph(
         cacheInternal(archiveTree, ArchiveTrace(artifactTree.metadata.descriptor, null))().merge()
     }
 
-    // Represents all the currently running jobs
+    // Represents all the currently running cache jobs
     private val beingCached: MutableMap<
             ArtifactMetadata.Descriptor,
             Deferred<Tree<Tagged<ArchiveData<*, CachedArchiveResource>, ArchiveNodeResolver<*, *, *, *, *>>>>
@@ -464,17 +484,13 @@ public open class DefaultArchiveGraph(
         return asyncJob(JobName("Resolve artifact: '${descriptor.name}'")) {
             val context = resolver.createContext(repository)
 
-            val artifact = context.getAndResolveAsync(request)().mapException {
+            context.getAndResolveAsync(request)().mapException {
                 if (it is ArtifactException.ArtifactNotFound) ArchiveException.ArchiveNotFound(
                     ArchiveTrace(request.descriptor, null),
                     it.desc,
                     it.searchedIn
                 ) else ArchiveException(ArchiveTrace(request.descriptor, null), null, it)
             }.merge()
-
-            info("Artifact tree for: '$descriptor'...\n" + textifyTree(artifact.toGraphable())().merge())
-
-            artifact
         }
     }
 
