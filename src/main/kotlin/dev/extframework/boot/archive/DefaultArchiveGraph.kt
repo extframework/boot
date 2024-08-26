@@ -24,6 +24,7 @@ import dev.extframework.boot.util.basicObjectMapper
 import dev.extframework.boot.util.textifyTree
 import dev.extframework.boot.util.toGraphable
 import dev.extframework.common.util.copyTo
+import dev.extframework.common.util.filterDuplicates
 import dev.extframework.common.util.make
 import dev.extframework.common.util.resolve
 import dev.extframework.`object`.MutableObjectContainer
@@ -176,6 +177,11 @@ public open class DefaultArchiveGraph(
      * @param resolver The base resolver.
      * @param trace The base trace as this is a recursive function.
      */
+    protected val beingRead: MutableMap<
+            ArtifactMetadata.Descriptor,
+            Deferred<Tree<Tagged<ArchiveData<*, CachedArchiveResource>, ArchiveNodeResolver<*, *, *, *, *>>>>
+            > = ConcurrentHashMap()
+
     protected fun <T : ArtifactMetadata.Descriptor> readArchiveTree(
         descriptor: T,
         resolver: ArchiveNodeResolver<T, *, *, *, *>,
@@ -183,36 +189,46 @@ public open class DefaultArchiveGraph(
     ): AsyncJob<Tree<Tagged<ArchiveData<*, CachedArchiveResource>, ArchiveNodeResolver<*, *, *, *, *>>>> = asyncJob {
         trace.checkCircularity()
 
-        val metadataPath = path resolve resolver.pathForDescriptor(descriptor, "archive-metadata", "json")
-        val info = basicObjectMapper.readValue<CacheableArchiveData>(
-            Files.newInputStream(metadataPath)
-        )
+        val job = beingRead[descriptor] ?: coroutineScope {
+            val job = async {
+                val metadataPath = path resolve resolver.pathForDescriptor(descriptor, "archive-metadata", "json")
+                val info = basicObjectMapper.readValue<CacheableArchiveData>(
+                    Files.newInputStream(metadataPath)
+                )
 
-        val parents = info.access.mapAsync {
-            val currResolver = getResolver(it.resolver)
-                ?: throw IllegalStateException("Resolver: '${it.resolver}' not found when hydrating cache. Please register it.")
+                val parents = info.access.mapAsync {
+                    val currResolver = getResolver(it.resolver)
+                        ?: throw IllegalStateException("Resolver: '${it.resolver}' not found when hydrating cache. Please register it.")
 
-            val currDescriptor = currResolver.deserializeDescriptor(it.descriptor, trace).merge()
+                    val currDescriptor = currResolver.deserializeDescriptor(it.descriptor, trace).merge()
 
-            readArchiveTree(
-                currDescriptor,
-                currResolver as ArchiveNodeResolver<ArtifactMetadata.Descriptor, *, *, *, *>,
-                trace.child(currDescriptor)
-            )().merge()
+                    readArchiveTree(
+                        currDescriptor,
+                        currResolver as ArchiveNodeResolver<ArtifactMetadata.Descriptor, *, *, *, *>,
+                        trace.child(currDescriptor)
+                    )().merge()
+                }
+
+                val resources = info.resources.mapValues { (_, value) ->
+                    CachedArchiveResource(Path.of(value))
+                }
+
+                Tree(
+                    ArchiveData(
+                        descriptor,
+                        CachedArchiveResource::class,
+                        resources
+                    ).tag(resolver),
+                    parents.awaitAll()
+                )
+            }
+
+            beingRead[descriptor] = job
+
+            job
         }
 
-        val resources = info.resources.mapValues { (_, value) ->
-            CachedArchiveResource(Path.of(value))
-        }
-
-        Tree(
-            ArchiveData(
-                descriptor,
-                CachedArchiveResource::class,
-                resources
-            ).tag(resolver),
-            parents.awaitAll()
-        )
+        job.await()
     }
 
     // Represents all the currently running get jobs
@@ -263,6 +279,7 @@ public open class DefaultArchiveGraph(
                                     )
                                 )
                             })
+                            .filterDuplicates()
                     }
 
                     val auditedTree = tree.item.tag.auditors[ArchiveAccessAuditContext::class].audit(
