@@ -13,6 +13,7 @@ import dev.extframework.boot.archive.ArchiveResolutionProvider
 import dev.extframework.boot.archive.ZipResolutionProvider
 import dev.extframework.boot.dependency.BasicDependencyNode
 import dev.extframework.boot.dependency.DependencyResolver
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -68,45 +69,43 @@ public open class MavenDependencyResolver(
 
         override fun getAndResolveAsync(
             metadata: SimpleMavenArtifactMetadata,
-            cache: MutableMap<SimpleMavenArtifactRequest, Artifact<SimpleMavenArtifactMetadata>>,
+            cache: MutableMap<SimpleMavenArtifactRequest, Deferred<Artifact<SimpleMavenArtifactMetadata>>>,
             trace: List<ArtifactMetadata.Descriptor>
         ): AsyncJob<Artifact<SimpleMavenArtifactMetadata>> = asyncJob {
             coroutineScope {
                 val newChildren = metadata.parents
                     .map { child ->
-                        async {
-                            if (trace.contains(child.request.descriptor)) throw ArtifactResolutionException.CircularArtifacts(
-                                trace + metadata.descriptor
-                            )
-                            cache[child.request] ?: run {
-                                val exceptions = mutableListOf<Throwable>()
+                        if (trace.contains(child.request.descriptor)) throw ArtifactResolutionException.CircularArtifacts(
+                            trace + metadata.descriptor
+                        )
 
-                                val childMetadata = (child.candidates + local).firstNotNullOfOrNull { candidate ->
-                                    val childMetadata = repository.factory
-                                        .createNew(candidate)
-                                        .get(child.request)()
+                        cache[child.request] ?: async {
+                            val exceptions = mutableListOf<Throwable>()
 
-                                    childMetadata.getOrElse {
-                                        exceptions.add(it)
-                                        null
-                                    }
-                                } ?: if (exceptions.all { it is MetadataRequestException.MetadataNotFound }) {
-                                    throw ArtifactException.ArtifactNotFound(
-                                        child.request.descriptor,
-                                        child.candidates,
-                                        trace
-                                    )
-                                } else {
-                                    throw IterableException(
-                                        "Failed to resolve '${child.request.descriptor}'", exceptions
-                                    )
+                            val childMetadata = (child.candidates + local).firstNotNullOfOrNull { candidate ->
+                                val childMetadata = repository.factory
+                                    .createNew(candidate)
+                                    .get(child.request)()
+
+                                childMetadata.getOrElse {
+                                    exceptions.add(it)
+                                    null
                                 }
-
-                                getAndResolveAsync(childMetadata, cache, trace + child.request.descriptor)().merge()
-                                    .also {
-                                        cache[child.request] = it
-                                    }
+                            } ?: if (exceptions.all { it is MetadataRequestException.MetadataNotFound }) {
+                                throw ArtifactException.ArtifactNotFound(
+                                    child.request.descriptor,
+                                    child.candidates,
+                                    trace
+                                )
+                            } else {
+                                throw IterableException(
+                                    "Failed to resolve '${child.request.descriptor}'", exceptions
+                                )
                             }
+
+                            getAndResolveAsync(childMetadata, cache, trace + child.request.descriptor)().merge()
+                        }.also {
+                            cache[child.request] = it
                         }
                     }
 

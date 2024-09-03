@@ -104,7 +104,7 @@ class TestDependencyGraph {
         val node = launch(BootLoggerFactory()) {
             archiveGraph.cache(
                 request,
-                SimpleMavenRepositorySettings.local(),// .default("https://maven.extframework.dev/snapshots"),
+                SimpleMavenRepositorySettings.default("https://maven.extframework.dev/snapshots"),
                 maven.resolver
             )().merge()
             archiveGraph.get(request.descriptor, maven.resolver)().merge()
