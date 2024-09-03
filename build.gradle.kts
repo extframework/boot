@@ -10,7 +10,7 @@ plugins {
 
     application
 
-    id("dev.extframework.common") version "1.0.8"
+    id("dev.extframework.common") version "1.0.19"
 }
 
 
@@ -66,7 +66,7 @@ allprojects {
     apply(plugin = "dev.extframework.common")
 
     group = "dev.extframework"
-    version = "3.2.1-SNAPSHOT"
+    version = "3.2.2-SNAPSHOT"
 
     repositories {
         mavenCentral()
@@ -105,11 +105,11 @@ allprojects {
         implementation(kotlin("reflect"))
         testImplementation(kotlin("test"))
 
-        resourceApi(version = "1.1.5-SNAPSHOT")
+        resourceApi(configurationName = "api")
         commonUtil(configurationName = "api")
         archives(configurationName = "api")
-        artifactResolver()
-        jobs(version = "1.3.1-SNAPSHOT", logging = true, progressSimple = true)
+        artifactResolver(configurationName = "api")
+        jobs(configurationName = "api", logging = true, progressSimple = true)
     }
 
     java {
