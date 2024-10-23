@@ -3,6 +3,8 @@ dependencies {
     implementation(project(":"))
 }
 
+version = "3.2.2-SNAPSHOT"
+
 common {
     publishing {
         publication {
