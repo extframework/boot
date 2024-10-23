@@ -13,6 +13,7 @@ plugins {
     id("dev.extframework.common") version "1.0.19"
 }
 
+version = "3.2.4-SNAPSHOT"
 
 tasks.compileKotlin {
     kotlinOptions {
@@ -66,7 +67,6 @@ allprojects {
     apply(plugin = "dev.extframework.common")
 
     group = "dev.extframework"
-    version = "3.2.2-SNAPSHOT"
 
     repositories {
         mavenCentral()

@@ -3,11 +3,7 @@ package dev.extframework.boot.constraint
 import com.durganmcbroom.artifact.resolver.ArtifactMetadata
 import com.durganmcbroom.jobs.Job
 import com.durganmcbroom.jobs.job
-import dev.extframework.boot.archive.ArchiveData
-import dev.extframework.boot.archive.ArchiveTrace
-import dev.extframework.boot.archive.IArchive
-import dev.extframework.boot.archive.ArchiveTreeAuditContext
-import dev.extframework.boot.archive.ArchiveTreeAuditor
+import dev.extframework.boot.archive.*
 import dev.extframework.boot.monad.*
 import dev.extframework.common.util.LazyMap
 import dev.extframework.common.util.filterDuplicates
@@ -66,7 +62,7 @@ public class ConstraintArchiveAuditor(
                 .map {
                     Constrained(
                         it.descriptor,
-                        if (it is ArchiveData<*, *>) ConstraintType.NEGOTIABLE
+                        if (it is ClassLoadedArchiveNode<*> && it.handle != null) ConstraintType.BOUND
                         else ConstraintType.NEGOTIABLE
                     )
                 }
