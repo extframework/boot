@@ -17,12 +17,13 @@ import dev.extframework.boot.util.printTree
 import dev.extframework.boot.util.toGraphable
 import java.nio.file.Files
 import java.nio.file.Path
+import kotlin.io.path.Path
 import kotlin.test.Test
 
 class TestDependencyGraph {
     @Test
     fun `Test maven basic dependency loading`() {
-        val basePath = Files.createTempDirectory("m2cache")
+        val basePath = Path("test-run")
         val maven = MavenResolverProvider()
         val archiveGraph = DefaultArchiveGraph(basePath, mutableMapOf())
 
@@ -93,7 +94,8 @@ class TestDependencyGraph {
     @Test
     fun `Test bootstrapper dependency load`() {
         val maven = MavenResolverProvider()
-        val archiveGraph = ArchiveGraph.from(Path.of("test-run").toAbsolutePath())
+
+        val archiveGraph = ArchiveGraph.from(Path("test-run").toAbsolutePath())
         println(archiveGraph.path)
 
         val request = SimpleMavenArtifactRequest(

@@ -7,7 +7,7 @@ import java.security.ProtectionDomain
 import java.util.*
 
 public open class IntegratedLoader(
-    name: String,
+    public val name: String,
     protected val classProvider: ClassProvider = object : ClassProvider {
         override val packages: Set<String> = HashSet()
 
@@ -25,7 +25,7 @@ public open class IntegratedLoader(
         d(n, b, ProtectionDomain(null, null, cl, null))
     },
     parent: ClassLoader,
-) : ClassLoader(name, parent) {
+) : ClassLoader(parent) {
     override fun findClass(name: String): Class<*> =
         classProvider.findClass(name) ?: throw ClassNotFoundException(name)
 

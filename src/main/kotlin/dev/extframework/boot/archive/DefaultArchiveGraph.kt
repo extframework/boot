@@ -12,7 +12,6 @@ import com.durganmcbroom.resources.LocalResource
 import com.durganmcbroom.resources.Resource
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.KotlinModule
-import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import com.fasterxml.jackson.module.kotlin.readValue
 import dev.extframework.boot.API_VERSION
 import dev.extframework.boot.audit.*
@@ -36,6 +35,7 @@ import kotlinx.coroutines.coroutineScope
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.io.path.Path
 import kotlin.io.path.writeBytes
 import kotlin.reflect.jvm.jvmName
 
@@ -45,7 +45,7 @@ public open class DefaultArchiveGraph(
 ) : ArchiveGraph {
     protected val resolvers: MutableObjectContainer<ArchiveNodeResolver<*, *, *, *, *>> = ObjectContainerImpl()
 
-    override val path: Path = path resolve API_VERSION
+    override val path: Path = path resolve "v$API_VERSION"
 
     /**
      * Register a resolver.
@@ -100,7 +100,7 @@ public open class DefaultArchiveGraph(
             return true
         }
 
-        val metadataPath = path resolve resolver.pathForDescriptor(descriptor, "archive-metadata", "json")
+        val metadataPath = metadataPath(resolver, descriptor)
 
         return Files.exists(metadataPath)
     }
@@ -191,7 +191,7 @@ public open class DefaultArchiveGraph(
 
         val job = beingRead[descriptor] ?: coroutineScope {
             val job = async {
-                val metadataPath = path resolve resolver.pathForDescriptor(descriptor, "archive-metadata", "json")
+                val metadataPath = metadataPath(resolver, descriptor)
                 val info = basicObjectMapper.readValue<CacheableArchiveData>(
                     Files.newInputStream(metadataPath)
                 )
@@ -210,7 +210,7 @@ public open class DefaultArchiveGraph(
                 }
 
                 val resources = info.resources.mapValues { (_, value) ->
-                    CachedArchiveResource(Path.of(value))
+                    CachedArchiveResource(Path(value))
                 }
 
                 Tree(
@@ -410,7 +410,7 @@ public open class DefaultArchiveGraph(
             }
 
             val asyncBlock = async {
-                val metadataPath = path resolve resolver.pathForDescriptor(data.descriptor, "archive-metadata", "json")
+                val metadataPath = metadataPath(resolver, data.descriptor)
 
                 val resourcePaths = data.resources.map { (name, wrapper) ->
                     val (classifier, extension) = name
@@ -422,7 +422,7 @@ public open class DefaultArchiveGraph(
                         )
 
                     val path =
-                        this@DefaultArchiveGraph.path resolve if (wrapper.resource is LocalResource) Path.of(wrapper.resource.location)
+                        this@DefaultArchiveGraph.path resolve if (wrapper.resource is LocalResource) Path(wrapper.resource.location)
                         else resolver.pathForDescriptor(data.descriptor, classifier, extension)
 
                     Triple(name, wrapper, path)
@@ -587,4 +587,13 @@ public open class DefaultArchiveGraph(
                     }
                 )().merge()
         }
+
+    private fun <T: ArtifactMetadata.Descriptor> metadataPath(
+        resolver: ArchiveNodeResolver<T, *, *, *, *>,
+        descriptor: T
+    ): Path {
+        val metadataPath = path resolve resolver.pathForDescriptor(descriptor, "archive-metadata-v${resolver.apiVersion}", "json")
+
+        return metadataPath
+    }
 }

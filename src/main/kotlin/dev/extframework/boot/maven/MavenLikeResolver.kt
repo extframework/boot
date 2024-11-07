@@ -14,6 +14,7 @@ import dev.extframework.boot.util.mapOfNonNullValues
 import dev.extframework.boot.util.requireKeyInDescriptor
 import java.io.File
 import java.nio.file.Path
+import kotlin.io.path.Path
 
 public interface MavenLikeResolver<
         V : ArchiveNode<SimpleMavenDescriptor>,
@@ -41,7 +42,7 @@ public interface MavenLikeResolver<
     }
 
     override fun pathForDescriptor(descriptor: SimpleMavenDescriptor, classifier: String, type: String): Path {
-        return Path.of(
+        return Path(
             descriptor.group.replace('.', File.separatorChar),
             descriptor.artifact,
             descriptor.version,

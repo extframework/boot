@@ -5,7 +5,6 @@ import com.durganmcbroom.jobs.JobName
 import com.durganmcbroom.jobs.facet
 import com.durganmcbroom.jobs.job
 import dev.extframework.archives.*
-import dev.extframework.archives.jpm.JpmResolutionResult
 import dev.extframework.archives.zip.ZipResolutionResult
 import java.io.FileNotFoundException
 import java.nio.file.Path
@@ -43,17 +42,12 @@ public open class BasicArchiveResolutionProvider<T : ArchiveReference, R : Resol
         }.let {
             if (it.isFailure)
                 throw ArchiveException.ArchiveLoadFailed(
-                    it.exceptionOrNull()!!, facet(ArchiveTrace)
+                    it.exceptionOrNull()!!, trace
                 )
             else it.getOrNull()!!
         }
     }
 }
-
-public object JpmResolutionProvider : BasicArchiveResolutionProvider<ArchiveReference, JpmResolutionResult>(
-    Archives.Finders.JPM_FINDER as ArchiveFinder<ArchiveReference>,
-    Archives.Resolvers.JPM_RESOLVER
-)
 
 public object ZipResolutionProvider : BasicArchiveResolutionProvider<ArchiveReference, ZipResolutionResult>(
     Archives.Finders.ZIP_FINDER as ArchiveFinder<ArchiveReference>,

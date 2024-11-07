@@ -9,8 +9,7 @@ import java.util.concurrent.Callable
 import java.util.concurrent.Executors
 import kotlin.test.Test
 
-
-fun  newClassBytes(name: String): ByteBuffer {
+fun newClassBytes(name: String): ByteBuffer {
     val node = ClassNode()
     node.name = name.replace('.', '/')
     node.superName = "java/lang/Object"
@@ -73,7 +72,7 @@ class TestIntegratedLoaderConcurrency {
             IntegratedLoader(
                 name = "Loader A",
                 sourceProvider = it,
-                parent = ClassLoader.getPlatformClassLoader()
+                parent = ClassLoader.getSystemClassLoader()
             )
         }
     }
@@ -84,7 +83,7 @@ class TestIntegratedLoaderConcurrency {
             MutableClassLoader(
                 name = "Mutable Loader A",
                 mutableListOf(it),
-                parent = ClassLoader.getPlatformClassLoader()
+                parent = ClassLoader.getSystemClassLoader()
             )
         }
     }

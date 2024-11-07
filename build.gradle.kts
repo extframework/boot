@@ -10,10 +10,10 @@ plugins {
 
     application
 
-    id("dev.extframework.common") version "1.0.19"
+    id("dev.extframework.common") version "1.0.30"
 }
 
-version = "3.2.4-SNAPSHOT"
+version = "3.3-SNAPSHOT"
 
 tasks.compileKotlin {
     kotlinOptions {
@@ -113,8 +113,6 @@ allprojects {
     }
 
     java {
-        toolchain {
-            languageVersion.set(JavaLanguageVersion.of(17))
-        }
+        toolchain.languageVersion.set(JavaLanguageVersion.of(8))
     }
 }

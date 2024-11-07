@@ -32,6 +32,9 @@ public interface ArchiveNodeResolver<
     public val auditors: Auditors
         get() = Auditors()
 
+    public val apiVersion: Int
+        get() = 0
+
     /**
      * Creates a resolution context for the given repository settings.
      *

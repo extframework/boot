@@ -33,9 +33,9 @@ class TestClassIsolation {
         }
 
         val classLoaderA =
-            IntegratedLoader("Loader A", sourceProvider = sourceProvider, parent = ClassLoader.getPlatformClassLoader())
+            IntegratedLoader("Loader A", sourceProvider = sourceProvider, parent = ClassLoader.getSystemClassLoader())
         val classLoaderB =
-            IntegratedLoader("Loader B", sourceProvider = sourceProvider, parent = ClassLoader.getPlatformClassLoader())
+            IntegratedLoader("Loader B", sourceProvider = sourceProvider, parent = ClassLoader.getSystemClassLoader())
 
         val classA = classLoaderA.loadClass(className)
         val classB = classLoaderB.loadClass(className)
@@ -59,48 +59,5 @@ class TestClassIsolation {
         }
 
         loader.loadClass("dev.extframework.boot.test.loader.TestClassIsolation")
-    }
-
-    @Test
-    fun `Test module Isolation`() {
-        val asmIn = TestClassIsolation::class.java.getResource("/blackbox-repository/org/ow2/asm/asm/9.7/asm-9.7.jar")!!.toURI().let(Path::of)
-
-        val refA = Archives.find(
-            asmIn,
-            Archives.Finders.JPM_FINDER
-        )
-        val loaderA = IntegratedLoader(
-            "Loader A",
-            sourceProvider = ArchiveSourceProvider(refA),
-            parent = ClassLoader.getPlatformClassLoader()
-        )
-        val archiveA = Archives.resolve(
-            refA,
-            loaderA,
-            Archives.Resolvers.JPM_RESOLVER,
-            setOf(),
-        ).archive
-
-        val refB = Archives.find(
-            asmIn,
-            Archives.Finders.JPM_FINDER
-        )
-        val archiveB = Archives.resolve(
-            refA,
-            IntegratedLoader(
-                "Loader B",
-                sourceProvider = ArchiveSourceProvider(refB),
-                parent = loaderA
-            ),
-            Archives.Resolvers.JPM_RESOLVER,
-            setOf(archiveA),
-        ).archive
-
-        archiveA.classloader.loadClass("org.objectweb.asm.ClassReader")
-            .getConstructor(String::class.java).newInstance("java.lang.Object")
-        archiveB.classloader.loadClass("org.objectweb.asm.ClassReader")
-            .getConstructor(String::class.java).newInstance("java.lang.Object")
-
-        println("asdf")
     }
 }

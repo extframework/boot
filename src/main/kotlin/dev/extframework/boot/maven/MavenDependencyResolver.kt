@@ -45,6 +45,7 @@ public open class MavenDependencyResolver(
 
     override val name: String = "simple-maven"
     override val metadataType: Class<SimpleMavenArtifactMetadata> = SimpleMavenArtifactMetadata::class.java
+    override val apiVersion: Int = 1
 
     private open class MavenResolutionContext(
         factory: RepositoryFactory<SimpleMavenRepositorySettings, SimpleMavenArtifactRepository>,
