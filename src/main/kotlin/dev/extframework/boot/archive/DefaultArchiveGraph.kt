@@ -141,7 +141,7 @@ public open class DefaultArchiveGraph(
                 descriptor.name, ArchiveTrace(descriptor)
             )
 
-            val archiveTree: Tree<Tagged<ArchiveData<*, CachedArchiveResource>, ArchiveNodeResolver<*, *, *, *, *>>> =
+            val archiveTree: Tree<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>> =
                 readArchiveTree(
                     descriptor,
                     resolver,
@@ -179,17 +179,22 @@ public open class DefaultArchiveGraph(
      */
     protected val beingRead: MutableMap<
             ArtifactMetadata.Descriptor,
-            Deferred<Tree<Tagged<ArchiveData<*, CachedArchiveResource>, ArchiveNodeResolver<*, *, *, *, *>>>>
+            Deferred<Tree<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>>>
             > = ConcurrentHashMap()
 
     protected fun <T : ArtifactMetadata.Descriptor> readArchiveTree(
         descriptor: T,
         resolver: ArchiveNodeResolver<T, *, *, *, *>,
         trace: ArchiveTrace
-    ): AsyncJob<Tree<Tagged<ArchiveData<*, CachedArchiveResource>, ArchiveNodeResolver<*, *, *, *, *>>>> = asyncJob {
+    ): AsyncJob<Tree<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>>> = asyncJob {
         trace.checkCircularity()
 
-        val job = beingRead[descriptor] ?: coroutineScope {
+        val loadedNode = getNode(descriptor)
+        if (loadedNode != null) {
+            return@asyncJob nodeToTree(loadedNode, trace)
+        }
+
+        val job =  beingRead[descriptor] ?: coroutineScope {
             val job = async {
                 val metadataPath = metadataPath(resolver, descriptor)
                 val info = basicObjectMapper.readValue<CacheableArchiveData>(
@@ -326,7 +331,7 @@ public open class DefaultArchiveGraph(
         request: T,
         repository: R,
         resolver: ArchiveNodeResolver<D, T, *, R, M>
-    ): AsyncJob<Tree<Tagged<ArchiveData<*, CachedArchiveResource>, ArchiveNodeResolver<*, *, *, *, *>>>> = asyncJob {
+    ): AsyncJob<Tree<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>>> = asyncJob {
         checkRegistration(resolver)
 
         val descriptor = request.descriptor
@@ -368,7 +373,7 @@ public open class DefaultArchiveGraph(
     private fun <D : ArtifactMetadata.Descriptor, M : ArtifactMetadata<D, *>> cacheInternal(
         artifactTree: Artifact<M>,
         resolver: ArchiveNodeResolver<D, *, *, *, M>
-    ): AsyncJob<Tree<Tagged<ArchiveData<*, CachedArchiveResource>, ArchiveNodeResolver<*, *, *, *, *>>>> = asyncJob {
+    ): AsyncJob<Tree<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>>> = asyncJob {
         val archiveTree =
             constructArchiveTree(artifactTree, resolver, ArchiveTrace(artifactTree.metadata.descriptor))().merge()
                 .toTree()
@@ -379,20 +384,22 @@ public open class DefaultArchiveGraph(
     // Represents all the currently running cache jobs
     private val beingCached: MutableMap<
             ArtifactMetadata.Descriptor,
-            Deferred<Tree<Tagged<ArchiveData<*, CachedArchiveResource>, ArchiveNodeResolver<*, *, *, *, *>>>>
+            Deferred<Tree<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>>>
             > = ConcurrentHashMap()
 
     /**
      * Recursively caches the given tree of archive data.
      */
     private fun cacheInternal(
-        tree: Tree<Tagged<ArchiveData<*, *>, ArchiveNodeResolver<*, *, *, *, *>>>,
+        tree: Tree<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>>,
         trace: ArchiveTrace
-    ): AsyncJob<Tree<Tagged<ArchiveData<*, CachedArchiveResource>, ArchiveNodeResolver<*, *, *, *, *>>>> = asyncJob {
+    ): AsyncJob<Tree<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>>> = asyncJob {
         coroutineScope {
             trace.checkCircularity()
 
-            val data = tree.item.value
+            val data = tree.item.value as? ArchiveData<*, *> ?: return@coroutineScope nodeToTree(
+                tree.item.value as? ArchiveNode<*> ?: throw ArchiveException(trace, "Unknown IArchive type. Only acceptable types are ArchiveData, or implement from ArchiveNode.", null), trace
+            )
             val resolver = tree.item.tag as ArchiveNodeResolver<ArtifactMetadata.Descriptor, *, *, *, *>
 
             if (isCached(
@@ -521,7 +528,7 @@ public open class DefaultArchiveGraph(
         artifact: Artifact<M>,
         resolver: ArchiveNodeResolver<D, *, *, *, M>,
         trace: ArchiveTrace,
-    ): AsyncJob<Tree<Tagged<ArchiveData<*, *>, ArchiveNodeResolver<*, *, *, *, *>>>> =
+    ): AsyncJob<Tree<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>>> =
         asyncJob(
             JobName("Construct archive tree: '${artifact.metadata.descriptor}'")
         ) {
@@ -545,7 +552,7 @@ public open class DefaultArchiveGraph(
                         override fun <D : ArtifactMetadata.Descriptor, M : ArtifactMetadata<D, *>> cache(
                             artifact: Artifact<M>,
                             resolver: ArchiveNodeResolver<D, *, *, *, M>
-                        ): AsyncJob<Tree<Tagged<ArchiveData<*, *>, ArchiveNodeResolver<*, *, *, *, *>>>> =
+                        ): AsyncJob<Tree<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>>> =
                             constructArchiveTree(
                                 artifact, resolver, trace.child(artifact.metadata.descriptor)
                             )
@@ -554,7 +561,7 @@ public open class DefaultArchiveGraph(
                             request: T,
                             repository: R,
                             resolver: ArchiveNodeResolver<D, T, *, R, M>
-                        ): AsyncJob<Tree<Tagged<ArchiveData<*, *>, ArchiveNodeResolver<*, *, *, *, *>>>> =
+                        ): AsyncJob<Tree<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>>> =
                             asyncJob cacheAsync@{
                                 checkRegistration(resolver)
 
@@ -574,8 +581,8 @@ public open class DefaultArchiveGraph(
 
                         override fun newData(
                             descriptor: D,
-                            parents: List<Tree<Tagged<ArchiveData<*, *>, ArchiveNodeResolver<*, *, *, *, *>>>>
-                        ): Tree<Tagged<ArchiveData<*, *>, ArchiveNodeResolver<*, *, *, *, *>>> =
+                            parents: List<Tree<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>>>
+                        ): Tree<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>> =
                             Tree(
                                 ArchiveData(
                                     descriptor,
@@ -595,5 +602,18 @@ public open class DefaultArchiveGraph(
         val metadataPath = path resolve resolver.pathForDescriptor(descriptor, "archive-metadata-v${resolver.apiVersion}", "json")
 
         return metadataPath
+    }
+
+    private fun nodeToTree(node: ArchiveNode<*>, trace: ArchiveTrace) : Tree<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>> {
+        return Tree(
+            Tagged(
+                node, resolvers.objects().values.find {
+                    it.nodeType.isInstance(node)
+                } ?: throw ArchiveException.ArchiveTypeNotFound("Type of node: '${node::class.java.name}'", trace)
+            ),
+            node.access.targets.map {
+                nodeToTree(it.relationship.node, trace.child(it.descriptor))
+            }
+        )
     }
 }

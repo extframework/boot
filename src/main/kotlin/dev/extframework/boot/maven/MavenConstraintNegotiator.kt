@@ -11,7 +11,7 @@ import dev.extframework.boot.constraint.ConstraintNegotiator
 import dev.extframework.boot.constraint.ConstraintType
 
 public class MavenConstraintNegotiator(
-    private val throwIfClashing: Boolean = true
+    private val throwIfClashing: Boolean = false
 ) : ConstraintNegotiator<SimpleMavenDescriptor> {
     override val descriptorType: Class<SimpleMavenDescriptor> = SimpleMavenDescriptor::class.java
 
