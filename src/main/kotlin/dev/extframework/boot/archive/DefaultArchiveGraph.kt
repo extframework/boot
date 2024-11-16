@@ -39,9 +39,9 @@ import kotlin.io.path.Path
 import kotlin.io.path.writeBytes
 import kotlin.reflect.jvm.jvmName
 
-public open class DefaultArchiveGraph(
+public open class DefaultArchiveGraph @JvmOverloads constructor(
     path: Path,
-    protected val mutable: MutableMap<ArtifactMetadata.Descriptor, ArchiveNode<*>> = HashMap()
+    protected val mutable: MutableMap<ArtifactMetadata.Descriptor, Tagged<ArchiveNode<*>, ArchiveNodeResolver<*, *, *, *, *>>> = HashMap()
 ) : ArchiveGraph {
     protected val resolvers: MutableObjectContainer<ArchiveNodeResolver<*, *, *, *, *>> = ObjectContainerImpl()
 
@@ -73,14 +73,14 @@ public open class DefaultArchiveGraph(
      * @param descriptor The descriptor to search for.
      * @return The node or null.
      */
-    override fun getNode(descriptor: ArtifactMetadata.Descriptor): ArchiveNode<*>? = mutable[descriptor]
+    override fun getNode(descriptor: ArtifactMetadata.Descriptor): ArchiveNode<*>? = mutable[descriptor]?.value
 
     /**
      * Returns a collection of all the nodes in this archive graph.
      *
      * @return All the currently loaded nodes.
      */
-    override fun nodes(): Collection<ArchiveNode<*>> = mutable.values
+    override fun nodes(): Collection<ArchiveNode<*>> = mutable.values.map { it.value }
 
     /**
      * Determines if the given descriptor has been previously cached
@@ -304,7 +304,7 @@ public open class DefaultArchiveGraph(
                             }
                         )().merge() as ArchiveNode<ArtifactMetadata.Descriptor>
 
-                    mutable[node.descriptor] = node
+                    mutable[node.descriptor] = node.tag(resolver)
 
                     node
                 }
@@ -605,12 +605,10 @@ public open class DefaultArchiveGraph(
     }
 
     private fun nodeToTree(node: ArchiveNode<*>, trace: ArchiveTrace) : Tree<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>> {
+        val value = mutable[node.descriptor] ?: throw ArchiveException(trace, "Archive node: '${node.descriptor}' was not loaded?")
+
         return Tree(
-            Tagged(
-                node, resolvers.objects().values.find {
-                    it.nodeType.isInstance(node)
-                } ?: throw ArchiveException.ArchiveTypeNotFound("Type of node: '${node::class.java.name}'", trace)
-            ),
+            value,
             node.access.targets.map {
                 nodeToTree(it.relationship.node, trace.child(it.descriptor))
             }

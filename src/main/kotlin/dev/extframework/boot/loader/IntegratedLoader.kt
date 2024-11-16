@@ -7,7 +7,7 @@ import java.security.ProtectionDomain
 import java.util.*
 
 public open class IntegratedLoader(
-    public val name: String,
+    private val name: String,
     protected val classProvider: ClassProvider = object : ClassProvider {
         override val packages: Set<String> = HashSet()
 
@@ -35,9 +35,6 @@ public open class IntegratedLoader(
 
     override fun findResource(name: String): URL? =
         resourceProvider.findResources(name).firstOrNull()
-
-//    override fun findResource(mn: String?, name: String): URL? =
-//        if (mn == null) sourceProvider.getResource(name) else sourceProvider.getResource(name, mn)
 
     override fun loadClass(name: String): Class<*> = synchronized(getClassLoadingLock(name)) {
         findLoadedClass(name)
