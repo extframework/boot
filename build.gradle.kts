@@ -1,9 +1,11 @@
+import dev.extframework.gradle.common.ARCHIVES_VERSION
 import dev.extframework.gradle.common.archives
 import dev.extframework.gradle.common.commonUtil
 import dev.extframework.gradle.common.dm.artifactResolver
 import dev.extframework.gradle.common.dm.jobs
 import dev.extframework.gradle.common.dm.resourceApi
 import dev.extframework.gradle.common.extFramework
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
     kotlin("jvm") version "1.9.21"
@@ -13,12 +15,17 @@ plugins {
     id("dev.extframework.common") version "1.0.30"
 }
 
-version = "3.4.2-SNAPSHOT"
+version = "3.4.3-SNAPSHOT"
 
 tasks.compileKotlin {
     kotlinOptions {
         freeCompilerArgs = listOf("-Xcontext-receivers")
     }
+}
+
+sourceSets {
+    create("java11")
+    create("java11Test")
 }
 
 application {
@@ -46,13 +53,26 @@ dependencies {
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.17.2")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0")
 
+    archives(configurationName = "java11Implementation", version = "1.4-SNAPSHOT")
+    jobs(configurationName = "java11Implementation")
+    "java11Implementation"(sourceSets.main.get().output)
+    "java11Implementation"("dev.extframework:archives:$ARCHIVES_VERSION:jdk11")
+
     testImplementation(project(":blackbox-test"))
+}
+
+val java11Jar by tasks.creating(Jar::class.java) {
+    from(sourceSets.named("java11").get().output)
+    archiveClassifier = "jdk11"
 }
 
 common {
     publishing {
         publication {
             artifactId = "boot"
+
+            artifact(java11Jar)
+
             pom {
                 name.set("Boot")
                 description.set("YakClient's Boot module")
@@ -60,6 +80,24 @@ common {
             }
         }
     }
+}
+
+tasks.named<KotlinCompile>("compileJava11Kotlin") {
+    kotlinJavaToolchain.toolchain.use(javaToolchains.launcherFor {
+        languageVersion.set(JavaLanguageVersion.of(11))
+    })
+    kotlinOptions.jvmTarget = "11"
+    kotlinOptions.freeCompilerArgs += "-Xexplicit-api=strict"
+}
+
+tasks.named<JavaCompile>("compileJava11Java") {
+    sourceCompatibility = "11"
+    targetCompatibility = "11"
+}
+
+tasks.named<JavaCompile>("compileJava11TestJava") {
+    sourceCompatibility = "11"
+    targetCompatibility = "11"
 }
 
 allprojects {
@@ -81,6 +119,7 @@ allprojects {
                 withJava()
                 withSources()
                 withDokka()
+
 
                 commonPom {
                     packaging = "jar"
@@ -107,7 +146,7 @@ allprojects {
 
         resourceApi(configurationName = "api")
         commonUtil(configurationName = "api")
-        archives(configurationName = "api")
+        archives(configurationName = "api", version = "1.4-SNAPSHOT")
         artifactResolver(configurationName = "api")
         jobs(configurationName = "api", logging = true, progressSimple = true)
     }
