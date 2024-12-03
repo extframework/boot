@@ -99,7 +99,7 @@ class TestDependencyGraph {
         println(archiveGraph.path)
 
         val request = SimpleMavenArtifactRequest(
-            "dev.extframework.minecraft:minecraft-provider-def:2.0-SNAPSHOT",
+            "dev.extframework.minecraft:minecraft-provider-def:2.0.12-SNAPSHOT",
             includeScopes = setOf("compile", "runtime", "import")
         )
 
