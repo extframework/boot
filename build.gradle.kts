@@ -53,7 +53,7 @@ dependencies {
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.17.2")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0")
 
-    archives(configurationName = "java11Implementation", version = "1.4-SNAPSHOT")
+    archives(configurationName = "java11Implementation")
     jobs(configurationName = "java11Implementation")
     "java11Implementation"(sourceSets.main.get().output)
     "java11Implementation"("dev.extframework:archives:$ARCHIVES_VERSION:jdk11")
@@ -146,7 +146,7 @@ allprojects {
 
         resourceApi(configurationName = "api")
         commonUtil(configurationName = "api")
-        archives(configurationName = "api", version = "1.4-SNAPSHOT")
+        archives(configurationName = "api")
         artifactResolver(configurationName = "api")
         jobs(configurationName = "api", logging = true, progressSimple = true)
     }
