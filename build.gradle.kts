@@ -12,7 +12,7 @@ plugins {
 
     application
 
-    id("dev.extframework.common") version "1.0.30"
+    id("dev.extframework.common") version "1.0.38"
 }
 
 version = "3.4.4-SNAPSHOT"
@@ -108,7 +108,6 @@ allprojects {
 
     repositories {
         mavenCentral()
-        mavenLocal()
         extFramework()
     }
 
