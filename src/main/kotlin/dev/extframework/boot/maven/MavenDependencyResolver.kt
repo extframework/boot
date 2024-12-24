@@ -41,7 +41,7 @@ public open class MavenDependencyResolver(
         )
     }
 
-    override fun SimpleMavenArtifactMetadata.resource(): Resource? = resource
+    override suspend fun SimpleMavenArtifactMetadata.resource(): Resource? = jar()
 
     override val name: String = "simple-maven"
     override val metadataType: Class<SimpleMavenArtifactMetadata> = SimpleMavenArtifactMetadata::class.java

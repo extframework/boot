@@ -71,7 +71,7 @@ public abstract class DependencyResolver<
         accessTree: ArchiveAccessTree,
     ): N
 
-    protected abstract fun M.resource() : Resource?
+    protected abstract suspend fun M.resource() : Resource?
 
     override fun cache(
         artifact: Artifact<M>,

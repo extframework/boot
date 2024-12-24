@@ -6,6 +6,8 @@ import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenRepositorySet
 import com.durganmcbroom.jobs.JobName
 import com.durganmcbroom.jobs.launch
 import com.durganmcbroom.jobs.result
+import com.durganmcbroom.resources.KtorInstance
+import com.durganmcbroom.resources.RemoteResource
 import com.durganmcbroom.resources.ResourceAlgorithm
 import dev.extframework.boot.archive.ArchiveException
 import dev.extframework.boot.archive.ArchiveGraph
@@ -15,8 +17,25 @@ import dev.extframework.boot.maven.MavenDependencyResolver
 import dev.extframework.boot.maven.MavenResolverProvider
 import dev.extframework.boot.util.printTree
 import dev.extframework.boot.util.toGraphable
+import dev.extframework.common.util.copyTo
+import io.ktor.client.call.body
+import io.ktor.client.request.HttpRequestBuilder
+import io.ktor.client.request.get
+import io.ktor.client.request.url
+import io.ktor.utils.io.ByteReadChannel
+import io.ktor.utils.io.readRemaining
+import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.debug.CoroutinesBlockHoundIntegration
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.runBlocking
+import kotlinx.io.readByteArray
+import reactor.blockhound.BlockHound
+import java.io.File
+import java.net.URL
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.Executors
 import kotlin.io.path.Path
 import kotlin.test.Test
 
@@ -93,6 +112,8 @@ class TestDependencyGraph {
 
     @Test
     fun `Test bootstrapper dependency load`() {
+        BlockHound.install(CoroutinesBlockHoundIntegration())
+
         val maven = MavenResolverProvider()
 
         val archiveGraph = ArchiveGraph.from(Path("test-run").toAbsolutePath())
@@ -104,15 +125,79 @@ class TestDependencyGraph {
         )
 
         val node = launch(BootLoggerFactory()) {
-            archiveGraph.cache(
-                request,
-                SimpleMavenRepositorySettings.default("https://maven.extframework.dev/snapshots"),
-                maven.resolver
-            )().merge()
-            archiveGraph.get(request.descriptor, maven.resolver)().merge()
+            runBlocking(Executors.newCachedThreadPool().asCoroutineDispatcher()) {
+                archiveGraph.cacheAsync(
+                    request,
+                    SimpleMavenRepositorySettings.default("https://maven.extframework.dev/snapshots"),
+                    maven.resolver
+                )().merge()
+                archiveGraph.getAsync(request.descriptor, maven.resolver)().merge()
+            }
+
         }
 
         println(node)
+    }
+
+    @Test
+    fun `Speed test`() {
+        val url =
+            URL("https://repo.maven.apache.org/maven2/org/jetbrains/kotlin/kotlin-reflect/1.5.30/kotlin-reflect-1.5.30.jar")
+
+        val file = File("test-run/speed-test.jar")
+        runSpeedTest {
+            val stream = url.openStream()
+            val streamOut = file.outputStream()
+            val buf = ByteArray(DEFAULT_BUFFER_SIZE)
+
+            while (true) {
+                if (stream.read(buf) == -1) break
+                streamOut.write(buf)
+            }
+        }
+
+        runBlocking {
+            val client = KtorInstance.client
+
+            runSpeedTest {
+                val res = client.get(HttpRequestBuilder().apply { url(url) })
+                val channel: ByteReadChannel = res.body()
+                val streamOut = file.outputStream()
+
+                while (!channel.isClosedForRead) {
+                    val packet = channel.readRemaining(DEFAULT_BUFFER_SIZE.toLong())
+                    while (!packet.exhausted()) {
+                        val bytes = packet.readByteArray()
+
+                        streamOut.write(bytes)
+                    }
+                }
+            }
+        }
+
+        runBlocking {
+            runSpeedTest {
+
+                val resource = RemoteResource(HttpRequestBuilder().apply { url(url) })
+                resource copyTo file.toPath()
+            }
+        }
+    }
+
+    private inline fun runSpeedTest(
+        block: () -> Unit,
+    ) {
+        val iterations = 20
+
+
+        var total = 0L
+        for (i in 0..iterations) {
+            val start = System.currentTimeMillis()
+            block.invoke()
+            total += System.currentTimeMillis() - start
+            println(i)
+        }
+        println(total / iterations)
     }
 
     companion object {

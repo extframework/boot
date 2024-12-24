@@ -1,6 +1,5 @@
 package dev.extframework.boot.loader
 
-import com.durganmcbroom.resources.openStream
 import dev.extframework.archives.ArchiveReference
 import dev.extframework.boot.util.dotClassFormat
 import dev.extframework.boot.util.packageName
@@ -29,8 +28,7 @@ public open class ArchiveSourceProvider(
     override fun findSource(name: String): ByteBuffer? =
         runBlocking {
             archive.reader[name.dotClassFormat]
-                ?.resource
-                ?.openStream()
+                ?.open()
                 ?.readInputStream()
                 ?.let(ByteBuffer::wrap)
         }

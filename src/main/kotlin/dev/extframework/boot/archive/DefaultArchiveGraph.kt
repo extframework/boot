@@ -192,58 +192,60 @@ public open class DefaultArchiveGraph @JvmOverloads constructor(
         descriptor: T,
         resolver: ArchiveNodeResolver<T, *, *, *, *>,
         trace: ArchiveTrace
-    ): AsyncJob<Tree<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>>> = asyncJob { coroutineScope {
-        trace.checkCircularity()
+    ): AsyncJob<Tree<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>>> = asyncJob {
+        coroutineScope {
+            trace.checkCircularity()
 
-        val loadedNode = getNode(descriptor)
-        if (loadedNode != null) {
-            return@coroutineScope nodeToTree(loadedNode, trace)
-        }
-
-        // Locking just to create the job, while this method is recursive
-        // no deadlocks should occur because the lock will release before
-        // child jobs start/complete.
-        val job = readingMutex.withSuspendingLock {
-            val job = beingRead[descriptor] ?: async {
-                val metadataPath = metadataPath(resolver, descriptor)
-                val info = basicObjectMapper.readValue<CacheableArchiveData>(
-                    Files.newInputStream(metadataPath)
-                )
-
-                val parents = info.access.mapAsync {
-                    val currResolver = getResolver(it.resolver)
-                        ?: throw IllegalStateException("Resolver: '${it.resolver}' not found when hydrating cache. Please register it.")
-
-                    val currDescriptor = currResolver.deserializeDescriptor(it.descriptor, trace).merge()
-
-                    readArchiveTree(
-                        currDescriptor,
-                        currResolver as ArchiveNodeResolver<ArtifactMetadata.Descriptor, *, *, *, *>,
-                        trace.child(currDescriptor)
-                    )().merge()
-                }
-
-                val resources = info.resources.mapValues { (_, value) ->
-                    CachedArchiveResource(Path(value))
-                }
-
-                Tree(
-                    ArchiveData(
-                        descriptor,
-                        CachedArchiveResource::class,
-                        resources
-                    ).tag(resolver),
-                    parents.awaitAll()
-                )
+            val loadedNode = getNode(descriptor)
+            if (loadedNode != null) {
+                return@coroutineScope nodeToTree(loadedNode, trace)
             }
 
-            beingRead[descriptor] = job
+            // Locking just to create the job, while this method is recursive
+            // no deadlocks should occur because the lock will release before
+            // child jobs start/complete.
+            val job = readingMutex.withSuspendingLock {
+                val job = beingRead[descriptor] ?: async {
+                    val metadataPath = metadataPath(resolver, descriptor)
+                    val info = basicObjectMapper.readValue<CacheableArchiveData>(
+                        Files.newInputStream(metadataPath)
+                    )
 
-            job
+                    val parents = info.access.mapAsync {
+                        val currResolver = getResolver(it.resolver)
+                            ?: throw IllegalStateException("Resolver: '${it.resolver}' not found when hydrating cache. Please register it.")
+
+                        val currDescriptor = currResolver.deserializeDescriptor(it.descriptor, trace).merge()
+
+                        readArchiveTree(
+                            currDescriptor,
+                            currResolver as ArchiveNodeResolver<ArtifactMetadata.Descriptor, *, *, *, *>,
+                            trace.child(currDescriptor)
+                        )().merge()
+                    }
+
+                    val resources = info.resources.mapValues { (_, value) ->
+                        CachedArchiveResource(Path(value))
+                    }
+
+                    Tree(
+                        ArchiveData(
+                            descriptor,
+                            CachedArchiveResource::class,
+                            resources
+                        ).tag(resolver),
+                        parents.awaitAll()
+                    )
+                }
+
+                beingRead[descriptor] = job
+
+                job
+            }
+
+            job.await()
         }
-
-        job.await()
-    } }
+    }
 
     // Represents all the currently running get jobs
     private val beingGotten: MutableMap<
@@ -264,79 +266,81 @@ public open class DefaultArchiveGraph @JvmOverloads constructor(
     private fun getInternal(
         tree: Tree<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>>,
         trace: ArchiveTrace
-    ): AsyncJob<ArchiveNode<*>> = asyncJob { coroutineScope {
-        val currDescriptor = tree.item.value.descriptor
+    ): AsyncJob<ArchiveNode<*>> = asyncJob {
+        coroutineScope {
+            val currDescriptor = tree.item.value.descriptor
 
-        val alreadyLoadedNode = getNode(currDescriptor)
-        if (alreadyLoadedNode != null) return@coroutineScope alreadyLoadedNode
+            val alreadyLoadedNode = getNode(currDescriptor)
+            if (alreadyLoadedNode != null) return@coroutineScope alreadyLoadedNode
 
-        // Lock to ensure there really only is one being gotten at a time
-        val job = gettingMutex.withSuspendingLock {
-            // Either get a currently running job or start a new one
-            val job = beingGotten[currDescriptor] ?: async {
-                val (data, resolver) = tree.item
+            // Lock to ensure there really only is one being gotten at a time
+            val job = gettingMutex.withSuspendingLock {
+                // Either get a currently running job or start a new one
+                val job = beingGotten[currDescriptor] ?: async {
+                    val (data, resolver) = tree.item
 
-                val parents = tree.parents.mapAsync {
-                    getInternal(it, trace.child(it.item.value.descriptor))().merge()
-                }.awaitAll()
+                    val parents = tree.parents.mapAsync {
+                        getInternal(it, trace.child(it.item.value.descriptor))().merge()
+                    }.awaitAll()
 
-                val accessTree = object : ArchiveAccessTree {
-                    override val descriptor: ArtifactMetadata.Descriptor = currDescriptor
-                    override val targets: List<ArchiveTarget> = (parents
-                        .map {
-                            ArchiveTarget(
-                                it.descriptor,
-                                ArchiveRelationship.Direct(
-                                    it
+                    val accessTree = object : ArchiveAccessTree {
+                        override val descriptor: ArtifactMetadata.Descriptor = currDescriptor
+                        override val targets: List<ArchiveTarget> = (parents
+                            .map {
+                                ArchiveTarget(
+                                    it.descriptor,
+                                    ArchiveRelationship.Direct(
+                                        it
+                                    )
                                 )
-                            )
-                        } + parents
-                        .flatMap { it.access.targets }
-                        .map {
-                            ArchiveTarget(
-                                it.descriptor,
-                                ArchiveRelationship.Transitive(
-                                    it.relationship.node
+                            } + parents
+                            .flatMap { it.access.targets }
+                            .map {
+                                ArchiveTarget(
+                                    it.descriptor,
+                                    ArchiveRelationship.Transitive(
+                                        it.relationship.node
+                                    )
                                 )
-                            )
-                        })
-                        .filterDuplicates()
+                            })
+                            .filterDuplicates()
+                    }
+
+                    val auditedTree = tree.item.tag.auditors[ArchiveAccessAuditContext::class].audit(
+                        ArchiveAccessAuditContext(
+                            accessTree,
+                            trace,
+                            this@DefaultArchiveGraph
+                        )
+                    )().merge().tree
+
+                    val node = (resolver as ArchiveNodeResolver<ArtifactMetadata.Descriptor, *, *, *, *>)
+                        .load(
+                            (data as ArchiveData<ArtifactMetadata.Descriptor, CachedArchiveResource>),
+                            auditedTree,
+                            object : ResolutionHelper {
+                                override val trace: ArchiveTrace = trace
+                            }
+                        )().merge() as ArchiveNode<ArtifactMetadata.Descriptor>
+
+                    mutable[node.descriptor] = node.tag(resolver)
+
+                    beingGotten.remove(currDescriptor)
+
+                    node
                 }
 
-                val auditedTree = tree.item.tag.auditors[ArchiveAccessAuditContext::class].audit(
-                    ArchiveAccessAuditContext(
-                        accessTree,
-                        trace,
-                        this@DefaultArchiveGraph
-                    )
-                )().merge().tree
+                // Immediately add to cache
+                beingGotten[currDescriptor] = job
 
-                val node = (resolver as ArchiveNodeResolver<ArtifactMetadata.Descriptor, *, *, *, *>)
-                    .load(
-                        (data as ArchiveData<ArtifactMetadata.Descriptor, CachedArchiveResource>),
-                        auditedTree,
-                        object : ResolutionHelper {
-                            override val trace: ArchiveTrace = trace
-                        }
-                    )().merge() as ArchiveNode<ArtifactMetadata.Descriptor>
-
-                mutable[node.descriptor] = node.tag(resolver)
-
-                beingGotten.remove(currDescriptor)
-
-                node
+                // Returning the already active or newly created job, it's
+                // safe to lock here because this should take <1ms
+                job
             }
 
-            // Immediately add to cache
-            beingGotten[currDescriptor] = job
-
-            // Returning the already active or newly created job, it's
-            // safe to lock here because this should take <1ms
-            job
+            job.await()
         }
-
-        job.await()
-    } }
+    }
 
     /**
      * Caches the given request + repository as defined by the supertype.
@@ -478,7 +482,7 @@ public open class DefaultArchiveGraph @JvmOverloads constructor(
 
                         val parents = tree.parents.mapAsync {
                             cacheInternal(it, trace)().merge()
-                        }.awaitAll()
+                        }.onEach { it.start() }
 
                         resourcePaths.mapAsync { (name, wrapper, path) ->
                             if (wrapper.resource !is LocalResource) {
@@ -500,7 +504,7 @@ public open class DefaultArchiveGraph @JvmOverloads constructor(
                                 resourcePaths.associate {
                                     it.first to CachedArchiveResource(it.third)
                                 }
-                            ) tag resolver, parents)
+                            ) tag resolver, parents.awaitAll())
                     }
 
                     beingCached[data.descriptor] = job
@@ -643,9 +647,9 @@ public open class DefaultArchiveGraph @JvmOverloads constructor(
 
         return Tree(
             value,
-            node.access.targets.map {
-                nodeToTree(it.relationship.node, trace.child(it.descriptor))
-            }
+            node.access.targets
+                .filterNot { target -> mutable.contains(target.descriptor) }
+                .map { nodeToTree(it.relationship.node, trace.child(it.descriptor)) }
         )
     }
 }

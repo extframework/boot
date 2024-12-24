@@ -58,6 +58,9 @@ public class ConstraintArchiveAuditor(
 
             val group = newTree
                 .asSequence()
+                // TODO two different types of archives may return the same classification (ie two maven based ones that
+                //   arent maven, but with a similar format yet different descriptor class), this will cause ClassCast
+                //   exceptions. Fix: in the filter al so check that the types are the same.
                 .filter { classify(it.descriptor) == classifier }
                 .map {
                     Constrained(

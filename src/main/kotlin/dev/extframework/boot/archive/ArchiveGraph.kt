@@ -92,7 +92,7 @@ public interface ArchiveGraph {
         repository: R,
         resolver: ArchiveNodeResolver<D, T, *, R, M>
     ): Job<Tree<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>>> = job {
-        runBlocking(Dispatchers.IO) {
+        runBlocking {
             cacheAsync(request, repository, resolver)().merge()
         }
     }
@@ -123,7 +123,7 @@ public interface ArchiveGraph {
         descriptor: K,
         resolver: ArchiveNodeResolver<K, *, T, *, *>
     ): Job<T> = job {
-        runBlocking(Dispatchers.IO) {
+        runBlocking {
             getAsync(descriptor, resolver)().merge()
         }
     }

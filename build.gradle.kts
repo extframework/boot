@@ -15,7 +15,7 @@ plugins {
     id("dev.extframework.common") version "1.0.38"
 }
 
-version = "3.4.4-SNAPSHOT"
+version = "3.4.5-SNAPSHOT"
 
 tasks.compileKotlin {
     kotlinOptions {
@@ -53,12 +53,16 @@ dependencies {
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.17.2")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0")
 
-    archives(configurationName = "java11Implementation")
+    archives(configurationName = "java11Implementation", version = "1.5-SNAPSHOT")
     jobs(configurationName = "java11Implementation")
     "java11Implementation"(sourceSets.main.get().output)
-    "java11Implementation"("dev.extframework:archives:$ARCHIVES_VERSION:jdk11")
+    "java11Implementation"("dev.extframework:archives:${"1.5-SNAPSHOT"}:jdk11")
 
     testImplementation(project(":blackbox-test"))
+
+
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-debug:1.5.2")
+    testImplementation("io.projectreactor.tools:blockhound:1.0.6.RELEASE")
 }
 
 val java11Jar by tasks.creating(Jar::class.java) {
@@ -109,6 +113,7 @@ allprojects {
     repositories {
         mavenCentral()
         extFramework()
+        mavenLocal()
     }
 
     common {
@@ -143,10 +148,10 @@ allprojects {
         implementation(kotlin("reflect"))
         testImplementation(kotlin("test"))
 
-        resourceApi(configurationName = "api")
-        commonUtil(configurationName = "api")
-        archives(configurationName = "api")
-        artifactResolver(configurationName = "api")
+        resourceApi(configurationName = "api", version = "1.2-SNAPSHOT")
+        commonUtil(configurationName = "api", version = "1.2.1-SNAPSHOT")
+        archives(configurationName = "api", version = "1.5-SNAPSHOT")
+        artifactResolver(configurationName = "api", version = "1.3-SNAPSHOT",  mavenVersion = "1.3-SNAPSHOT")
         jobs(configurationName = "api", logging = true, progressSimple = true)
     }
 
