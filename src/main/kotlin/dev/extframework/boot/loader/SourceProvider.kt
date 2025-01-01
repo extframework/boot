@@ -4,7 +4,6 @@ import dev.extframework.archives.ArchiveReference
 import dev.extframework.boot.util.dotClassFormat
 import dev.extframework.boot.util.packageName
 import dev.extframework.common.util.readInputStream
-import kotlinx.coroutines.runBlocking
 import java.nio.ByteBuffer
 
 public interface SourceProvider {
@@ -26,10 +25,8 @@ public open class ArchiveSourceProvider(
     override val packages: Set<String> = archive.packages
 
     override fun findSource(name: String): ByteBuffer? =
-        runBlocking {
-            archive.reader[name.dotClassFormat]
-                ?.open()
-                ?.readInputStream()
-                ?.let(ByteBuffer::wrap)
-        }
+        archive.reader[name.dotClassFormat]
+            ?.open()
+            ?.readInputStream()
+            ?.let(ByteBuffer::wrap)
 }

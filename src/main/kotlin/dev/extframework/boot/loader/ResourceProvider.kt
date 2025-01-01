@@ -15,8 +15,8 @@ public open class ArchiveResourceProvider private constructor(
     protected val resourceProvider: (String) -> URL?
 ) : ResourceProvider {
     public constructor(reference: ArchiveReference) : this({
-        reference.reader[it]?.let {
-            URL("jar:${Paths.get(reference.location)}!${File.separatorChar}$it")
+        reference.reader[it.removePrefix("/")]?.let {
+            URL("jar:${reference.location}!${File.separatorChar}${it.name.removePrefix("/")}")
         }
     })
 
