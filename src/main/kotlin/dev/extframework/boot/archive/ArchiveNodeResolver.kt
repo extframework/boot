@@ -29,9 +29,6 @@ public interface ArchiveNodeResolver<
     public val nodeType: Class<in V>
     public val metadataType: Class<M>
 
-    public val auditors: Auditors
-        get() = Auditors()
-
     public val apiVersion: Int
         get() = 0
 
@@ -137,14 +134,13 @@ public interface CacheHelper<K : ArtifactMetadata.Descriptor> {
      * Load an artifact tree.
      */
     public fun <
-            D : ArtifactMetadata.Descriptor,
+            D: ArtifactMetadata.Descriptor,
             T : ArtifactRequest<D>,
             R : RepositorySettings,
-            M : ArtifactMetadata<D, ArtifactMetadata.ParentInfo<T, R>>
             > cache(
         request: T,
         repository: R,
-        resolver: ArchiveNodeResolver<D, T, *, R, M>
+        resolver: ArchiveNodeResolver<D, T, *, R, *>
     ): AsyncJob<Tree<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>>>
 
     /**

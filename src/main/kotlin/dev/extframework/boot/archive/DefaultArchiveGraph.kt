@@ -50,15 +50,21 @@ public open class DefaultArchiveGraph @JvmOverloads constructor(
 
     override val path: Path = path resolve "v$API_VERSION"
 
-    private val workPool = Executors.newWorkStealingPool()
+    override var auditors: Auditors = Auditors()
 
     /**
      * Register a resolver.
      *
      * @param resolver the resolver.
      */
-    override fun registerResolver(resolver: ArchiveNodeResolver<*, *, *, *, *>) {
+    override fun registerResolver(resolver: ArchiveNodeResolver<*, *, *, *, *>): Unit = synchronized(this) {
+        if (resolver is RegisterAuditor) {
+            auditors = resolver.register(auditors)
+        }
+
         resolvers.register(resolver.name, resolver)
+
+        Unit
     }
 
     /**
@@ -153,7 +159,9 @@ public open class DefaultArchiveGraph @JvmOverloads constructor(
                     ArchiveTrace(descriptor)
                 )().merge()
 
-            val auditedTree = resolver.auditors[ArchiveTreeAuditContext::class].audit(
+            println("Read tree")
+
+            val auditedTree = auditors[ArchiveTreeAuditContext::class].audit(
                 ArchiveTreeAuditContext(
                     archiveTree,
                     ArchiveTrace(descriptor), this@DefaultArchiveGraph
@@ -306,7 +314,7 @@ public open class DefaultArchiveGraph @JvmOverloads constructor(
                             .filterDuplicates()
                     }
 
-                    val auditedTree = tree.item.tag.auditors[ArchiveAccessAuditContext::class].audit(
+                    val auditedTree = auditors[ArchiveAccessAuditContext::class].audit(
                         ArchiveAccessAuditContext(
                             accessTree,
                             trace,
@@ -572,6 +580,10 @@ public open class DefaultArchiveGraph @JvmOverloads constructor(
                 "Invalid metadata type for artifact: '$artifact', expected the entire tree to be of type: '${resolver.metadataType::class.jvmName}'",
             )
 
+            if (isCached(artifact.metadata.descriptor, resolver)) {
+                return@asyncJob readArchiveTree(artifact.metadata.descriptor, resolver, trace)().merge()
+            }
+
             (resolver as ArchiveNodeResolver<D, *, *, *, ArtifactMetadata<D, *>>)
                 .cache(
                     artifact as Artifact<ArtifactMetadata<D, *>>,
@@ -588,10 +600,10 @@ public open class DefaultArchiveGraph @JvmOverloads constructor(
                                 artifact, resolver, trace.child(artifact.metadata.descriptor)
                             )
 
-                        override fun <D : ArtifactMetadata.Descriptor, T : ArtifactRequest<D>, R : RepositorySettings, M : ArtifactMetadata<D, ArtifactMetadata.ParentInfo<T, R>>> cache(
+                        override fun <D: ArtifactMetadata.Descriptor,  T : ArtifactRequest<D>, R : RepositorySettings> cache(
                             request: T,
                             repository: R,
-                            resolver: ArchiveNodeResolver<D, T, *, R, M>
+                            resolver: ArchiveNodeResolver<D, T, *, R, *>
                         ): AsyncJob<Tree<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>>> =
                             asyncJob cacheAsync@{
                                 checkRegistration(resolver)
@@ -603,7 +615,10 @@ public open class DefaultArchiveGraph @JvmOverloads constructor(
                                     ArchiveTrace(descriptor, null)
                                 )().merge()
 
-                                cache(resolveArtifact(request, repository, resolver)().merge(), resolver)().merge()
+                                cache(
+                                    resolveArtifact(request, repository, resolver)().merge() as Artifact<ArtifactMetadata<D, *>>,
+                                    resolver as ArchiveNodeResolver<D, *, *, *, ArtifactMetadata<D, *>>
+                                )().merge()
                             }
 
                         override fun withResource(name: String, resource: Resource) {

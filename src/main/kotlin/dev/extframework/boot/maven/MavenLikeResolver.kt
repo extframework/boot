@@ -8,8 +8,10 @@ import com.durganmcbroom.jobs.result
 import dev.extframework.boot.archive.ArchiveNode
 import dev.extframework.boot.archive.ArchiveNodeResolver
 import dev.extframework.boot.archive.ArchiveTrace
+import dev.extframework.boot.archive.RegisterAuditor
 import dev.extframework.boot.audit.Auditors
 import dev.extframework.boot.constraint.ConstraintArchiveAuditor
+import dev.extframework.boot.constraint.registerConstraintNegotiator
 import dev.extframework.boot.util.mapOfNonNullValues
 import dev.extframework.boot.util.requireKeyInDescriptor
 import java.io.File
@@ -20,14 +22,14 @@ public interface MavenLikeResolver<
         V : ArchiveNode<SimpleMavenDescriptor>,
         M : SimpleMavenArtifactMetadata
         > :
-    ArchiveNodeResolver<SimpleMavenDescriptor, SimpleMavenArtifactRequest, V, SimpleMavenRepositorySettings, M> {
+    ArchiveNodeResolver<SimpleMavenDescriptor, SimpleMavenArtifactRequest, V, SimpleMavenRepositorySettings, M>,
+    RegisterAuditor {
 
-    override val auditors: Auditors
-        get() = super.auditors.chain(
-            ConstraintArchiveAuditor(
-                listOf(MavenConstraintNegotiator())
-            )
+    override fun register(auditors: Auditors): Auditors {
+        return auditors.registerConstraintNegotiator(
+            MavenConstraintNegotiator()
         )
+    }
 
     override fun deserializeDescriptor(
         descriptor: Map<String, String>,

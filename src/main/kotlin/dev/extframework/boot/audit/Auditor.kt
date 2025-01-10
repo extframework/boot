@@ -37,7 +37,8 @@ public inline fun <reified T: Any> Auditor(
     }
 }
 
-public fun <T: Any> Auditor<T>.chain(other: Auditor<T>): Auditor<T> =
-    Auditor(type) {
-        other.audit(this@chain.audit(it)().merge())().merge()
+public fun <T: Any> List<Auditor<T>>.audit(ctx: T) : Job<T> = job() {
+    fold(ctx) {acc, it ->
+        it.audit(acc)().merge()
     }
+}

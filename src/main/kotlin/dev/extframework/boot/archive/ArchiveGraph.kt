@@ -6,6 +6,8 @@ import com.durganmcbroom.artifact.resolver.RepositorySettings
 import com.durganmcbroom.jobs.Job
 import com.durganmcbroom.jobs.async.AsyncJob
 import com.durganmcbroom.jobs.job
+import dev.extframework.boot.audit.Auditor
+import dev.extframework.boot.audit.Auditors
 import dev.extframework.boot.monad.Tagged
 import dev.extframework.boot.monad.Tree
 import kotlinx.coroutines.Dispatchers
@@ -40,6 +42,8 @@ import java.nio.file.Path
  */
 public interface ArchiveGraph {
     public val path: Path
+
+    public var auditors: Auditors
 
     /**
      * Registers a resolver with the ArchiveGraph.

@@ -9,7 +9,7 @@ import dev.extframework.common.util.LazyMap
 import dev.extframework.common.util.filterDuplicates
 
 public class ConstraintArchiveAuditor(
-    private val negotiators: List<ConstraintNegotiator<*>>,
+    public val negotiators: List<ConstraintNegotiator<*>>,
 ) : ArchiveTreeAuditor {
     private fun doConstraints(
         tree: Tree<IArchive<*>>,
