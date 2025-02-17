@@ -23,7 +23,7 @@ public open class MutableSourceProvider(
         packageMap[name.substring(0, name.lastIndexOf('.')
             .let { if (it == -1) 0 else it })]?.firstNotNullOfOrNull { it.findSource(name) }
 
-    public fun add(provider: SourceProvider) {
+    public open fun add(provider: SourceProvider) {
         delegateSources.add(provider)
     }
 }
@@ -47,7 +47,7 @@ public open class MutableClassProvider(
             .let { if (it == -1) 0 else it })]?.firstNotNullOfOrNull { it.findClass(name) }
     }
 
-    public fun add(provider: ClassProvider) {
+    public open fun add(provider: ClassProvider) {
         delegateClasses.add(provider)
     }
 }
@@ -61,7 +61,7 @@ public open class MutableResourceProvider(
         return delegateResources.asSequence().flatMap { it.findResources(name) }
     }
 
-    public fun add(provider: ResourceProvider) {
+    public open fun add(provider: ResourceProvider) {
         delegateResources.add(provider)
     }
 }
@@ -100,15 +100,15 @@ public open class MutableClassLoader(
         sd, parent
     )
 
-    public fun addSources(provider: SourceProvider) {
+    public open fun addSources(provider: SourceProvider) {
         sources.add(provider)
     }
 
-    public fun addClasses(provider: ClassProvider) {
+    public open fun addClasses(provider: ClassProvider) {
         classes.add(provider)
     }
 
-    public fun addResources(provider: ResourceProvider) {
+    public open fun addResources(provider: ResourceProvider) {
         resources.add(provider)
     }
 

@@ -21,14 +21,12 @@ import kotlinx.coroutines.coroutineScope
 public open class MavenDependencyResolver(
     parentClassLoader: ClassLoader,
     resolutionProvider: ArchiveResolutionProvider<*> = ZipResolutionProvider,
-    private val factory: RepositoryFactory<SimpleMavenRepositorySettings, SimpleMavenArtifactRepository> = SimpleMaven,
+    factory: RepositoryFactory<SimpleMavenRepositorySettings, SimpleMavenArtifactRepository> = SimpleMaven,
 ) : DependencyResolver<SimpleMavenDescriptor, SimpleMavenArtifactRequest, BasicDependencyNode<SimpleMavenDescriptor>, SimpleMavenRepositorySettings, SimpleMavenArtifactMetadata>(
     parentClassLoader, resolutionProvider
 ), MavenLikeResolver<BasicDependencyNode<SimpleMavenDescriptor>, SimpleMavenArtifactMetadata> {
-    override fun createContext(
-        settings: SimpleMavenRepositorySettings
-    ): ResolutionContext<SimpleMavenRepositorySettings, SimpleMavenArtifactRequest, SimpleMavenArtifactMetadata> =
-        MavenResolutionContext(factory, settings)
+    override val context: ResolutionContext<SimpleMavenRepositorySettings, SimpleMavenArtifactRequest, SimpleMavenArtifactMetadata> =
+        MavenResolutionContext(factory)
 
     override fun constructNode(
         descriptor: SimpleMavenDescriptor,
@@ -49,72 +47,81 @@ public open class MavenDependencyResolver(
 
     private open class MavenResolutionContext(
         factory: RepositoryFactory<SimpleMavenRepositorySettings, SimpleMavenArtifactRepository>,
-        settings: SimpleMavenRepositorySettings,
-    ) : WithLocalContext(factory.createNew(settings)) {
-        val localContext = WithLocalContext(factory.createNew(SimpleMavenRepositorySettings.local()))
-
-        override fun getAndResolve(
-            request: SimpleMavenArtifactRequest
-        ): Job<Artifact<SimpleMavenArtifactMetadata>> = job {
-            super.getAndResolve(request)().getOrNull() ?: localContext.getAndResolve(request)().merge()
-        }
-    }
-
-    private open class WithLocalContext(
-        repository: SimpleMavenArtifactRepository,
-    ) : ResolutionContext<
-            SimpleMavenRepositorySettings, SimpleMavenArtifactRequest, SimpleMavenArtifactMetadata>(
-        repository
+    ) : ResolutionContext<SimpleMavenRepositorySettings, SimpleMavenArtifactRequest, SimpleMavenArtifactMetadata>(
+        factory
     ) {
-        private val local = SimpleMavenRepositorySettings.local()
+//        val localContext = WithLocalContext(factory.createNew(SimpleMavenRepositorySettings.local()))
+
+//        override fun getAndResolve(
+//            request: SimpleMavenArtifactRequest
+//        ): Job<Artifact<SimpleMavenArtifactMetadata>> = job {
+//            super.getAndResolve(request)().getOrNull() ?: localContext.getAndResolve(request)().merge()
+//        }
 
         override fun getAndResolveAsync(
-            metadata: SimpleMavenArtifactMetadata,
-            cache: MutableMap<SimpleMavenArtifactRequest, Deferred<Artifact<SimpleMavenArtifactMetadata>>>,
+            request: SimpleMavenArtifactRequest,
+            candidates: List<SimpleMavenRepositorySettings>,
             trace: List<ArtifactMetadata.Descriptor>
-        ): AsyncJob<Artifact<SimpleMavenArtifactMetadata>> = asyncJob {
-            coroutineScope {
-                val newChildren = metadata.parents
-                    .map { child ->
-                        if (trace.contains(child.request.descriptor)) throw ArtifactResolutionException.CircularArtifacts(
-                            trace + metadata.descriptor
-                        )
-
-                        cache[child.request] ?: async {
-                            val exceptions = mutableListOf<Throwable>()
-
-                            val childMetadata = (child.candidates + local).firstNotNullOfOrNull { candidate ->
-                                val childMetadata = repository.factory
-                                    .createNew(candidate)
-                                    .get(child.request)()
-
-                                childMetadata.getOrElse {
-                                    exceptions.add(it)
-                                    null
-                                }
-                            } ?: if (exceptions.all { it is MetadataRequestException.MetadataNotFound }) {
-                                throw ArtifactException.ArtifactNotFound(
-                                    child.request.descriptor,
-                                    child.candidates,
-                                    trace
-                                )
-                            } else {
-                                throw IterableException(
-                                    "Failed to resolve '${child.request.descriptor}'", exceptions
-                                )
-                            }
-
-                            getAndResolveAsync(childMetadata, cache, trace + child.request.descriptor)().merge()
-                        }.also {
-                            cache[child.request] = it
-                        }
-                    }
-
-                Artifact(
-                    metadata,
-                    newChildren.awaitAll(),
-                )
-            }
+        ): AsyncJob<Artifact<SimpleMavenArtifactMetadata>> {
+            return super.getAndResolveAsync(request, candidates + SimpleMavenRepositorySettings.local(), trace)
         }
     }
+
+//    private open class WithLocalContext(
+//        repository: SimpleMavenArtifactRepository,
+//    ) : ResolutionContext<
+//            SimpleMavenRepositorySettings, SimpleMavenArtifactRequest, SimpleMavenArtifactMetadata>(
+//        repository
+//    ) {
+//        private val local = SimpleMavenRepositorySettings.local()
+//
+////        override fun getAndResolveAsync(
+////            metadata: SimpleMavenArtifactMetadata,
+////            cache: MutableMap<SimpleMavenArtifactRequest, Deferred<Artifact<SimpleMavenArtifactMetadata>>>,
+////            trace: List<ArtifactMetadata.Descriptor>
+////        ): AsyncJob<Artifact<SimpleMavenArtifactMetadata>> = asyncJob {
+////            coroutineScope {
+////                val newChildren = metadata.parents
+////                    .map { child ->
+////                        if (trace.contains(child.request.descriptor)) throw ArtifactResolutionException.CircularArtifacts(
+////                            trace + metadata.descriptor
+////                        )
+////
+////                        cache[child.request] ?: async {
+////                            val exceptions = mutableListOf<Throwable>()
+////
+////                            val childMetadata = (child.candidates + local).firstNotNullOfOrNull { candidate ->
+////                                val childMetadata = repository.factory
+////                                    .createNew(candidate)
+////                                    .get(child.request)()
+////
+////                                childMetadata.getOrElse {
+////                                    exceptions.add(it)
+////                                    null
+////                                }
+////                            } ?: if (exceptions.all { it is MetadataRequestException.MetadataNotFound }) {
+////                                throw ArtifactException.ArtifactNotFound(
+////                                    child.request.descriptor,
+////                                    child.candidates,
+////                                    trace
+////                                )
+////                            } else {
+////                                throw IterableException(
+////                                    "Failed to resolve '${child.request.descriptor}'", exceptions
+////                                )
+////                            }
+////
+////                            getAndResolveAsync(childMetadata, cache, trace + child.request.descriptor)().merge()
+////                        }.also {
+////                            cache[child.request] = it
+////                        }
+////                    }
+////
+////                Artifact(
+////                    metadata,
+////                    newChildren.awaitAll(),
+////                )
+////            }
+////        }
+//    }
 }

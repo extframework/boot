@@ -1,8 +1,6 @@
 package dev.extframework.boot.constraint
 
-import dev.extframework.boot.archive.ArchiveAccessAuditContext
 import dev.extframework.boot.archive.ArchiveTreeAuditContext
-import dev.extframework.boot.archive.ArchiveTreeAuditor
 import dev.extframework.boot.audit.Auditors
 
 public fun Auditors.registerConstraintNegotiator(
@@ -14,7 +12,7 @@ public fun Auditors.registerConstraintNegotiator(
 public fun Auditors.registerConstraintNegotiators(
     negotiator: List<ConstraintNegotiator<*>>
 ): Auditors {
-    val (auditors, constraintAuditors) = this[ArchiveTreeAuditContext::class]
+    val (constraintAuditors, auditors) = this[ArchiveTreeAuditContext::class]
         .partition { it is ConstraintNegotiator<*> }
 
     val negotiators = constraintAuditors

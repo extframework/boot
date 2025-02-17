@@ -21,10 +21,11 @@ public open class ArchiveException(
     public data class ArchiveNotCached(val artifact: String, override val trace: ArchiveTrace) : ArchiveException(trace)
 
     // If the archive artifact cannot be located
-    public data class ArchiveNotFound(
+    public data class ArchiveNotFound @JvmOverloads constructor(
         override val trace: ArchiveTrace,
         val archive: ArtifactMetadata.Descriptor,
-        val lookedIn: List<RepositorySettings>
+        val lookedIn: List<RepositorySettings>,
+        override val cause: Throwable? = null,
     ) : ArchiveException(
         trace,
         """Failed to find the artifact: '$archive'. Looked in places: 

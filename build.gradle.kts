@@ -12,10 +12,10 @@ plugins {
 
     application
 
-    id("dev.extframework.common") version "1.0.43"
+    id("dev.extframework.common") version "1.0.49"
 }
 
-version = "3.5-SNAPSHOT"
+version = "3.6-SNAPSHOT"
 
 tasks.compileKotlin {
     kotlinOptions {
@@ -40,10 +40,6 @@ application {
 
 tasks.wrapper {
     gradleVersion = "8.5"
-}
-
-configurations.all {
-    resolutionStrategy.cacheChangingModulesFor(0, "seconds")
 }
 
 dependencies {

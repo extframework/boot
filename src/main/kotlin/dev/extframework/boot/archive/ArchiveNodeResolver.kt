@@ -33,12 +33,9 @@ public interface ArchiveNodeResolver<
         get() = 0
 
     /**
-     * Creates a resolution context for the given repository settings.
-     *
-     * @param settings the repository settings
-     * @return a resolution context with the specified settings
+     * A resolution context for the given repository settings.
      */
-    public fun createContext(settings: S): ResolutionContext<S, R, M>
+    public val context: ResolutionContext<S, R, M>
 
     /**
      * Serializes the given artifact descriptor into a map of key-value pairs.

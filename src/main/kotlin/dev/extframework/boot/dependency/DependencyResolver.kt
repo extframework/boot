@@ -77,6 +77,7 @@ public abstract class DependencyResolver<
         artifact: Artifact<M>,
         helper: CacheHelper<K>
     ): AsyncJob<Tree<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>>> = asyncJob {
+        println("Getting resource: '${artifact.metadata.descriptor}'")
         helper.withResource("jar.jar", artifact.metadata.resource())
 
         helper.newData(
