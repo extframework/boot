@@ -15,7 +15,7 @@ plugins {
     id("dev.extframework.common") version "1.0.49"
 }
 
-version = "3.6-SNAPSHOT"
+version = "3.6.1-SNAPSHOT"
 
 tasks.compileKotlin {
     kotlinOptions {

@@ -16,7 +16,7 @@ public open class ArchiveResourceProvider private constructor(
 ) : ResourceProvider {
     public constructor(reference: ArchiveReference) : this({
         reference.reader[it.removePrefix("/")]?.let {
-            URL("jar:${reference.location}!${File.separatorChar}${it.name.removePrefix("/")}")
+            URL("jar:${reference.location}!/${it.name.removePrefix("/")}")
         }
     })
 
