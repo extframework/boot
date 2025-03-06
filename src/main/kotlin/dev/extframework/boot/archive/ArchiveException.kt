@@ -35,6 +35,11 @@ public open class ArchiveException(
 
     public data class CircularArtifactException(override val trace: ArchiveTrace) : ArchiveException(trace)
 
+    public data class UnloadingConstrained(
+        override val trace: ArchiveTrace,
+        val constrainedBy: Set<ArtifactMetadata.Descriptor>
+    ) : ArchiveException(trace, "Cannot unload the node: '${trace.descriptor}' because it is constrained by the following: '${constrainedBy.joinToString(", ")}'")
+
     override fun toString(): String {
         return "ArchiveException(message=${message ?: cause?.message} in trace: '$trace')"
     }

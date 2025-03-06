@@ -178,6 +178,45 @@ public open class DefaultArchiveGraph @JvmOverloads constructor(
         }
     }
 
+    override fun unload(descriptor: ArtifactMetadata.Descriptor): AsyncJob<Set<ArchiveNode<*>>> = asyncJob {
+        val backReferences = HashMap<ArtifactMetadata.Descriptor, MutableList<ArtifactMetadata.Descriptor>>()
+
+        for (node in nodes()) {
+            for (target in node.access.targets.filter { it.relationship is ArchiveRelationship.Direct }) {
+                backReferences.getOrPut(target.descriptor) {
+                    ArrayList()
+                }.add(node.descriptor)
+            }
+        }
+
+        if (backReferences[descriptor]?.isNotEmpty() == true) {
+            throw ArchiveException.UnloadingConstrained(ArchiveTrace(descriptor, null), backReferences[descriptor]!!.toSet())
+        }
+
+        val result = HashSet<ArchiveNode<*>>()
+
+        val edge = getNode(descriptor)?.let { mutableListOf(it) } ?: return@asyncJob setOf()
+        result.addAll(edge)
+
+        while (edge.isNotEmpty()) {
+            val current = edge.removeAt(0)
+
+            for (target in current.access.targets.filter { it.relationship is ArchiveRelationship.Direct }) {
+                var references = backReferences[target.descriptor]
+                if (references?.contains(current.descriptor) == true || references?.size == 1) {
+                    result.add(target.relationship.node)
+                    edge.add(target.relationship.node)
+                }
+            }
+        }
+
+        for (node in result) {
+            mutable.remove(node.descriptor)
+        }
+
+        result
+    }
+
     /**
      * Recursively reads the given archive tree from the cache. This can throw
      * if not all required resolvers are registered before this is

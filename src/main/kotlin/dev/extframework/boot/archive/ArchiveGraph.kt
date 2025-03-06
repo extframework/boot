@@ -133,6 +133,14 @@ public interface ArchiveGraph {
     }
 
     /**
+     * Unloads the given node and returns all the nodes that were unloaded by this.
+     * Note that this method does not guarantee speed and that these values will not
+     * be discarded until the return value of this method is garbage collected. This method
+     * will also not provide unloading of any processes/daemons these nodes may have spawned.
+     */
+    public fun unload(descriptor: ArtifactMetadata.Descriptor) : AsyncJob<Set<ArchiveNode<*>>>
+
+    /**
      * Retrieves an already loaded ArchiveNode with no guarantee of type. The
      * returned node will always match the given descriptor or will be null.
      *
