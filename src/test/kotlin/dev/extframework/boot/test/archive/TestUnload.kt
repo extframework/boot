@@ -50,6 +50,57 @@ class TestUnload {
         System.gc()
         println("Ending")
     }
+//dev.extframework:minecraft-bootstrapper:2.0.12-SNAPSHOT
+
+    @Test
+    fun `Test unloading ignores reused archives`() {
+        val maven = MavenResolverProvider()
+
+        val archiveGraph = ArchiveGraph.from(Path("test-run").toAbsolutePath())
+
+        launch(BootLoggerFactory()) {
+            runBlocking(Executors.newCachedThreadPool().asCoroutineDispatcher()) {
+                val toUnload = SimpleMavenArtifactRequest(
+                    "com.durganmcbroom:artifact-resolver-jvm:1.3-SNAPSHOT",
+                    includeScopes = setOf("compile", "runtime", "import")
+                )
+
+                archiveGraph.cacheAsync(
+                    toUnload,
+                    SimpleMavenRepositorySettings.default("https://maven.extframework.dev/snapshots"),
+                    maven.resolver
+                )().merge()
+                archiveGraph.getAsync(toUnload.descriptor, maven.resolver)().merge()
+
+                val toConstrain = SimpleMavenArtifactRequest(
+                    "dev.extframework:archives:1.5-SNAPSHOT",
+                    includeScopes = setOf("compile", "runtime", "import")
+                )
+
+                archiveGraph.cacheAsync(
+                    toConstrain,
+                    SimpleMavenRepositorySettings.default("https://maven.extframework.dev/snapshots"),
+                    maven.resolver
+                )().merge()
+                archiveGraph.getAsync(toConstrain.descriptor, maven.resolver)().merge()
+
+                val size = archiveGraph.nodes().size
+
+                val result = archiveGraph.unload(
+                    toUnload.descriptor
+                )().merge()
+
+                // Shouldn't remove all
+                check(result.size != size)
+                println(result.joinToString("\n") {
+                    it.descriptor.name
+                })
+            }
+        }
+
+        System.gc()
+        println("Ending")
+    }
 
     @Test
     fun `Test throws constrained exception`() {

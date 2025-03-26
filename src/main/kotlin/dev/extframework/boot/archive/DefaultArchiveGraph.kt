@@ -178,43 +178,86 @@ public open class DefaultArchiveGraph @JvmOverloads constructor(
         }
     }
 
-    override fun unload(descriptor: ArtifactMetadata.Descriptor): AsyncJob<Set<ArchiveNode<*>>> = asyncJob {
-        val backReferences = HashMap<ArtifactMetadata.Descriptor, MutableList<ArtifactMetadata.Descriptor>>()
+    override fun unload(descriptor: ArtifactMetadata.Descriptor): AsyncJob<List<ArchiveNode<*>>> = asyncJob {
+        val node = getNode(descriptor) ?: return@asyncJob listOf()
 
-        for (node in nodes()) {
-            for (target in node.access.targets.filter { it.relationship is ArchiveRelationship.Direct }) {
-                backReferences.getOrPut(target.descriptor) {
-                    ArrayList()
-                }.add(node.descriptor)
-            }
+        val canAccess = node.access.targets.mapTo(HashSet()) {
+            it.descriptor
+        } + descriptor
+
+        val uniquelyAccessed = mutable
+            .filterNot { canAccess.contains(it.key) }
+            .flatMapTo(HashSet()) { (_, it) -> it.value.access.targets.map { it.descriptor } }
+
+        if (uniquelyAccessed.contains(descriptor)) {
+            throw ArchiveException.UnloadingConstrained(
+                ArchiveTrace(descriptor, null),
+                // TODO
+                setOf()
+            )
         }
 
-        if (backReferences[descriptor]?.isNotEmpty() == true) {
-            throw ArchiveException.UnloadingConstrained(ArchiveTrace(descriptor, null), backReferences[descriptor]!!.toSet())
+       val result = canAccess.filterNot {
+            uniquelyAccessed.contains(it)
+        }.map {
+            getNode(it)!!
         }
 
-        val result = HashSet<ArchiveNode<*>>()
+//        val backReferences = HashMap<ArtifactMetadata.Descriptor, MutableList<ArtifactMetadata.Descriptor>>()
+//
+//        for (node in nodes()) {
+//            for (target in node.access.targets.filter { it.relationship is ArchiveRelationship.Direct }) {
+//                backReferences.getOrPut(target.descriptor) {
+//                    ArrayList()
+//                }.add(node.descriptor)
+//            }
+//        }
+//
 
-        val edge = getNode(descriptor)?.let { mutableListOf(it) } ?: return@asyncJob setOf()
-        result.addAll(edge)
-
-        while (edge.isNotEmpty()) {
-            val current = edge.removeAt(0)
-
-            for (target in current.access.targets.filter { it.relationship is ArchiveRelationship.Direct }) {
-                var references = backReferences[target.descriptor]
-                if (references?.contains(current.descriptor) == true || references?.size == 1) {
-                    result.add(target.relationship.node)
-                    edge.add(target.relationship.node)
-                }
-            }
-        }
-
+//
+//        fun fullPath(
+//            descriptor: ArtifactMetadata.Descriptor,
+//        ): List<List<ArtifactMetadata.Descriptor>> {
+//            return (backReferences[descriptor] ?: listOf()).flatMap { b ->
+//                fullPath(b).map {
+//                    listOf(descriptor) + it
+//                }
+//            }.takeIf { it.isNotEmpty() } ?: listOf(listOf(descriptor))
+//        }
+//
+//        val fullBackReferences = backReferences.mapValues { (key) -> fullPath(key) }
+//
+//        val result = ArrayList<ArchiveNode<*>>()
+//
+//        val edge = getNode(descriptor)?.let { mutableListOf(it) } ?: return@asyncJob listOf()
+//        result.addAll(edge)
+//
+//        while (edge.isNotEmpty()) {
+//            val current = edge.removeAt(0)
+//
+//            if ((fullBackReferences[current.descriptor]?.size ?: 0) <= 1) {
+//                result.add(current)
+//            }
+//
+//            for (target in current.access.targets.filter { it.relationship is ArchiveRelationship.Direct }) {
+//                edge.add(target.relationship.node)
+//            }
+////            for (target in current.access.targets.filter { it.relationship is ArchiveRelationship.Direct }) {
+////                val references = backReferences[target.descriptor]
+////                if (references?.contains(current.descriptor) == true || references?.size == 1) {
+////                    result.add(target.relationship.node)
+////                    edge.add(target.relationship.node)
+////                }
+////            }
+//        }
+//
         for (node in result) {
             mutable.remove(node.descriptor)
         }
-
         result
+            .asReversed()
+            .filterDuplicates()
+            .asReversed()
     }
 
     /**
@@ -748,7 +791,7 @@ public open class DefaultArchiveGraph @JvmOverloads constructor(
         return Tree(
             value,
             node.access.targets
-                .filterNot { target -> mutable.contains(target.descriptor) }
+                .filter { target -> mutable.contains(target.descriptor) }
                 .map { nodeToTree(it.relationship.node, trace.child(it.descriptor)) }
         )
     }

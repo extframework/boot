@@ -138,7 +138,7 @@ public interface ArchiveGraph {
      * be discarded until the return value of this method is garbage collected. This method
      * will also not provide unloading of any processes/daemons these nodes may have spawned.
      */
-    public fun unload(descriptor: ArtifactMetadata.Descriptor) : AsyncJob<Set<ArchiveNode<*>>>
+    public fun unload(descriptor: ArtifactMetadata.Descriptor) : AsyncJob<List<ArchiveNode<*>>>
 
     /**
      * Retrieves an already loaded ArchiveNode with no guarantee of type. The
