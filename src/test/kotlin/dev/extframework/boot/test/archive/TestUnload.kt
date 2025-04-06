@@ -17,9 +17,9 @@ import kotlin.test.Test
 class TestUnload {
     @Test
     fun `Test unloading actually removes`() {
-        val maven = MavenResolverProvider()
 
         val archiveGraph = ArchiveGraph.from(Path("test-run").toAbsolutePath())
+        val maven = MavenResolverProvider()
 
         val request = SimpleMavenArtifactRequest(
             "dev.extframework.minecraft:minecraft-provider-def:2.0.12-SNAPSHOT",
@@ -54,9 +54,9 @@ class TestUnload {
 
     @Test
     fun `Test unloading ignores reused archives`() {
-        val maven = MavenResolverProvider()
 
         val archiveGraph = ArchiveGraph.from(Path("test-run").toAbsolutePath())
+        val maven = MavenResolverProvider()
 
         launch(BootLoggerFactory()) {
             runBlocking(Executors.newCachedThreadPool().asCoroutineDispatcher()) {
@@ -104,9 +104,9 @@ class TestUnload {
 
     @Test
     fun `Test throws constrained exception`() {
-        val maven = MavenResolverProvider()
 
         val archiveGraph = ArchiveGraph.from(Path("test-run").toAbsolutePath())
+        val maven = MavenResolverProvider()
 
         val request = SimpleMavenArtifactRequest(
             "dev.extframework.minecraft:minecraft-provider-def:2.0.12-SNAPSHOT",

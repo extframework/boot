@@ -50,14 +50,6 @@ public open class MavenDependencyResolver(
     ) : ResolutionContext<SimpleMavenRepositorySettings, SimpleMavenArtifactRequest, SimpleMavenArtifactMetadata>(
         factory
     ) {
-//        val localContext = WithLocalContext(factory.createNew(SimpleMavenRepositorySettings.local()))
-
-//        override fun getAndResolve(
-//            request: SimpleMavenArtifactRequest
-//        ): Job<Artifact<SimpleMavenArtifactMetadata>> = job {
-//            super.getAndResolve(request)().getOrNull() ?: localContext.getAndResolve(request)().merge()
-//        }
-
         override fun getAndResolveAsync(
             request: SimpleMavenArtifactRequest,
             candidates: List<SimpleMavenRepositorySettings>,
@@ -67,61 +59,4 @@ public open class MavenDependencyResolver(
         }
     }
 
-//    private open class WithLocalContext(
-//        repository: SimpleMavenArtifactRepository,
-//    ) : ResolutionContext<
-//            SimpleMavenRepositorySettings, SimpleMavenArtifactRequest, SimpleMavenArtifactMetadata>(
-//        repository
-//    ) {
-//        private val local = SimpleMavenRepositorySettings.local()
-//
-////        override fun getAndResolveAsync(
-////            metadata: SimpleMavenArtifactMetadata,
-////            cache: MutableMap<SimpleMavenArtifactRequest, Deferred<Artifact<SimpleMavenArtifactMetadata>>>,
-////            trace: List<ArtifactMetadata.Descriptor>
-////        ): AsyncJob<Artifact<SimpleMavenArtifactMetadata>> = asyncJob {
-////            coroutineScope {
-////                val newChildren = metadata.parents
-////                    .map { child ->
-////                        if (trace.contains(child.request.descriptor)) throw ArtifactResolutionException.CircularArtifacts(
-////                            trace + metadata.descriptor
-////                        )
-////
-////                        cache[child.request] ?: async {
-////                            val exceptions = mutableListOf<Throwable>()
-////
-////                            val childMetadata = (child.candidates + local).firstNotNullOfOrNull { candidate ->
-////                                val childMetadata = repository.factory
-////                                    .createNew(candidate)
-////                                    .get(child.request)()
-////
-////                                childMetadata.getOrElse {
-////                                    exceptions.add(it)
-////                                    null
-////                                }
-////                            } ?: if (exceptions.all { it is MetadataRequestException.MetadataNotFound }) {
-////                                throw ArtifactException.ArtifactNotFound(
-////                                    child.request.descriptor,
-////                                    child.candidates,
-////                                    trace
-////                                )
-////                            } else {
-////                                throw IterableException(
-////                                    "Failed to resolve '${child.request.descriptor}'", exceptions
-////                                )
-////                            }
-////
-////                            getAndResolveAsync(childMetadata, cache, trace + child.request.descriptor)().merge()
-////                        }.also {
-////                            cache[child.request] = it
-////                        }
-////                    }
-////
-////                Artifact(
-////                    metadata,
-////                    newChildren.awaitAll(),
-////                )
-////            }
-////        }
-//    }
 }

@@ -57,8 +57,8 @@ dependencies {
     testImplementation(project(":blackbox-test"))
 
 
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-debug:1.5.2")
-    testImplementation("io.projectreactor.tools:blockhound:1.0.6.RELEASE")
+//    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-debug:1.5.2")
+//    testImplementation("io.projectreactor.tools:blockhound:1.0.6.RELEASE")
 }
 
 val java11Jar by tasks.creating(Jar::class.java) {

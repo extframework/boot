@@ -568,7 +568,7 @@ public open class DefaultArchiveGraph @JvmOverloads constructor(
                         ).let(ObjectMapper().registerModule(KotlinModule.Builder().build())::writeValueAsBytes)
 
                         val parents = tree.parents.mapAsync {
-                            cacheInternal(it, trace)().merge()
+                            cacheInternal(it, trace.child(it.item.value.descriptor))().merge()
                         }.onEach { it.start() }
 
                         resourcePaths.mapAsync { (name, wrapper, path) ->
@@ -600,13 +600,11 @@ public open class DefaultArchiveGraph @JvmOverloads constructor(
                 }
             }
 
-
-
             job.await()
         }
     }
 
-    // Represents all the currently running cache jobs
+    // Represents all the currently running resolution jobs
     private val beingResolved: MutableMap<
             Triple<ArtifactRequest<*>, ArchiveNodeResolver<*, *, *, *, *>, RepositorySettings>,
             Deferred<Artifact<*>>
@@ -685,14 +683,14 @@ public open class DefaultArchiveGraph @JvmOverloads constructor(
 
                 if (context[ArchiveTrace]?.isCircular() == true) throw ArchiveException.CircularArtifactException(trace)
 
+                if (isCached(artifact.metadata.descriptor, resolver)) {
+                    return@coroutineScope readArchiveTree(artifact.metadata.descriptor, resolver, trace)().merge()
+                }
+
                 if (!resolver.metadataType.isInstance(artifact.metadata)) throw ArchiveException(
                     trace,
                     "Invalid metadata type for artifact: '$artifact', expected the entire tree to be of type: '${resolver.metadataType::class.jvmName}'",
                 )
-
-                if (isCached(artifact.metadata.descriptor, resolver)) {
-                    return@coroutineScope readArchiveTree(artifact.metadata.descriptor, resolver, trace)().merge()
-                }
 
                 val job = constructionMutex.withSuspendingLock {
                     beingConstructed[artifact.metadata.descriptor to resolver] ?: run {

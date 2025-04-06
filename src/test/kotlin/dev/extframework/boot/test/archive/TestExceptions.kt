@@ -15,8 +15,8 @@ import kotlin.test.Test
 
 class TestExceptions {
     val basePath = Files.createTempDirectory("m2cache")
-    val maven = MavenResolverProvider()
     val archiveGraph = ArchiveGraph.from(basePath)
+    val maven = MavenResolverProvider()
 
     inline fun <reified T : Throwable> assertThatThrows(
         noinline exp: () -> Unit,

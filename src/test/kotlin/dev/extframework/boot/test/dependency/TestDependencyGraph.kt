@@ -18,23 +18,15 @@ import dev.extframework.boot.maven.MavenResolverProvider
 import dev.extframework.boot.util.printTree
 import dev.extframework.boot.util.toGraphable
 import dev.extframework.common.util.copyTo
-import io.ktor.client.call.body
-import io.ktor.client.request.HttpRequestBuilder
-import io.ktor.client.request.get
-import io.ktor.client.request.url
-import io.ktor.utils.io.ByteReadChannel
-import io.ktor.utils.io.readRemaining
+import io.ktor.client.call.*
+import io.ktor.client.request.*
+import io.ktor.utils.io.*
 import kotlinx.coroutines.asCoroutineDispatcher
-import kotlinx.coroutines.debug.CoroutinesBlockHoundIntegration
-import kotlinx.coroutines.flow.emitAll
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
 import kotlinx.io.readByteArray
-import reactor.blockhound.BlockHound
 import java.io.File
 import java.net.URL
 import java.nio.file.Files
-import java.nio.file.Path
 import java.util.concurrent.Executors
 import kotlin.io.path.Path
 import kotlin.test.Test
@@ -43,8 +35,8 @@ class TestDependencyGraph {
     @Test
     fun `Test maven basic dependency loading`() {
         val basePath = Path("test-run")
-        val maven = MavenResolverProvider()
         val archiveGraph = DefaultArchiveGraph(basePath, mutableMapOf())
+        val maven = MavenResolverProvider()
 
         val request = SimpleMavenArtifactRequest(
             "org.ow2.asm:asm-commons:9.7",
@@ -67,8 +59,9 @@ class TestDependencyGraph {
     fun `Test invalid artifact throws correct exception`() {
         val basePath = Files.createTempDirectory("m2cache")
 
-        val maven = MavenResolverProvider()
         val archiveGraph = DefaultArchiveGraph(basePath)
+
+        val maven = MavenResolverProvider()
 
 
         val request = SimpleMavenArtifactRequest(
@@ -93,8 +86,9 @@ class TestDependencyGraph {
     fun `Test getting without caching throws correct exception`() {
         val basePath = Files.createTempDirectory("m2cache")
 
-        val maven = MavenResolverProvider()
         val archiveGraph = DefaultArchiveGraph(basePath)
+
+        val maven = MavenResolverProvider()
 
 
         val request = SimpleMavenArtifactRequest(
@@ -112,12 +106,10 @@ class TestDependencyGraph {
 
     @Test
     fun `Test bootstrapper dependency load`() {
-        BlockHound.install(CoroutinesBlockHoundIntegration())
-
-        val maven = MavenResolverProvider()
-
         val archiveGraph = ArchiveGraph.from(Path("test-run").toAbsolutePath())
         println(archiveGraph.path)
+
+        val maven = MavenResolverProvider()
 
         val request = SimpleMavenArtifactRequest(
             "dev.extframework.minecraft:minecraft-provider-def:2.0.12-SNAPSHOT",
@@ -129,6 +121,33 @@ class TestDependencyGraph {
                 archiveGraph.cacheAsync(
                     request,
                     SimpleMavenRepositorySettings.default("https://maven.extframework.dev/snapshots"),
+                    maven.resolver
+                )().merge()
+                archiveGraph.getAsync(request.descriptor, maven.resolver)().merge()
+            }
+
+        }
+
+        println(node)
+    }
+
+    @Test
+    fun `Test not cached but parents are`() {
+        val archiveGraph = ArchiveGraph.from(Path("test-run").toAbsolutePath())
+        println(archiveGraph.path)
+
+        val maven = MavenResolverProvider()
+
+        val request = SimpleMavenArtifactRequest(
+            "dev.extframework.minecraft:minecraft-provider-def:2.0.12-SNAPSHOT",
+            includeScopes = setOf("compile", "runtime", "import")
+        )
+
+        val node = launch(BootLoggerFactory()) {
+            runBlocking(Executors.newCachedThreadPool().asCoroutineDispatcher()) {
+                archiveGraph.cacheAsync(
+                    request,
+                    SimpleMavenRepositorySettings.local(),
                     maven.resolver
                 )().merge()
                 archiveGraph.getAsync(request.descriptor, maven.resolver)().merge()
