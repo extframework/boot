@@ -29,6 +29,7 @@ import dev.extframework.common.util.filterDuplicates
 import dev.extframework.common.util.make
 import dev.extframework.common.util.resolve
 import dev.extframework.`object`.MutableObjectContainer
+import dev.extframework.`object`.ObjectContainer
 import dev.extframework.`object`.ObjectContainerImpl
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
@@ -44,9 +45,14 @@ import kotlin.reflect.jvm.jvmName
 
 public open class DefaultArchiveGraph @JvmOverloads constructor(
     path: Path,
-    protected val mutable: MutableMap<ArtifactMetadata.Descriptor, Tagged<ArchiveNode<*>, ArchiveNodeResolver<*, *, *, *, *>>> = HashMap()
+    protected open val mutable: MutableMap<ArtifactMetadata.Descriptor, Tagged<ArchiveNode<*>, ArchiveNodeResolver<*, *, *, *, *>>> = HashMap()
 ) : ArchiveGraph {
-    protected val resolvers: MutableObjectContainer<ArchiveNodeResolver<*, *, *, *, *>> = ObjectContainerImpl()
+    protected open val resolvers: MutableObjectContainer<ArchiveNodeResolver<*, *, *, *, *>> = ObjectContainerImpl()
+
+    public val theResolvers: ObjectContainer<ArchiveNodeResolver<*, *, *, *, *>>
+        get() = resolvers
+    public val theGraph: Map<ArtifactMetadata.Descriptor, Tagged<ArchiveNode<*>, ArchiveNodeResolver<*, *, *, *, *>>>
+        get() = mutable
 
     override val path: Path = path resolve "v$API_VERSION"
 

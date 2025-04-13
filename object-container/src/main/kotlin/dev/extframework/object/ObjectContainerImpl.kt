@@ -1,7 +1,8 @@
 package dev.extframework.`object`
 
-public open class ObjectContainerImpl<T> : MutableObjectContainer<T> {
+public open class ObjectContainerImpl<T>(
     private val delegate: MutableMap<String, T> = HashMap()
+) : MutableObjectContainer<T> {
 
     override fun get(name: String): T? = delegate[name]
 

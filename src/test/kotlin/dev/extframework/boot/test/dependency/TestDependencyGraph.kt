@@ -125,7 +125,6 @@ class TestDependencyGraph {
                 )().merge()
                 archiveGraph.getAsync(request.descriptor, maven.resolver)().merge()
             }
-
         }
 
         println(node)
