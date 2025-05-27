@@ -8,7 +8,7 @@ import dev.extframework.gradle.common.extFramework
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
-    kotlin("jvm") version "1.9.21"
+    kotlin("jvm") version "2.1.20"
 
     application
 
@@ -17,11 +17,11 @@ plugins {
 
 version = "3.6.2-SNAPSHOT"
 
-tasks.compileKotlin {
-    kotlinOptions {
-        freeCompilerArgs = listOf("-Xcontext-receivers")
-    }
-}
+//tasks.compileKotlin {
+//    kotlinOptions {
+//        freeCompilerArgs = listOf("-Xcontext-receivers")
+//    }
+//}
 
 sourceSets {
     create("java11")

@@ -47,7 +47,7 @@ public open class DefaultArchiveGraph @JvmOverloads constructor(
     path: Path,
     protected open val mutable: MutableMap<ArtifactMetadata.Descriptor, Tagged<ArchiveNode<*>, ArchiveNodeResolver<*, *, *, *, *>>> = HashMap()
 ) : ArchiveGraph {
-    protected open val resolvers: MutableObjectContainer<ArchiveNodeResolver<*, *, *, *, *>> = ObjectContainerImpl()
+    protected open val resolvers: MutableObjectContainer<ArchiveNodeResolver<*, *, *, *, *>> = ObjectContainerImpl(ConcurrentHashMap())
 
     public val theResolvers: ObjectContainer<ArchiveNodeResolver<*, *, *, *, *>>
         get() = resolvers
@@ -203,7 +203,7 @@ public open class DefaultArchiveGraph @JvmOverloads constructor(
             )
         }
 
-       val result = canAccess.filterNot {
+        val result = canAccess.filterNot {
             uniquelyAccessed.contains(it)
         }.map {
             getNode(it)!!
