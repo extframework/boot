@@ -1,11 +1,9 @@
 package dev.extframework.boot.maven
 
-import com.durganmcbroom.artifact.resolver.*
+import com.durganmcbroom.artifact.resolver.ArtifactRepository
+import com.durganmcbroom.artifact.resolver.RepositoryFactory
 import com.durganmcbroom.artifact.resolver.simple.maven.*
-import com.durganmcbroom.jobs.Job
-import com.durganmcbroom.jobs.async.AsyncJob
-import com.durganmcbroom.jobs.async.asyncJob
-import com.durganmcbroom.jobs.job
+import com.durganmcbroom.artifact.resolver.simple.maven.layout.SimpleMavenRepositoryLayout
 import com.durganmcbroom.resources.Resource
 import dev.extframework.archives.ArchiveHandle
 import dev.extframework.boot.archive.ArchiveAccessTree
@@ -13,10 +11,6 @@ import dev.extframework.boot.archive.ArchiveResolutionProvider
 import dev.extframework.boot.archive.ZipResolutionProvider
 import dev.extframework.boot.dependency.BasicDependencyNode
 import dev.extframework.boot.dependency.DependencyResolver
-import kotlinx.coroutines.Deferred
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 
 public open class MavenDependencyResolver(
     parentClassLoader: ClassLoader,
@@ -25,9 +19,6 @@ public open class MavenDependencyResolver(
 ) : DependencyResolver<SimpleMavenDescriptor, SimpleMavenArtifactRequest, BasicDependencyNode<SimpleMavenDescriptor>, SimpleMavenRepositorySettings, SimpleMavenArtifactMetadata>(
     parentClassLoader, resolutionProvider
 ), MavenLikeResolver<BasicDependencyNode<SimpleMavenDescriptor>, SimpleMavenArtifactMetadata> {
-    override val context: ResolutionContext<SimpleMavenRepositorySettings, SimpleMavenArtifactRequest, SimpleMavenArtifactMetadata> =
-        MavenResolutionContext(factory)
-
     override fun constructNode(
         descriptor: SimpleMavenDescriptor,
         handle: ArchiveHandle?,
@@ -45,18 +36,32 @@ public open class MavenDependencyResolver(
     override val metadataType: Class<SimpleMavenArtifactMetadata> = SimpleMavenArtifactMetadata::class.java
     override val apiVersion: Int = 1
 
-    private open class MavenResolutionContext(
-        factory: RepositoryFactory<SimpleMavenRepositorySettings, SimpleMavenArtifactRepository>,
-    ) : ResolutionContext<SimpleMavenRepositorySettings, SimpleMavenArtifactRequest, SimpleMavenArtifactMetadata>(
-        factory
-    ) {
-        override fun getAndResolveAsync(
-            request: SimpleMavenArtifactRequest,
-            candidates: List<SimpleMavenRepositorySettings>,
-            trace: List<ArtifactMetadata.Descriptor>
-        ): AsyncJob<Artifact<SimpleMavenArtifactMetadata>> {
-            return super.getAndResolveAsync(request, candidates + SimpleMavenRepositorySettings.local(), trace)
-        }
-    }
+    override val factory: RepositoryFactory<SimpleMavenRepositorySettings, ArtifactRepository<SimpleMavenRepositorySettings, SimpleMavenArtifactRequest, SimpleMavenArtifactMetadata>> =
+        object : RepositoryFactory<SimpleMavenRepositorySettings, SimpleMavenArtifactRepository> {
+            override fun createNew(settings: SimpleMavenRepositorySettings): SimpleMavenArtifactRepository {
+                val delegate = factory.createNew(settings)
 
+                return object : SimpleMavenArtifactRepository(settings, this) {
+                    override val layout: SimpleMavenRepositoryLayout by delegate::layout
+                    override val name: String by delegate::name
+
+                    override suspend fun get(request: SimpleMavenArtifactRequest): SimpleMavenArtifactMetadata {
+                        val metadata = delegate.get(request)
+
+                        return SimpleMavenArtifactMetadata(
+                            metadata.descriptor,
+                            metadata.parents.map {
+                                SimpleMavenParentInfo(
+                                    it.request,
+                                    it.candidates + SimpleMavenRepositorySettings.local(),
+                                    it.scope
+                                )
+                            }
+                        ) {
+                            metadata.jar()
+                        }
+                    }
+                }
+            }
+        }
 }

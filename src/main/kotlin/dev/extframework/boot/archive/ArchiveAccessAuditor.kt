@@ -1,6 +1,5 @@
 package dev.extframework.boot.archive
 
-import com.durganmcbroom.jobs.Job
 import dev.extframework.boot.audit.Auditor
 import dev.extframework.boot.util.typeOf
 
@@ -8,7 +7,7 @@ public interface ArchiveAccessAuditor : Auditor<ArchiveAccessAuditContext> {
     override val type: Class<ArchiveAccessAuditContext>
         get() = typeOf()
 
-    override fun audit(event: ArchiveAccessAuditContext): Job<ArchiveAccessAuditContext>
+    override fun audit(event: ArchiveAccessAuditContext): ArchiveAccessAuditContext
 }
 
 public class ArchiveAccessAuditContext internal constructor(

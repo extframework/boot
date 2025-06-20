@@ -3,15 +3,9 @@ package dev.extframework.boot.archive
 import com.durganmcbroom.artifact.resolver.ArtifactMetadata
 import com.durganmcbroom.artifact.resolver.ArtifactRequest
 import com.durganmcbroom.artifact.resolver.RepositorySettings
-import com.durganmcbroom.jobs.Job
-import com.durganmcbroom.jobs.async.AsyncJob
-import com.durganmcbroom.jobs.job
-import dev.extframework.boot.audit.Auditor
 import dev.extframework.boot.audit.Auditors
 import dev.extframework.boot.monad.Tagged
 import dev.extframework.boot.monad.Tree
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.runBlocking
 import java.nio.file.Path
 
 /**
@@ -20,7 +14,7 @@ import java.nio.file.Path
  *
  * Example:
  * ``` kotlin
- * launch {
+ * runBlocking {
  *   val graph = ArchiveGraph(...)
  *
  *   val request = SimpleMavenArtifactRequest("com.example:example:1.0")
@@ -29,12 +23,12 @@ import java.nio.file.Path
  *      request,
  *      SimpleMavenRepositorySettings.mavenCentral(),
  *      // maven resolver
- *   )().merge()
+ *   )
  *
  *   val node = graph.get(
  *      request.descriptor,
  *      // maven resolver
- *   )().merge()
+ *   )
  *
  *   // ...
  * }
@@ -68,26 +62,7 @@ public interface ArchiveGraph {
      * @param resolver The resolver used to cache the artifact request.
      * @return A Job that represents the caching process.
      */
-    public fun <
-            D : ArtifactMetadata.Descriptor,
-            T : ArtifactRequest<D>,
-            R : RepositorySettings,
-            M : ArtifactMetadata<D, ArtifactMetadata.ParentInfo<T, R>>> cacheAsync(
-        request: T,
-        repository: R,
-        resolver: ArchiveNodeResolver<D, T, *, R, M>
-    ): AsyncJob<Tree<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>>>
-
-    /**
-     * @see cacheAsync
-     * Runs the job in a blocking coroutine scope.
-     *
-     * @param request The artifact request to be cached.
-     * @param repository The repository in which the artifact request will be cached.
-     * @param resolver The resolver used to cache the artifact request.
-     * @return A Job that represents the caching process.
-     */
-    public fun <
+    public suspend fun <
             D : ArtifactMetadata.Descriptor,
             T : ArtifactRequest<D>,
             R : RepositorySettings,
@@ -95,11 +70,30 @@ public interface ArchiveGraph {
         request: T,
         repository: R,
         resolver: ArchiveNodeResolver<D, T, *, R, M>
-    ): Job<Tree<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>>> = job {
-        runBlocking {
-            cacheAsync(request, repository, resolver)().merge()
-        }
-    }
+    ): Tree<TaggedIArchive>
+
+    /**
+     * @see cache
+     * Runs the job in a blocking coroutine scope.
+     *
+     * @param request The artifact request to be cached.
+     * @param repository The repository in which the artifact request will be cached.
+     * @param resolver The resolver used to cache the artifact request.
+     * @return A Job that represents the caching process.
+     */
+//    public fun <
+//            D : ArtifactMetadata.Descriptor,
+//            T : ArtifactRequest<D>,
+//            R : RepositorySettings,
+//            M : ArtifactMetadata<D, ArtifactMetadata.ParentInfo<T, R>>> cache(
+//        request: T,
+//        repository: R,
+//        resolver: ArchiveNodeResolver<D, T, *, R, M>
+//    ): Job<Tree<TaggedIArchive>> = job {
+//        runBlocking {
+//            cacheAsync(request, repository, resolver)().merge()
+//        }
+//    }
 
     /**
      * Retrieves the specified ArchiveNode based on the given descriptor and resolver.
@@ -110,27 +104,27 @@ public interface ArchiveGraph {
      * @param resolver The resolver used to retrieve the ArchiveNode.
      * @return A Job that will eventually resolve the specified archive.
      */
-    public fun <K : ArtifactMetadata.Descriptor, T : ArchiveNode<K>> getAsync(
+    public suspend fun <K : ArtifactMetadata.Descriptor, T : ArchiveNode<K>> get(
         descriptor: K,
         resolver: ArchiveNodeResolver<K, *, T, *, *>
-    ): AsyncJob<T>
+    ): T
 
     /**
-     * @see getAsync
+     * @see get
      * Runs the job in a blocking coroutine scope.
      *
      * @param descriptor The descriptor of the ArchiveNode to retrieve.
      * @param resolver The resolver used to retrieve the ArchiveNode.
      * @return A Job that will eventually resolve the specified archive.
      */
-    public fun <K : ArtifactMetadata.Descriptor, T : ArchiveNode<K>> get(
-        descriptor: K,
-        resolver: ArchiveNodeResolver<K, *, T, *, *>
-    ): Job<T> = job {
-        runBlocking {
-            getAsync(descriptor, resolver)().merge()
-        }
-    }
+//    public fun <K : ArtifactMetadata.Descriptor, T : ArchiveNode<K>> get(
+//        descriptor: K,
+//        resolver: ArchiveNodeResolver<K, *, T, *, *>
+//    ): Job<T> = job {
+//        runBlocking {
+//            getAsync(descriptor, resolver)().merge()
+//        }
+//    }
 
     /**
      * Unloads the given node and returns all the nodes that were unloaded by this.
@@ -138,7 +132,7 @@ public interface ArchiveGraph {
      * be discarded until the return value of this method is garbage collected. This method
      * will also not provide unloading of any processes/daemons these nodes may have spawned.
      */
-    public fun unload(descriptor: ArtifactMetadata.Descriptor) : AsyncJob<List<ArchiveNode<*>>>
+    public suspend fun unload(descriptor: ArtifactMetadata.Descriptor) : List<ArchiveNode<*>>
 
     /**
      * Retrieves an already loaded ArchiveNode with no guarantee of type. The

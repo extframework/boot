@@ -1,6 +1,6 @@
 package dev.extframework.boot.monad
 
-public sealed class Either<A, B> {
+public sealed class Either<out A, out B> {
     public val isThis: Boolean = this is This
     public val isThat: Boolean = this is That
 
@@ -19,4 +19,12 @@ public sealed class Either<A, B> {
     public fun getThat() : B {
         return (this as That).item
     }
+}
+
+public fun <A, B, T> Either<A,B>.map(
+    mapThis: (A) -> T,
+    mapThat: (B) -> T
+) : T {
+    if (isThis) return mapThis(getThis())
+    return mapThat(getThat())
 }

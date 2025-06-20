@@ -1,7 +1,5 @@
 package dev.extframework.boot.archive
 
-import com.durganmcbroom.jobs.Job
-import com.durganmcbroom.jobs.job
 import dev.extframework.archives.*
 import dev.extframework.archives.module.JpmFinder
 import dev.extframework.archives.module.JpmResolutionResult
@@ -22,15 +20,15 @@ public object JpmResolutionProvider : ArchiveResolutionProvider<ZipResolutionRes
         classLoader: ClassLoaderProvider<ArchiveReference>,
         parents: Set<ArchiveHandle>,
         trace: ArchiveTrace
-    ): Job<ZipResolutionResult> = job {
+    ): ZipResolutionResult {
         val jpmResult = runCatching {
-            val result = jpmProvider.resolve(resource, classLoader, parents, trace)().merge()
+            val result = jpmProvider.resolve(resource, classLoader, parents, trace)
 
             ZipResolutionResult(
                 result.archive
             )
         }.getOrNull()
 
-        jpmResult ?: fallbackProvider.resolve(resource, classLoader, parents, trace)().merge()
+        return jpmResult ?: fallbackProvider.resolve(resource, classLoader, parents, trace)
     }
 }

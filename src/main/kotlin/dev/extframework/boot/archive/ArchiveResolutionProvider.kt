@@ -1,8 +1,5 @@
 package dev.extframework.boot.archive
 
-import com.durganmcbroom.jobs.Job
-import com.durganmcbroom.jobs.JobName
-import com.durganmcbroom.jobs.job
 import dev.extframework.archives.*
 import dev.extframework.archives.zip.ZipResolutionResult
 import java.io.FileNotFoundException
@@ -16,7 +13,7 @@ public interface ArchiveResolutionProvider<out R : ResolutionResult> {
         parents: Set<ArchiveHandle>,
 
         trace: ArchiveTrace,
-    ): Job<R>
+    ): R
 }
 
 public open class BasicArchiveResolutionProvider<T : ArchiveReference, R : ResolutionResult>(
@@ -29,10 +26,13 @@ public open class BasicArchiveResolutionProvider<T : ArchiveReference, R : Resol
         parents: Set<ArchiveHandle>,
 
         trace: ArchiveTrace,
-    ): Job<R> = job(JobName("Load archive: '$resource'")) {
-        if (!resource.exists()) throw ArchiveException.ArchiveLoadFailed(FileNotFoundException(resource.toString()), trace)
+    ): R {
+        if (!resource.exists()) throw ArchiveException.ArchiveLoadFailed(
+            FileNotFoundException(resource.toString()),
+            trace
+        )
 
-        runCatching {
+        return runCatching {
             resolver.resolve(
                 listOf(finder.find(resource)),
                 classLoader,

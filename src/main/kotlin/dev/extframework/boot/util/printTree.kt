@@ -1,13 +1,9 @@
 package dev.extframework.boot.util
 
 import com.durganmcbroom.artifact.resolver.Artifact
-import com.durganmcbroom.jobs.Job
-import com.durganmcbroom.jobs.job
-import com.durganmcbroom.jobs.logging.LogLevel
-import com.durganmcbroom.jobs.logging.Logger
-import com.durganmcbroom.jobs.logging.logger
 import dev.extframework.boot.archive.ArchiveNode
 import dev.extframework.boot.monad.Tree
+import java.util.logging.Logger
 
 public interface Graphable {
     public val name: String
@@ -20,7 +16,7 @@ public fun Artifact<*>.toGraphable(): Graphable = object : Graphable {
     override val children: List<Graphable> = this@toGraphable.parents.map { it.toGraphable() }
 }
 
-public fun printTree(artifact: Artifact<*>): Job<Unit> = printTree(artifact.toGraphable())
+public fun printTree(artifact: Artifact<*>, logger: Logger): Unit = printTree(artifact.toGraphable(), logger)
 
 public fun ArchiveNode<*>.toGraphable(): Graphable = object : Graphable {
     override val name: String = descriptor.name
@@ -29,16 +25,16 @@ public fun ArchiveNode<*>.toGraphable(): Graphable = object : Graphable {
     }
 }
 
-public fun printTree(graph: Graphable): Job<Unit> = job {
-    logger.log(LogLevel.INFO, textifyTree(graph)().merge())
+public fun printTree(graph: Graphable, logger: Logger) {
+    logger.info(textifyTree(graph))
 }
 
-public fun textifyTree(graph: Graphable): Job<String> = job {
+public fun textifyTree(graph: Graphable): String {
     val alreadyPrinted = HashSet<String>()
 
     val builder = StringBuilder()
 
-    fun printTreeInternal(graph: Graphable, prefix: String, isLast: Boolean, logger: Logger) {
+    fun printTreeInternal(graph: Graphable, prefix: String, isLast: Boolean) {
         val hasntSeenBefore = alreadyPrinted.add(graph.name)
 
         builder.appendLine(
@@ -57,13 +53,13 @@ public fun textifyTree(graph: Graphable): Job<String> = job {
                     "    "
                 else "|   ") + " "
 
-                printTreeInternal(it, newPrefix, childIsLast, logger)
+                printTreeInternal(it, newPrefix, childIsLast)
             }
     }
 
-    printTreeInternal(graph, "", true, logger)
+    printTreeInternal(graph, "", true)
 
-    builder.toString()
+    return builder.toString()
 }
 
 public fun <T> Tree<T>.toGraphable(

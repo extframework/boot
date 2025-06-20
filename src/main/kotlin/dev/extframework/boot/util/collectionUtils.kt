@@ -1,7 +1,5 @@
 package dev.extframework.boot.util
 
-import com.durganmcbroom.jobs.ResultScope
-import com.durganmcbroom.jobs.result
 import dev.extframework.boot.archive.ArchiveException
 import dev.extframework.boot.archive.ArchiveTrace
 
@@ -48,12 +46,12 @@ public fun <T> Collection<Result<T>>.mapNotFailure() : Result<List<T>> {
     })
 }
 
-public fun <T, R> Collection<T>.mapFailing(mapper: ResultScope.(T) -> R) : Result<List<R>> = result {
-    val scope = this@result
-    map {
-        scope.mapper(it)
-    }
-}
+//public fun <T, R> Collection<T>.mapFailing(mapper: (T) -> R) : Result<List<R>> {
+//    val scope = this@result
+//    map {
+//        scope.mapper(it)
+//    }
+//}
 
 public fun <K, V> mapOfNonNullValues(
     vararg pairs: Pair<K, V?>

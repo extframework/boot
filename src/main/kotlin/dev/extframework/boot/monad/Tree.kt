@@ -7,7 +7,7 @@ package dev.extframework.boot.monad
  * @property item the value contained within the tree node.
  * @property parents the list of parent nodes of the current tree node.
  */
-public class Tree<out T>(
+public open class Tree<out T>(
     item: T,
     parents: List<Tree<T>>
 ) : AndMany<T, Tree<T>>(item, parents) {

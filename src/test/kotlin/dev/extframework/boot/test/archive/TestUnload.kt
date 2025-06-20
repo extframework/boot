@@ -1,10 +1,8 @@
 package dev.extframework.boot.test.archive
 
-import BootLoggerFactory
 import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenArtifactRequest
 import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenDescriptor
 import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenRepositorySettings
-import com.durganmcbroom.jobs.launch
 import dev.extframework.boot.archive.ArchiveException
 import dev.extframework.boot.archive.ArchiveGraph
 import dev.extframework.boot.maven.MavenResolverProvider
@@ -26,25 +24,23 @@ class TestUnload {
             includeScopes = setOf("compile", "runtime", "import")
         )
 
-        launch(BootLoggerFactory()) {
-            runBlocking(Executors.newCachedThreadPool().asCoroutineDispatcher()) {
-                archiveGraph.cacheAsync(
-                    request,
-                    SimpleMavenRepositorySettings.default("https://maven.extframework.dev/snapshots"),
-                    maven.resolver
-                )().merge()
-                archiveGraph.getAsync(request.descriptor, maven.resolver)().merge()
+        runBlocking(Executors.newCachedThreadPool().asCoroutineDispatcher()) {
+            archiveGraph.cache(
+                request,
+                SimpleMavenRepositorySettings.default("https://maven.extframework.dev/snapshots"),
+                maven.resolver
+            )
+            archiveGraph.get(request.descriptor, maven.resolver)
 
-                // BasicDependencyNode 5164
-                val size = archiveGraph.nodes().size
+            // BasicDependencyNode 5164
+            val size = archiveGraph.nodes().size
 
-                val result = archiveGraph.unload(
-                    request.descriptor
-                )().merge()
+            val result = archiveGraph.unload(
+                request.descriptor
+            )
 
-                check(result.size == size)
-                check(archiveGraph.nodes().isEmpty())
-            }
+            check(result.size == size)
+            check(archiveGraph.nodes().isEmpty())
         }
 
         System.gc()
@@ -58,44 +54,42 @@ class TestUnload {
         val archiveGraph = ArchiveGraph.from(Path("test-run").toAbsolutePath())
         val maven = MavenResolverProvider()
 
-        launch(BootLoggerFactory()) {
-            runBlocking(Executors.newCachedThreadPool().asCoroutineDispatcher()) {
-                val toUnload = SimpleMavenArtifactRequest(
-                    "com.durganmcbroom:artifact-resolver-jvm:1.3-SNAPSHOT",
-                    includeScopes = setOf("compile", "runtime", "import")
-                )
+        runBlocking(Executors.newCachedThreadPool().asCoroutineDispatcher()) {
+            val toUnload = SimpleMavenArtifactRequest(
+                "com.durganmcbroom:artifact-resolver-jvm:1.3-SNAPSHOT",
+                includeScopes = setOf("compile", "runtime", "import")
+            )
 
-                archiveGraph.cacheAsync(
-                    toUnload,
-                    SimpleMavenRepositorySettings.default("https://maven.extframework.dev/snapshots"),
-                    maven.resolver
-                )().merge()
-                archiveGraph.getAsync(toUnload.descriptor, maven.resolver)().merge()
+            archiveGraph.cache(
+                toUnload,
+                SimpleMavenRepositorySettings.default("https://maven.extframework.dev/snapshots"),
+                maven.resolver
+            )
+            archiveGraph.get(toUnload.descriptor, maven.resolver)
 
-                val toConstrain = SimpleMavenArtifactRequest(
-                    "dev.extframework:archives:1.5-SNAPSHOT",
-                    includeScopes = setOf("compile", "runtime", "import")
-                )
+            val toConstrain = SimpleMavenArtifactRequest(
+                "dev.extframework:archives:1.5-SNAPSHOT",
+                includeScopes = setOf("compile", "runtime", "import")
+            )
 
-                archiveGraph.cacheAsync(
-                    toConstrain,
-                    SimpleMavenRepositorySettings.default("https://maven.extframework.dev/snapshots"),
-                    maven.resolver
-                )().merge()
-                archiveGraph.getAsync(toConstrain.descriptor, maven.resolver)().merge()
+            archiveGraph.cache(
+                toConstrain,
+                SimpleMavenRepositorySettings.default("https://maven.extframework.dev/snapshots"),
+                maven.resolver
+            )
+            archiveGraph.get(toConstrain.descriptor, maven.resolver)
 
-                val size = archiveGraph.nodes().size
+            val size = archiveGraph.nodes().size
 
-                val result = archiveGraph.unload(
-                    toUnload.descriptor
-                )().merge()
+            val result = archiveGraph.unload(
+                toUnload.descriptor
+            )
 
-                // Shouldn't remove all
-                check(result.size != size)
-                println(result.joinToString("\n") {
-                    it.descriptor.name
-                })
-            }
+            // Shouldn't remove all
+            check(result.size != size)
+            println(result.joinToString("\n") {
+                it.descriptor.name
+            })
         }
 
         System.gc()
@@ -113,24 +107,22 @@ class TestUnload {
             includeScopes = setOf("compile", "runtime", "import")
         )
 
-        launch(BootLoggerFactory()) {
-            runBlocking(Executors.newCachedThreadPool().asCoroutineDispatcher()) {
-                archiveGraph.cacheAsync(
-                    request,
-                    SimpleMavenRepositorySettings.default("https://maven.extframework.dev/snapshots"),
-                    maven.resolver
-                )().merge()
-                archiveGraph.getAsync(request.descriptor, maven.resolver)().merge()
+        runBlocking(Executors.newCachedThreadPool().asCoroutineDispatcher()) {
+            archiveGraph.cache(
+                request,
+                SimpleMavenRepositorySettings.default("https://maven.extframework.dev/snapshots"),
+                maven.resolver
+            )
+            archiveGraph.get(request.descriptor, maven.resolver)
 
-                val result = runCatching {
-                    archiveGraph.unload(
-                        SimpleMavenDescriptor.parseDescription("com.durganmcbroom:jobs-jvm:1.3.2-SNAPSHOT")!!
-                    )().merge()
-                }
-
-                check(result.isFailure)
-                check(result.exceptionOrNull() is ArchiveException.UnloadingConstrained)
+            val result = runCatching {
+                archiveGraph.unload(
+                    SimpleMavenDescriptor.parseDescription("com.durganmcbroom:jobs-jvm:1.3.2-SNAPSHOT")!!
+                )
             }
+
+            check(result.isFailure)
+            check(result.exceptionOrNull() is ArchiveException.UnloadingConstrained)
         }
     }
 }

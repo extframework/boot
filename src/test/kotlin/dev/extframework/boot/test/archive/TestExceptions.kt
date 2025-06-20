@@ -1,15 +1,13 @@
 package dev.extframework.boot.test.archive
 
-import BootLoggerFactory
 import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenArtifactRequest
 import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenDescriptor
 import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenRepositorySettings
-import com.durganmcbroom.jobs.JobName
-import com.durganmcbroom.jobs.launch
 import dev.extframework.boot.archive.ArchiveException
 import dev.extframework.boot.archive.ArchiveGraph
 import dev.extframework.boot.dependency.BasicDependencyNode
 import dev.extframework.boot.maven.MavenResolverProvider
+import kotlinx.coroutines.runBlocking
 import java.nio.file.Files
 import kotlin.test.Test
 
@@ -43,14 +41,14 @@ class TestExceptions {
         request: SimpleMavenArtifactRequest,
         repository: SimpleMavenRepositorySettings,
     ): BasicDependencyNode<*> {
-        val node = launch(JobName("test") + BootLoggerFactory()) {
+        val node = runBlocking {
             archiveGraph.cache(
                 request,
                 repository,
                 maven.resolver
-            )().merge()
+            )
 
-            archiveGraph.get(request.descriptor, maven.resolver)().merge()
+            archiveGraph.get(request.descriptor, maven.resolver)
         }
 
         return node
@@ -69,11 +67,11 @@ class TestExceptions {
     @Test
     fun `Test artifact not cached throws correctly`() {
         assertThatThrows<ArchiveException.ArchiveNotCached> {
-            launch(BootLoggerFactory()) {
+            runBlocking {
                 archiveGraph.get(
                     SimpleMavenDescriptor.parseDescription("a:a:a")!!,
                     maven.resolver
-                )().merge()
+                )
             }
         }
     }

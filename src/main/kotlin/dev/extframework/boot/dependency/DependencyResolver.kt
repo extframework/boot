@@ -1,17 +1,14 @@
 package dev.extframework.boot.dependency
 
 import com.durganmcbroom.artifact.resolver.*
-import com.durganmcbroom.jobs.Job
-import com.durganmcbroom.jobs.async.AsyncJob
-import com.durganmcbroom.jobs.async.asyncJob
-import com.durganmcbroom.jobs.async.mapAsync
-import com.durganmcbroom.jobs.job
 import com.durganmcbroom.resources.Resource
 import dev.extframework.archives.ArchiveHandle
 import dev.extframework.boot.archive.*
 import dev.extframework.boot.loader.*
+import dev.extframework.boot.monad.Either
 import dev.extframework.boot.monad.Tagged
 import dev.extframework.boot.monad.Tree
+import dev.extframework.boot.util.mapAsync
 import kotlinx.coroutines.awaitAll
 
 public abstract class DependencyResolver<
@@ -30,7 +27,7 @@ public abstract class DependencyResolver<
         data: ArchiveData<K, CachedArchiveResource>,
         accessTree: ArchiveAccessTree,
         helper: ResolutionHelper
-    ): Job<N> = job {
+    ): N {
         val accessibleNodes = accessTree.targets
             .asSequence()
             .map(ArchiveTarget::relationship)
@@ -51,10 +48,10 @@ public abstract class DependencyResolver<
                     .mapNotNullTo(mutableSetOf(), ClassLoadedArchiveNode<*>::handle),
 
                 helper.trace
-            )().merge().archive
+            ).archive
         }
 
-        constructNode(
+       return constructNode(
             data.descriptor,
             archive,
             accessibleNodes
@@ -73,19 +70,19 @@ public abstract class DependencyResolver<
 
     protected abstract suspend fun M.resource() : Resource?
 
-    override fun cache(
-        artifact: Artifact<M>,
+    override suspend fun cache(
+        metadata: M,
+        parents: List<Tree<Either<M, TaggedIArchive>>>,
         helper: CacheHelper<K>
-    ): AsyncJob<Tree<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>>> = asyncJob {
-        println("Getting resource: '${artifact.metadata.descriptor}'")
-        helper.withResource("jar.jar", artifact.metadata.resource())
+    ): Tree<TaggedIArchive> {
+        helper.withResource("jar.jar", metadata.resource())
 
-        helper.newData(
-            artifact.metadata.descriptor,
-            artifact.parents.mapAsync {
+        return helper.newData(
+            metadata.descriptor,
+            parents.mapAsync {
                 helper.cache(
                     it, this@DependencyResolver,
-                )().merge()
+                )
             }.awaitAll()
         )
     }

@@ -1,8 +1,6 @@
 package dev.extframework.boot.constraint
 
 import com.durganmcbroom.artifact.resolver.ArtifactMetadata
-import com.durganmcbroom.jobs.Job
-import com.durganmcbroom.jobs.job
 import dev.extframework.boot.archive.*
 import dev.extframework.boot.monad.*
 import dev.extframework.common.util.LazyMap
@@ -16,7 +14,7 @@ public class ConstraintArchiveAuditor(
         constraintPrototypes: List<Constrained<*>>,
 
         trace: ArchiveTrace
-    ): Job<Tree<IArchive<*>>> = job {
+    ): Tree<IArchive<*>> {
         val cachedConstraints = LazyMap { d: ArtifactMetadata.Descriptor ->
             (negotiators.find {
                 it.descriptorType.isInstance(d)
@@ -83,7 +81,7 @@ public class ConstraintArchiveAuditor(
                     negotiator.descriptorType.isInstance(it.descriptor) && negotiator.classify(it.descriptor) == classifier
                 } as List<Constrained<ArtifactMetadata.Descriptor>>,
                 trace
-            )().merge()
+            )
 
             val replaceWith = tree.findBranch {
                 it.descriptor == negotiated
@@ -97,7 +95,7 @@ public class ConstraintArchiveAuditor(
             }
         }
 
-        list.fold(tree) { acc, it ->
+        return list.fold(tree) { acc, it ->
             if (constrained.size == uniqueConstraints) return@fold acc
 
             acc.constrain(
@@ -106,21 +104,21 @@ public class ConstraintArchiveAuditor(
         }
     }
 
-    override fun audit(event: ArchiveTreeAuditContext): Job<ArchiveTreeAuditContext> = job {
+    override fun audit(event: ArchiveTreeAuditContext): ArchiveTreeAuditContext {
         val tree = event.tree
 
         val resolvers = tree
             .asSequence()
             .associate { it.value.descriptor to it.tag }
 
-        event.copy(
+        return event.copy(
             doConstraints(
                 tree.map { it.value },
                 if (negotiators.any {
                         it.descriptorType.isInstance(tree.item.value.descriptor)
                     }) listOf(Constrained(tree.item.value.descriptor, ConstraintType.BOUND)) else listOf(),
                 event.trace
-            )().merge().tag {
+            ).tag {
                 resolvers[it.descriptor]!!
             }
         )

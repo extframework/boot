@@ -1,10 +1,8 @@
 package dev.extframework.boot.archive
 
 import com.durganmcbroom.artifact.resolver.*
-import com.durganmcbroom.jobs.Job
-import com.durganmcbroom.jobs.async.AsyncJob
 import com.durganmcbroom.resources.Resource
-import dev.extframework.boot.audit.Auditors
+import dev.extframework.boot.monad.Either
 import dev.extframework.boot.monad.Tagged
 import dev.extframework.boot.monad.Tree
 import java.nio.file.Path
@@ -35,7 +33,7 @@ public interface ArchiveNodeResolver<
     /**
      * A resolution context for the given repository settings.
      */
-    public val context: ResolutionContext<S, R, M>
+    public val factory: RepositoryFactory<S, ArtifactRepository<S, R, M>>
 
     /**
      * Serializes the given artifact descriptor into a map of key-value pairs.
@@ -52,12 +50,12 @@ public interface ArchiveNodeResolver<
      *
      * @param descriptor the map containing the serialized key-value pairs of the descriptor
      * @param trace the archive trace that provides context for the deserialization
-     * @return a Result object that encapsulates the deserialized instance of type K
+     * @return the deserialized instance of type K
      */
     public fun deserializeDescriptor(
         descriptor: Map<String, String>,
         trace: ArchiveTrace,
-    ): Result<K>
+    ): K
 
     /**
      * Returns the path for the given descriptor, classifier, and type. Will be resolved against
@@ -80,26 +78,30 @@ public interface ArchiveNodeResolver<
      *
      * @param data the archive data containing the descriptor and resources of the archive to load
      * @param helper the resolution helper used to load the archive
-     * @return a [Job] representing the loading process of the archive
      */
     public fun load(
         data: ArchiveData<K, CachedArchiveResource>,
         accessTree: ArchiveAccessTree,
         helper: ResolutionHelper
-    ): Job<V>
+    ): V
 
     /**
      * Caches the archive specified by the given [metadata] using the provided [helper].
      *
+     * @see Artifact
+     *
      * @param metadata the metadata of the archive to cache
+     * @param parents the list of parents for this artifact. If the parent is not already cached its type will be of 'metadata', otherwise it will be a tagged archive.
      * @param helper the cache helper used to cache the archive
-     * @return a [Job] representing the caching process of the archive
      */
-    public fun cache(
-        artifact: Artifact<M>,
+    public suspend fun cache(
+        metadata: M,
+        parents: List<Tree<Either<M, TaggedIArchive>>>,
         helper: CacheHelper<K>
-    ): AsyncJob<Tree<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>>>
+    ): Tree<TaggedIArchive>
 }
+
+public typealias TaggedIArchive = Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>
 
 /**
  * The ResolutionHelper interface provides helper methods for resolving and loading archive nodes.
@@ -119,18 +121,18 @@ public interface CacheHelper<K : ArtifactMetadata.Descriptor> {
     /**
      * Cache an entire tree given a resolver.
      */
-    public fun <
+    public suspend fun <
             D : ArtifactMetadata.Descriptor,
             M : ArtifactMetadata<D, *>,
             > cache(
-        artifact: Artifact<M>,
+        artifact: Tree<Either<M, TaggedIArchive>>,
         resolver: ArchiveNodeResolver<D, *, *, *, M>
-    ): AsyncJob<Tree<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>>>
+    ): Tree<TaggedIArchive>
 
     /**
      * Load an artifact tree.
      */
-    public fun <
+    public suspend fun <
             D: ArtifactMetadata.Descriptor,
             T : ArtifactRequest<D>,
             R : RepositorySettings,
@@ -138,7 +140,7 @@ public interface CacheHelper<K : ArtifactMetadata.Descriptor> {
         request: T,
         repository: R,
         resolver: ArchiveNodeResolver<D, T, *, R, *>
-    ): AsyncJob<Tree<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>>>
+    ): Tree<TaggedIArchive>
 
     /**
      * Add a resource to the archive data being built.
@@ -159,8 +161,8 @@ public interface CacheHelper<K : ArtifactMetadata.Descriptor> {
      */
     public fun newData(
         descriptor: K,
-        parents: List<Tree<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>>>
-    ): Tree<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>>
+        parents: List<Tree<TaggedIArchive>>
+    ): Tree<TaggedIArchive>
 }
 
 /**

@@ -1,11 +1,7 @@
 package dev.extframework.boot.test.dependency
 
-import BootLoggerFactory
 import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenArtifactRequest
 import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenRepositorySettings
-import com.durganmcbroom.jobs.JobName
-import com.durganmcbroom.jobs.launch
-import com.durganmcbroom.jobs.result
 import com.durganmcbroom.resources.KtorInstance
 import com.durganmcbroom.resources.RemoteResource
 import com.durganmcbroom.resources.ResourceAlgorithm
@@ -13,6 +9,7 @@ import dev.extframework.boot.archive.ArchiveException
 import dev.extframework.boot.archive.ArchiveGraph
 import dev.extframework.boot.archive.ArchiveNode
 import dev.extframework.boot.archive.DefaultArchiveGraph
+import dev.extframework.boot.getLogger
 import dev.extframework.boot.maven.MavenDependencyResolver
 import dev.extframework.boot.maven.MavenResolverProvider
 import dev.extframework.boot.util.printTree
@@ -69,7 +66,7 @@ class TestDependencyGraph {
             includeScopes = setOf("compile", "runtime", "import")
         )
 
-        val r = result {
+        val r = runCatching {
             cacheAndGet(
                 archiveGraph, request, SimpleMavenRepositorySettings.mavenCentral(
                     preferredHash = ResourceAlgorithm.SHA1
@@ -96,8 +93,10 @@ class TestDependencyGraph {
             includeScopes = setOf("compile", "runtime", "import")
         )
 
-        val r = launch(BootLoggerFactory()) {
-            archiveGraph.get(request.descriptor, maven.resolver)()
+        val r = runBlocking {
+            runCatching {
+                archiveGraph.get(request.descriptor, maven.resolver)
+            }
         }
 
         r.exceptionOrNull()?.printStackTrace()
@@ -116,16 +115,15 @@ class TestDependencyGraph {
             includeScopes = setOf("compile", "runtime", "import")
         )
 
-        val node = launch(BootLoggerFactory()) {
+        val node =
             runBlocking(Executors.newCachedThreadPool().asCoroutineDispatcher()) {
-                archiveGraph.cacheAsync(
+                archiveGraph.cache(
                     request,
                     SimpleMavenRepositorySettings.default("https://maven.extframework.dev/snapshots"),
                     maven.resolver
-                )().merge()
-                archiveGraph.getAsync(request.descriptor, maven.resolver)().merge()
+                )
+                archiveGraph.get(request.descriptor, maven.resolver)
             }
-        }
 
         println(node)
     }
@@ -142,15 +140,13 @@ class TestDependencyGraph {
             includeScopes = setOf("compile", "runtime", "import")
         )
 
-        val node = launch(BootLoggerFactory()) {
-            runBlocking(Executors.newCachedThreadPool().asCoroutineDispatcher()) {
-                archiveGraph.cacheAsync(
-                    request,
-                    SimpleMavenRepositorySettings.local(),
-                    maven.resolver
-                )().merge()
-                archiveGraph.getAsync(request.descriptor, maven.resolver)().merge()
-            }
+        val node = runBlocking(Executors.newCachedThreadPool().asCoroutineDispatcher()) {
+            archiveGraph.cache(
+                request,
+                SimpleMavenRepositorySettings.default("https://maven.extframework.dev/snapshots"),
+                maven.resolver
+            )
+            archiveGraph.get(request.descriptor, maven.resolver)
 
         }
 
@@ -225,17 +221,17 @@ class TestDependencyGraph {
             repository: SimpleMavenRepositorySettings,
             maven: MavenDependencyResolver
         ): ArchiveNode<*> {
-            val node = launch(JobName("test") + BootLoggerFactory()) {
+            val node = runBlocking {
                 archiveGraph.cache(
                     request,
                     repository,
                     maven
-                )().merge()
+                )
 
-                archiveGraph.get(request.descriptor, maven)().merge()
+                archiveGraph.get(request.descriptor, maven)
             }
 
-            printTree(node.toGraphable())
+            printTree(node.toGraphable(), this@Companion.getLogger())
             separator("Targets:")
             println(node.access.targets.joinToString(separator = "\n") {
                 it.descriptor.name

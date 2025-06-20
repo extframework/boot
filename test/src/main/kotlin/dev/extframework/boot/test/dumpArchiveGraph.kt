@@ -1,12 +1,11 @@
 package dev.extframework.boot.test
 
-import com.durganmcbroom.jobs.Job
-import com.durganmcbroom.jobs.job
 import dev.extframework.boot.archive.ArchiveGraph
 import dev.extframework.boot.util.printTree
 import dev.extframework.boot.util.toGraphable
+import java.util.logging.Logger
 
-public fun ArchiveGraph.dump(): Job<Unit> = job {
+public fun ArchiveGraph.dump(logger: Logger): Unit {
     println(" --------------------------------------------------- ")
     println(" ----- The following archives have been loaded ----- ")
     println(" --------------------------------------------------- ")
@@ -18,7 +17,7 @@ public fun ArchiveGraph.dump(): Job<Unit> = job {
         }
         .filterNot { visited.contains(it.name) }
         .forEach {
-            printTree(it)().merge()
+            printTree(it, logger)
 
             println(" --------------------------------------------------- ")
         }

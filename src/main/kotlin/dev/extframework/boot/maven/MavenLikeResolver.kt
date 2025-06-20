@@ -4,13 +4,11 @@ import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenArtifactMetad
 import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenArtifactRequest
 import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenDescriptor
 import com.durganmcbroom.artifact.resolver.simple.maven.SimpleMavenRepositorySettings
-import com.durganmcbroom.jobs.result
 import dev.extframework.boot.archive.ArchiveNode
 import dev.extframework.boot.archive.ArchiveNodeResolver
 import dev.extframework.boot.archive.ArchiveTrace
 import dev.extframework.boot.archive.RegisterAuditor
 import dev.extframework.boot.audit.Auditors
-import dev.extframework.boot.constraint.ConstraintArchiveAuditor
 import dev.extframework.boot.constraint.registerConstraintNegotiator
 import dev.extframework.boot.util.mapOfNonNullValues
 import dev.extframework.boot.util.requireKeyInDescriptor
@@ -34,8 +32,8 @@ public interface MavenLikeResolver<
     override fun deserializeDescriptor(
         descriptor: Map<String, String>,
         trace: ArchiveTrace
-    ): Result<SimpleMavenDescriptor> = result {
-        SimpleMavenDescriptor(
+    ): SimpleMavenDescriptor {
+        return SimpleMavenDescriptor(
             descriptor.requireKeyInDescriptor("group") { trace },
             descriptor.requireKeyInDescriptor("artifact") { trace },
             descriptor.requireKeyInDescriptor("version") { trace },

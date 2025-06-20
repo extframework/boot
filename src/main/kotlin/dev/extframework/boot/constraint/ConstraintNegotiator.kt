@@ -1,7 +1,6 @@
 package dev.extframework.boot.constraint
 
 import com.durganmcbroom.artifact.resolver.ArtifactMetadata
-import com.durganmcbroom.jobs.Job
 import dev.extframework.boot.archive.ArchiveTrace
 
 public enum class ConstraintType {
@@ -26,5 +25,5 @@ public interface ConstraintNegotiator<T: ArtifactMetadata.Descriptor> {
     public fun negotiate(
         constraints: Set<Constrained<T>>,
         trace: ArchiveTrace
-    ): Job<T>
+    ): T
 }

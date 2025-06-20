@@ -11,12 +11,12 @@ public interface ArchiveTreeAuditor : Auditor<ArchiveTreeAuditContext> {
 }
 
 public class ArchiveTreeAuditContext internal constructor(
-    public val tree: Tree<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>>,
+    public val tree: Tree<TaggedIArchive>,
     public val trace: ArchiveTrace,
     public val graph: ArchiveGraph
 ) {
     public fun copy(
-        tree: Tree<Tagged<IArchive<*>, ArchiveNodeResolver<*, *, *, *, *>>>
+        tree: Tree<TaggedIArchive>
     ): ArchiveTreeAuditContext {
         return ArchiveTreeAuditContext(tree, trace, graph)
     }

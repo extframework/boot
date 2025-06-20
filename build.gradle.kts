@@ -1,9 +1,4 @@
-import dev.extframework.gradle.common.ARCHIVES_VERSION
-import dev.extframework.gradle.common.archives
-import dev.extframework.gradle.common.commonUtil
-import dev.extframework.gradle.common.dm.artifactResolver
-import dev.extframework.gradle.common.dm.jobs
-import dev.extframework.gradle.common.dm.resourceApi
+import dev.extframework.gradle.common.*
 import dev.extframework.gradle.common.extFramework
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
@@ -12,16 +7,10 @@ plugins {
 
     application
 
-    id("dev.extframework.common") version "1.0.49"
+    id("dev.extframework.common") version "1.1"
 }
 
-version = "3.6.2-SNAPSHOT"
-
-//tasks.compileKotlin {
-//    kotlinOptions {
-//        freeCompilerArgs = listOf("-Xcontext-receivers")
-//    }
-//}
+version = "3.7-SNAPSHOT"
 
 sourceSets {
     create("java11")
@@ -45,20 +34,24 @@ tasks.wrapper {
 dependencies {
     implementation(project(":object-container"))
 
+    implementation(kotlin("reflect"))
+
     implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.7.22")
     implementation("com.fasterxml.jackson.module:jackson-module-kotlin:2.17.2")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.8.0")
 
-    archives(configurationName = "java11Implementation", version = ARCHIVES_VERSION)
-    jobs(configurationName = "java11Implementation")
+    "java11Implementation"(archives())
     "java11Implementation"(sourceSets.main.get().output)
-    "java11Implementation"("dev.extframework:archives:${ARCHIVES_VERSION}:jdk11")
+    "java11Implementation"("dev.extframework:archives:${dependencyManagement[ARCHIVES]["version"]}:jdk11")
+
+    api(resourceApi())
+    api(commonUtil())
+    api(archives())
+    api(artifactResolver())
+    api(artifactResolverMaven())
+
 
     testImplementation(project(":blackbox-test"))
-
-
-//    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-debug:1.5.2")
-//    testImplementation("io.projectreactor.tools:blockhound:1.0.6.RELEASE")
 }
 
 val java11Jar by tasks.creating(Jar::class.java) {
@@ -140,14 +133,7 @@ allprojects {
 
     dependencies {
         implementation(kotlin("stdlib"))
-        implementation(kotlin("reflect"))
         testImplementation(kotlin("test"))
-
-        resourceApi(configurationName = "api")
-        commonUtil(configurationName = "api")
-        archives(configurationName = "api")
-        artifactResolver(configurationName = "api")
-        jobs(configurationName = "api", logging = true, progressSimple = true)
     }
 
     java {
