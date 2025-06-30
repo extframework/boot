@@ -10,7 +10,7 @@ plugins {
     id("dev.extframework.common") version "1.1"
 }
 
-version = "3.7-SNAPSHOT"
+version = "3.7.1-SNAPSHOT"
 
 sourceSets {
     create("java11")
@@ -49,7 +49,6 @@ dependencies {
     api(archives())
     api(artifactResolver())
     api(artifactResolverMaven())
-
 
     testImplementation(project(":blackbox-test"))
 }

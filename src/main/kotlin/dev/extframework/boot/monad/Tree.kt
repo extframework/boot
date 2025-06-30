@@ -49,11 +49,11 @@ public fun <T, V> Tree<T>.mapWithTree(
 public fun <T> Tree<T>.forEach(
     onEach: (T) -> Unit
 ) {
-    onEach(this.item)
-
     parents.forEach {
         it.forEach(onEach)
     }
+
+    onEach(this.item)
 }
 
 /**

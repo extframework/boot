@@ -1,14 +1,14 @@
 package dev.extframework.boot.dependency
 
-import dev.extframework.boot.archive.ArchiveGraph
-import dev.extframework.`object`.ObjectContainerImpl
+import dev.extframework.`object`.ObjectContainer
 
+public typealias DependencyTypeContainer = ObjectContainer<DependencyResolverProvider<*, *, *>>
 
-public class DependencyTypeContainer (
-    private val archiveGraph: ArchiveGraph
-): ObjectContainerImpl<DependencyResolverProvider<*, *, *>>() {
-    override fun register(name: String, obj: DependencyResolverProvider<*, *, *>): Boolean {
-        archiveGraph.registerResolver(obj.resolver)
-        return super.register(name, obj)
-    }
-}
+//public open class DependencyTypeContainer (
+//    public val archiveGraph: ArchiveGraph
+//): ObjectContainerImpl<DependencyResolverProvider<*, *, *>>() {
+//    override fun register(name: String, obj: DependencyResolverProvider<*, *, *>): Boolean {
+//        archiveGraph.registerResolver(obj.resolver)
+//        return super.register(name, obj)
+//    }
+//}

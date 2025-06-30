@@ -1,19 +1,11 @@
 package dev.extframework.`object`
 
-public open class ObjectContainerImpl<T> @JvmOverloads constructor(
+public open class ObjectContainerImpl<T: ObjectContainer.IDed> @JvmOverloads constructor(
     private val delegate: MutableMap<String, T> = HashMap()
-) : MutableObjectContainer<T> {
-    override fun get(name: String): T? = delegate[name]
-
-    override fun has(name: String): Boolean = delegate.containsKey(name)
-
-    override fun objects(): Map<String, T> {
-        return delegate.toMap()
-    }
-
-    override fun register(name: String, obj: T): Boolean {
-        if (has(name)) return false
-        delegate[name] = obj
-        return true
+) : ObjectContainer<T>, Map<String, T> by delegate {
+    override fun register(obj: T): Boolean {
+        val contained = contains(obj.id)
+        delegate[obj.id] = obj
+        return !contained
     }
 }

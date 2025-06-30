@@ -5,6 +5,7 @@ import com.durganmcbroom.resources.Resource
 import dev.extframework.boot.monad.Either
 import dev.extframework.boot.monad.Tagged
 import dev.extframework.boot.monad.Tree
+import dev.extframework.`object`.ObjectContainer
 import java.nio.file.Path
 
 /**
@@ -21,8 +22,8 @@ public interface ArchiveNodeResolver<
         R : ArtifactRequest<K>,
         V : ArchiveNode<K>,
         S : RepositorySettings,
-        M : ArtifactMetadata<K, ArtifactMetadata.ParentInfo<R, S>>> {
-    public val name: String
+        M : ArtifactMetadata<K, ArtifactMetadata.ParentInfo<R, S>>> : ObjectContainer.IDed {
+    override val id: String
 
     public val nodeType: Class<in V>
     public val metadataType: Class<M>
@@ -159,7 +160,7 @@ public interface CacheHelper<K : ArtifactMetadata.Descriptor> {
     /**
      * Construct the data.
      */
-    public fun newData(
+    public suspend fun newData(
         descriptor: K,
         parents: List<Tree<TaggedIArchive>>
     ): Tree<TaggedIArchive>

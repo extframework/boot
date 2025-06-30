@@ -11,7 +11,7 @@ public open class MavenResolverProvider(
         parentClassLoader = MavenResolverProvider::class.java.classLoader,
     )
 ) : DependencyResolverProvider<SimpleMavenDescriptor, SimpleMavenArtifactRequest, SimpleMavenRepositorySettings> {
-    override val name: String = "simple-maven"
+    override val id: String = "simple-maven"
 
     override fun parseRequest(request: Map<String, String>): SimpleMavenArtifactRequest? {
         val descriptorName = request["descriptor"] ?: return null

@@ -10,22 +10,12 @@ import dev.extframework.boot.API_VERSION
 import dev.extframework.boot.audit.Auditors
 import dev.extframework.boot.audit.audit
 import dev.extframework.boot.getLogger
-import dev.extframework.boot.monad.Either
-import dev.extframework.boot.monad.Tagged
-import dev.extframework.boot.monad.Tree
-import dev.extframework.boot.monad.map
-import dev.extframework.boot.monad.tag
-import dev.extframework.boot.monad.toTree
-import dev.extframework.boot.util.basicObjectMapper
-import dev.extframework.boot.util.mapAsync
-import dev.extframework.boot.util.textifyTree
-import dev.extframework.boot.util.toGraphable
-import dev.extframework.boot.util.withSuspendingLock
+import dev.extframework.boot.monad.*
+import dev.extframework.boot.util.*
 import dev.extframework.common.util.copyTo
 import dev.extframework.common.util.filterDuplicates
 import dev.extframework.common.util.make
 import dev.extframework.common.util.resolve
-import dev.extframework.`object`.MutableObjectContainer
 import dev.extframework.`object`.ObjectContainer
 import dev.extframework.`object`.ObjectContainerImpl
 import kotlinx.coroutines.Deferred
@@ -43,62 +33,25 @@ import kotlin.reflect.jvm.jvmName
 
 public open class DefaultArchiveGraph @JvmOverloads constructor(
     path: Path,
-    protected open val mutable: MutableMap<ArtifactMetadata.Descriptor, Tagged<ArchiveNode<*>, ArchiveNodeResolver<*, *, *, *, *>>> = HashMap()
+    override val nodes: MutableMap<ArtifactMetadata.Descriptor, Tagged<ArchiveNode<*>, ArchiveNodeResolver<*, *, *, *, *>>> = HashMap()
 ) : ArchiveGraph {
-    protected val logger: Logger = getLogger()
+    protected open val logger: Logger = getLogger()
 
-    protected open val resolvers: MutableObjectContainer<ArchiveNodeResolver<*, *, *, *, *>> =
-        ObjectContainerImpl(ConcurrentHashMap())
+    override val resolvers: ObjectContainer<ArchiveNodeResolver<*, *, *, *, *>> =
+        object: ObjectContainerImpl<ArchiveNodeResolver<*, *, *, *, *>>(ConcurrentHashMap()) {
+            override fun register(obj: ArchiveNodeResolver<*, *, *, *, *>): Boolean {
+                if (obj is RegisterAuditor) {
+                    auditors = obj.register(auditors)
+                }
 
-    public val theResolvers: ObjectContainer<ArchiveNodeResolver<*, *, *, *, *>>
-        get() = resolvers
-    public val theGraph: Map<ArtifactMetadata.Descriptor, Tagged<ArchiveNode<*>, ArchiveNodeResolver<*, *, *, *, *>>>
-        get() = mutable
+                return super.register(obj)
+            }
+        }
 
     override val path: Path = path resolve "v$API_VERSION"
 
     override var auditors: Auditors = Auditors()
 
-    /**
-     * Register a resolver.
-     *
-     * @param resolver the resolver.
-     */
-    override fun registerResolver(resolver: ArchiveNodeResolver<*, *, *, *, *>): Unit = synchronized(this) {
-        if (resolver is RegisterAuditor) {
-            auditors = resolver.register(auditors)
-        }
-
-        resolvers.register(resolver.name, resolver)
-
-        Unit
-    }
-
-    /**
-     * Get a registered resolver or null.
-     *
-     * @param name The name to get by.
-     * @return The resolver or null.
-     */
-    override fun getResolver(name: String): ArchiveNodeResolver<*, *, *, *, *>? {
-        return resolvers.get(name)
-    }
-
-    /**
-     * Looks for a node with the specified descriptor that has already been loaded
-     * or null if it was not found.
-     *
-     * @param descriptor The descriptor to search for.
-     * @return The node or null.
-     */
-    override fun getNode(descriptor: ArtifactMetadata.Descriptor): ArchiveNode<*>? = mutable[descriptor]?.value
-
-    /**
-     * Returns a collection of all the nodes in this archive graph.
-     *
-     * @return All the currently loaded nodes.
-     */
-    override fun nodes(): Collection<ArchiveNode<*>> = mutable.values.map { it.value }
 
     /**
      * Determines if the given descriptor has been previously cached
@@ -114,7 +67,7 @@ public open class DefaultArchiveGraph @JvmOverloads constructor(
     ): Boolean {
         checkRegistration(resolver)
 
-        if (loaded(descriptor)) {
+        if (nodes.contains(descriptor)) {
             return true
         }
 
@@ -124,18 +77,18 @@ public open class DefaultArchiveGraph @JvmOverloads constructor(
     }
 
     protected fun checkRegistration(resolver: ArchiveNodeResolver<*, *, *, *, *>) {
-        if (resolvers.has(resolver.name)) return
-        registerResolver(resolver)
+        if (resolvers.contains(resolver.id)) return
+        resolvers.register(resolver)
     }
 
     private suspend fun <K : ArtifactMetadata.Descriptor, N : ArchiveNode<K>> checkLoaded(
         descriptor: K,
         resolver: ArchiveNodeResolver<K, *, *, *, *>,
         or: suspend () -> N
-    ): N = getNode(descriptor)?.let { node ->
-        check(resolver.nodeType.isInstance(node)) { "Archive node: '$descriptor' was found loaded but it does not match the expected type of: '${resolver.nodeType.name}'. Its type was: '${node::class.java.name}" }
+    ): N = nodes[descriptor]?.let { node ->
+        check(resolver.nodeType.isInstance(node.value)) { "Archive node: '$descriptor' was found loaded but it does not match the expected type of: '${resolver.nodeType.name}'. Its type was: '${node::class.java.name}" }
 
-        node as N
+        node.value as N
     } ?: or()
 
     /**
@@ -186,13 +139,13 @@ public open class DefaultArchiveGraph @JvmOverloads constructor(
     }
 
     override suspend fun unload(descriptor: ArtifactMetadata.Descriptor): List<ArchiveNode<*>> {
-        val node = getNode(descriptor) ?: return listOf()
+        val node = nodes[descriptor]?.value ?: return listOf()
 
         val canAccess = node.access.targets.mapTo(HashSet()) {
             it.descriptor
         } + descriptor
 
-        val uniquelyAccessed = mutable
+        val uniquelyAccessed = nodes
             .filterNot { canAccess.contains(it.key) }
             .flatMapTo(HashSet()) { (_, it) -> it.value.access.targets.map { it.descriptor } }
 
@@ -207,7 +160,7 @@ public open class DefaultArchiveGraph @JvmOverloads constructor(
         val result = canAccess.filterNot {
             uniquelyAccessed.contains(it)
         }.map {
-            getNode(it)!!
+            nodes[it]!!.value
         }
 
 //        val backReferences = HashMap<ArtifactMetadata.Descriptor, MutableList<ArtifactMetadata.Descriptor>>()
@@ -259,7 +212,7 @@ public open class DefaultArchiveGraph @JvmOverloads constructor(
 //        }
 //
         for (node in result) {
-            mutable.remove(node.descriptor)
+            nodes.remove(node.descriptor)
         }
         return result
             .asReversed()
@@ -289,7 +242,7 @@ public open class DefaultArchiveGraph @JvmOverloads constructor(
     ): Tree<TaggedIArchive> = coroutineScope {
         trace.checkCircularity()
 
-        val loadedNode = getNode(descriptor)
+        val loadedNode = nodes[descriptor]?.value
         if (loadedNode != null) {
             return@coroutineScope nodeToTree(loadedNode, trace)
         }
@@ -305,7 +258,7 @@ public open class DefaultArchiveGraph @JvmOverloads constructor(
                 )
 
                 val parents = info.access.mapAsync {
-                    val currResolver = getResolver(it.resolver)
+                    val currResolver = resolvers[it.resolver]
                         ?: throw IllegalStateException("Resolver: '${it.resolver}' not found when hydrating cache. Please register it.")
 
                     val currDescriptor = currResolver.deserializeDescriptor(it.descriptor, trace)
@@ -361,7 +314,7 @@ public open class DefaultArchiveGraph @JvmOverloads constructor(
     ): ArchiveNode<*> = coroutineScope {
         val currDescriptor = tree.item.value.descriptor
 
-        val alreadyLoadedNode = getNode(currDescriptor)
+        val alreadyLoadedNode = nodes[currDescriptor]?.value
         if (alreadyLoadedNode != null) return@coroutineScope alreadyLoadedNode
 
         // Lock to ensure there really only is one being gotten at a time
@@ -414,7 +367,7 @@ public open class DefaultArchiveGraph @JvmOverloads constructor(
                         }
                     ) as ArchiveNode<ArtifactMetadata.Descriptor>
 
-                mutable[node.descriptor] = node.tag(resolver)
+                nodes[node.descriptor] = node.tag(resolver)
 
                 beingGotten.remove(currDescriptor)
 
@@ -569,7 +522,7 @@ public open class DefaultArchiveGraph @JvmOverloads constructor(
                                     ?: throw IllegalArgumentException("Unknown archive resolver: '$resolver'. Make sure it is registered before you try to cache your archive.")
 
                             CacheableParentInfo(
-                                it.tag.name,
+                                it.tag.id,
                                 parentDescriptor
                             )
                         }
@@ -760,7 +713,7 @@ public open class DefaultArchiveGraph @JvmOverloads constructor(
                                     resources[name] = CacheableArchiveResource(resource)
                                 }
 
-                                override fun newData(
+                                override suspend fun newData(
                                     descriptor: D,
                                     parents: List<Tree<TaggedIArchive>>
                                 ): Tree<TaggedIArchive> =
@@ -800,7 +753,7 @@ public open class DefaultArchiveGraph @JvmOverloads constructor(
         node: ArchiveNode<*>,
         trace: ArchiveTrace
     ): Tree<TaggedIArchive> {
-        val value = mutable[node.descriptor] ?: throw ArchiveException(
+        val value = nodes[node.descriptor] ?: throw ArchiveException(
             trace,
             "Archive node: '${node.descriptor}' was not loaded?"
         )
@@ -808,7 +761,7 @@ public open class DefaultArchiveGraph @JvmOverloads constructor(
         return Tree(
             value,
             node.access.targets
-                .filter { target -> mutable.contains(target.descriptor) }
+                .filter { target -> nodes.contains(target.descriptor) }
                 .map { nodeToTree(it.relationship.node, trace.child(it.descriptor)) }
         )
     }

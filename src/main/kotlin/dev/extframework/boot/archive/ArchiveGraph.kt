@@ -6,16 +6,17 @@ import com.durganmcbroom.artifact.resolver.RepositorySettings
 import dev.extframework.boot.audit.Auditors
 import dev.extframework.boot.monad.Tagged
 import dev.extframework.boot.monad.Tree
+import dev.extframework.`object`.ObjectContainer
 import java.nio.file.Path
 
 /**
- * A graph of archives with the capability to load and cache more. This
+ * A graph of archives with the capability to load and cache. This
  * graph contains the relationships and nodes between archives.
  *
  * Example:
  * ``` kotlin
  * runBlocking {
- *   val graph = ArchiveGraph(...)
+ *   val graph = ArchiveGraph.from(Paths.get("local-cache"))
  *
  *   val request = SimpleMavenArtifactRequest("com.example:example:1.0")
  *
@@ -39,20 +40,9 @@ public interface ArchiveGraph {
 
     public var auditors: Auditors
 
-    /**
-     * Registers a resolver with the ArchiveGraph.
-     *
-     * @param resolver The resolver to register.
-     */
-    public fun registerResolver(resolver: ArchiveNodeResolver<*, *, *, *, *>)
+    public val resolvers: ObjectContainer<ArchiveNodeResolver<*, *, *, *, *>>
 
-    /**
-     * Retrieves the ArchiveNodeResolver with the specified name.
-     *
-     * @param name The name of the ArchiveNodeResolver to retrieve.
-     * @return The ArchiveNodeResolver with the specified name if found, or null otherwise.
-     */
-    public fun getResolver(name: String): ArchiveNodeResolver<*, *, *, *, *>?
+    public val nodes: Map<ArtifactMetadata.Descriptor, Tagged<ArchiveNode<*>, ArchiveNodeResolver<*, *, *, *, *>>>
 
     /**
      * Caches the specified artifact request in the given repository using the provided resolver.
@@ -73,29 +63,6 @@ public interface ArchiveGraph {
     ): Tree<TaggedIArchive>
 
     /**
-     * @see cache
-     * Runs the job in a blocking coroutine scope.
-     *
-     * @param request The artifact request to be cached.
-     * @param repository The repository in which the artifact request will be cached.
-     * @param resolver The resolver used to cache the artifact request.
-     * @return A Job that represents the caching process.
-     */
-//    public fun <
-//            D : ArtifactMetadata.Descriptor,
-//            T : ArtifactRequest<D>,
-//            R : RepositorySettings,
-//            M : ArtifactMetadata<D, ArtifactMetadata.ParentInfo<T, R>>> cache(
-//        request: T,
-//        repository: R,
-//        resolver: ArchiveNodeResolver<D, T, *, R, M>
-//    ): Job<Tree<TaggedIArchive>> = job {
-//        runBlocking {
-//            cacheAsync(request, repository, resolver)().merge()
-//        }
-//    }
-
-    /**
      * Retrieves the specified ArchiveNode based on the given descriptor and resolver.
      * The archive must already be cached via `ArchiveGraph#cache` or else this
      * method will throw.
@@ -110,57 +77,12 @@ public interface ArchiveGraph {
     ): T
 
     /**
-     * @see get
-     * Runs the job in a blocking coroutine scope.
-     *
-     * @param descriptor The descriptor of the ArchiveNode to retrieve.
-     * @param resolver The resolver used to retrieve the ArchiveNode.
-     * @return A Job that will eventually resolve the specified archive.
-     */
-//    public fun <K : ArtifactMetadata.Descriptor, T : ArchiveNode<K>> get(
-//        descriptor: K,
-//        resolver: ArchiveNodeResolver<K, *, T, *, *>
-//    ): Job<T> = job {
-//        runBlocking {
-//            getAsync(descriptor, resolver)().merge()
-//        }
-//    }
-
-    /**
      * Unloads the given node and returns all the nodes that were unloaded by this.
      * Note that this method does not guarantee speed and that these values will not
      * be discarded until the return value of this method is garbage collected. This method
      * will also not provide unloading of any processes/daemons these nodes may have spawned.
      */
     public suspend fun unload(descriptor: ArtifactMetadata.Descriptor) : List<ArchiveNode<*>>
-
-    /**
-     * Retrieves an already loaded ArchiveNode with no guarantee of type. The
-     * returned node will always match the given descriptor or will be null.
-     *
-     * @param descriptor The descriptor of the ArchiveNode to retrieve.
-     * @return The ArchiveNode with the specified descriptor or null
-     */
-    public fun getNode(
-        descriptor: ArtifactMetadata.Descriptor,
-    ): ArchiveNode<*>?
-
-    /**
-     * Checks if an ArchiveNode with the specified descriptor is already loaded.
-     *
-     * @param descriptor The descriptor of the ArchiveNode to check.
-     * @return true if an ArchiveNode with the specified descriptor is loaded, false otherwise.
-     */
-    public fun loaded(
-        descriptor: ArtifactMetadata.Descriptor,
-    ): Boolean = getNode(descriptor) != null
-
-    /**
-     * Returns all the loaded archives by this graph.
-     *
-     * @return The collection of ArchiveNode objects.
-     */
-    public fun nodes(): Collection<ArchiveNode<*>>
 
     public companion object {
         /**
