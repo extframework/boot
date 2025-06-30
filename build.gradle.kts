@@ -49,8 +49,6 @@ dependencies {
     api(archives())
     api(artifactResolver())
     api(artifactResolverMaven())
-
-    testImplementation(project(":blackbox-test"))
 }
 
 val java11Jar by tasks.creating(Jar::class.java) {
