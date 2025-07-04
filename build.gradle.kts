@@ -10,7 +10,7 @@ plugins {
     id("dev.extframework.common") version "1.1"
 }
 
-version = "3.7.1-SNAPSHOT"
+version = "3.7.2-SNAPSHOT"
 
 sourceSets {
     create("java11")

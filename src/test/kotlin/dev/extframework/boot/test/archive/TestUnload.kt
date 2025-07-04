@@ -7,6 +7,7 @@ import dev.extframework.boot.archive.ArchiveException
 import dev.extframework.boot.archive.ArchiveGraph
 import dev.extframework.boot.maven.MavenResolverProvider
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import java.util.concurrent.Executors
 import kotlin.io.path.Path
@@ -33,18 +34,23 @@ class TestUnload {
             archiveGraph.get(request.descriptor, maven.resolver)
 
             // BasicDependencyNode 5164
-            val size = archiveGraph.nodes().size
+            val size = archiveGraph.nodes.size
 
             val result = archiveGraph.unload(
                 request.descriptor
             )
 
             check(result.size == size)
-            check(archiveGraph.nodes().isEmpty())
+            check(archiveGraph.nodes.isEmpty())
+
+            delay(1000)
+
+            System.gc()
+
+            println("HERE")
         }
 
-        System.gc()
-        println("Ending")
+        println("Ending + " + archiveGraph)
     }
 //dev.extframework:minecraft-bootstrapper:2.0.12-SNAPSHOT
 
@@ -79,7 +85,7 @@ class TestUnload {
             )
             archiveGraph.get(toConstrain.descriptor, maven.resolver)
 
-            val size = archiveGraph.nodes().size
+            val size = archiveGraph.nodes.size
 
             val result = archiveGraph.unload(
                 toUnload.descriptor
@@ -95,6 +101,38 @@ class TestUnload {
         System.gc()
         println("Ending")
     }
+
+    data class CustomType(val str: String)
+
+    class WithSuspendRef<T>(
+        val cb: suspend () -> T
+    )
+
+    suspend fun callThis(ref: WithSuspendRef<*>): Any? {
+        delay(100)
+
+        return ref.cb()
+    }
+
+    @Test
+    fun `Coroutine mem manage`() {
+        val withRef = WithSuspendRef {
+            CustomType("A custom type")
+        }
+
+        runBlocking {
+            println(callThis(withRef))
+
+            println("Here")
+
+            System.gc()
+
+            delay(10)
+
+            println("here now")
+        }
+    }
+
 
     @Test
     fun `Test throws constrained exception`() {
