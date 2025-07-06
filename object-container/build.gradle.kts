@@ -1,4 +1,4 @@
-group = "dev.extframework"
+group = "com.kaolinmc"
 version = "1.1.3-SNAPSHOT"
 
 common {

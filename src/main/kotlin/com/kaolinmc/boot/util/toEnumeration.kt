@@ -1,0 +1,17 @@
+package com.kaolinmc.boot.util
+
+import java.util.*
+
+public fun <T> Sequence<T>.toEnumeration() : Enumeration<T> {
+    val iterator = iterator()
+
+    return object : Enumeration<T> {
+        override fun hasMoreElements(): Boolean {
+            return iterator.hasNext()
+        }
+
+        override fun nextElement(): T {
+            return iterator.next()
+        }
+    }
+}

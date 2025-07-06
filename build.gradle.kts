@@ -1,13 +1,10 @@
-import dev.extframework.gradle.common.*
-import dev.extframework.gradle.common.extFramework
+import com.kaolinmc.gradle.common.*
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
     kotlin("jvm") version "2.1.20"
 
-    application
-
-    id("dev.extframework.common") version "1.1"
+    id("com.kaolinmc.common") version "0.1"
 }
 
 version = "3.7.2-SNAPSHOT"
@@ -15,16 +12,6 @@ version = "3.7.2-SNAPSHOT"
 sourceSets {
     create("java11")
     create("java11Test")
-}
-
-application {
-    mainClass.set("dev.extframework.boot.main.BootKt")
-
-    applicationDefaultJvmArgs = listOf(
-        "-Xms512m",
-        "-Xmx4G",
-        "-XstartOnFirstThread",
-    )
 }
 
 tasks.wrapper {
@@ -42,7 +29,7 @@ dependencies {
 
     "java11Implementation"(archives())
     "java11Implementation"(sourceSets.main.get().output)
-    "java11Implementation"("dev.extframework:archives:${dependencyManagement[ARCHIVES]["version"]}:jdk11")
+    "java11Implementation"("com.kaolinmc:archives:${dependencyManagement[ARCHIVES]["version"]}:jdk11")
 
     api(resourceApi())
     api(commonUtil())
@@ -65,8 +52,7 @@ common {
 
             pom {
                 name.set("Boot")
-                description.set("YakClient's Boot module")
-                url.set("https://github.com/extframework/boot")
+                description.set("Kaolin's Boot module")
             }
         }
     }
@@ -92,13 +78,13 @@ tasks.named<JavaCompile>("compileJava11TestJava") {
 
 allprojects {
     apply(plugin = "org.jetbrains.kotlin.jvm")
-    apply(plugin = "dev.extframework.common")
+    apply(plugin = "com.kaolinmc.common")
 
-    group = "dev.extframework"
+    group = "com.kaolinmc"
 
     repositories {
         mavenCentral()
-        extFramework()
+        kaolin()
     }
 
     common {
@@ -113,13 +99,13 @@ allprojects {
                 commonPom {
                     packaging = "jar"
                     defaultDevelopers()
-                    withExtFrameworkRepo()
+                    withKaolinRepo()
                     gnuLicense()
-                    extFrameworkScm("boot")
+                    kaolinScm("boot")
                 }
             }
             repositories {
-                extFramework(credentials = propertyCredentialProvider)
+                kaolin(credentials = propertyCredentialProvider)
             }
         }
     }

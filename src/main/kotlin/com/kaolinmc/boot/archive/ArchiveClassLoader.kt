@@ -1,0 +1,26 @@
+package com.kaolinmc.boot.archive
+
+import com.kaolinmc.archives.ArchiveReference
+import com.kaolinmc.boot.loader.*
+import java.security.CodeSource
+import java.security.ProtectionDomain
+import java.security.cert.Certificate
+
+public class ArchiveClassLoader(
+    archive: ArchiveReference,
+    public val accessTree: ArchiveAccessTree,
+    parent: ClassLoader
+) : IntegratedLoader(
+    name = accessTree.descriptor.name,
+    classProvider = DelegatingClassProvider(accessTree.targets
+        .map { it.relationship.node }
+        .filterIsInstance<ClassLoadedArchiveNode<*>>()
+        .map { ArchiveClassProvider(it.handle) }),
+
+    sourceProvider = ArchiveSourceProvider(archive),
+    resourceProvider = ArchiveResourceProvider(archive),
+    sourceDefiner = {n, b, cl, d ->
+        d(n, b, ProtectionDomain(CodeSource(archive.location.toURL(), arrayOf<Certificate>()), null, cl, null))
+    },
+    parent = parent,
+)
