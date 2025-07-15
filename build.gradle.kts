@@ -4,10 +4,10 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 plugins {
     kotlin("jvm") version "2.1.20"
 
-    id("com.kaolinmc.common") version "0.1"
+    id("com.kaolinmc.common") version "0.1.6"
 }
 
-version = "3.7.2-SNAPSHOT"
+version = "3.7.3-SNAPSHOT"
 
 sourceSets {
     create("java11")

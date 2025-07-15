@@ -28,8 +28,6 @@ public open class MavenResolverProvider(
     }
 
     override fun parseSettings(settings: Map<String, String>): SimpleMavenRepositorySettings? {
-        val releasesEnabled = settings["releasesEnabled"] ?: "true"
-        val snapshotsEnabled = settings["snapshotsEnabled"] ?: "true"
         val location = settings["location"] ?: return null
         val preferredHash = settings["preferredHash"] ?: "SHA1"
         val type = settings["type"] ?: "default"
@@ -39,8 +37,6 @@ public open class MavenResolverProvider(
         return when (type) {
             "default" -> SimpleMavenRepositorySettings.default(
                 location,
-                releasesEnabled.toBoolean(),
-                snapshotsEnabled.toBoolean(),
                 hashType
             )
 
